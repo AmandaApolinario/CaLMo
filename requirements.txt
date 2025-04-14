@@ -1,0 +1,10 @@
+pip
+autopep8
+flask
+sqlalchemy
+psycopg2-binary
+pyjwt
+python-dotenv
+flask
+flask-cors
+flask_sqlalchemy
