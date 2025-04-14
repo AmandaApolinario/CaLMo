@@ -26,9 +26,6 @@ docker-compose up -d
 
 ## API Endpoints
 
-### Health Check
-- `GET /health` - Returns service status
-
 ### Authentication
 - `POST /register`
     - Register new user
@@ -68,10 +65,10 @@ Use curl or Postman to test the endpoints. Example:
 
 ```bash
 # Health check
-curl http://localhost:5000/health
+curl http://localhost:5001/health
 
 # Register user
-curl -X POST http://localhost:5000/register \
+curl -X POST http://localhost:5001/register \
     -H "Content-Type: application/json" \
     -d '{"name":"Test User","email":"test@example.com","password":"secret"}'
 ```
