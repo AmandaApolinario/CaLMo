@@ -1,11 +1,9 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Enum, Date, Text
 from sqlalchemy.orm import relationship
-from sqlalchemy.ext.declarative import declarative_base
 import enum
+from . import db
 
-Base = declarative_base()
-
-class User(Base):
+class User(db.Model):
     __tablename__ = 'users'
 
     id = Column(Integer, primary_key=True)
@@ -16,7 +14,7 @@ class User(Base):
     objects = relationship("Object", back_populates="user")
     clds = relationship("CLD", back_populates="user")
 
-class Object(Base):
+class Object(db.Model):
     __tablename__ = 'objects'
 
     id = Column(Integer, primary_key=True)
@@ -30,7 +28,7 @@ class RelationshipType(enum.Enum):
     Positive = "Positive"
     Negative = "Negative"
 
-class CLD(Base):
+class CLD(db.Model):
     __tablename__ = 'clds'
 
     id = Column(Integer, primary_key=True)
@@ -42,7 +40,7 @@ class CLD(Base):
     user = relationship("User", back_populates="clds")
     variable_clds = relationship("VariableCLD", back_populates="cld", cascade="all, delete-orphan")
 
-class VariableCLD(Base):
+class VariableCLD(db.Model):
     __tablename__ = 'variable_clds'
 
     id = Column(Integer, primary_key=True)

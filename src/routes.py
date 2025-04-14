@@ -89,43 +89,81 @@ def get_objects(user_id):
 @token_required
 def create_cld(user_id):
     data = request.get_json()
-    required_fields = ['name', 'date', 'variable_clds']
+    
+    # Validate required fields
+    required_fields = ['name', 'date', 'description', 'variable_clds']
     if not all(field in data for field in required_fields):
-        return jsonify({'message': 'Missing required fields'}), 400
+        return jsonify({'message': 'Missing required fields. Need: name, date, description, and variable_clds'}), 400
 
+    # Validate date format
     try:
         cld_date = datetime.strptime(data['date'], "%Y-%m-%d").date()
     except ValueError:
         return jsonify({'message': 'Invalid date format. Use YYYY-MM-DD'}), 400
 
-    cld = CLD(
-        name=data['name'],
-        date=cld_date,
-        description=data.get('description', ''),
-        user_id=user_id
-    )
-    db.session.add(cld)
-    db.session.flush()  # Gets cld.id without full commit yet
-
-    for v in data['variable_clds']:
-        if not all(k in v for k in ['from_variable_id', 'to_variable_id', 'type']):
-            return jsonify({'message': 'Each variable_cld must include from_variable_id, to_variable_id, and type'}), 400
-
-        try:
-            relationship_type = RelationshipType(v['type'])
-        except ValueError:
-            return jsonify({'message': f"Invalid relationship type: {v['type']}"}), 400
-
-        variable = VariableCLD(
-            cld_id=cld.id,
-            from_variable_id=v['from_variable_id'],
-            to_variable_id=v['to_variable_id'],
-            type=relationship_type
+    try:
+        # Create the CLD
+        cld = CLD(
+            user_id=user_id,
+            name=data['name'],
+            date=cld_date,
+            description=data['description']
         )
-        db.session.add(variable)
+        db.session.add(cld)
+        db.session.flush()  # Get the CLD ID without committing
 
-    db.session.commit()
-    return jsonify({'message': 'CLD and variables created successfully', 'cld_id': cld.id}), 201
+        # Validate and create variable relationships
+        for rel in data['variable_clds']:
+            # Validate relationship structure
+            if not all(k in rel for k in ['from_variable_id', 'to_variable_id', 'type']):
+                db.session.rollback()
+                return jsonify({
+                    'message': 'Each variable relationship must include from_variable_id, to_variable_id, and type'
+                }), 400
+
+            # Validate relationship type
+            if rel['type'] not in ['Positive', 'Negative']:
+                db.session.rollback()
+                return jsonify({
+                    'message': f"Invalid relationship type: {rel['type']}. Must be 'Positive' or 'Negative'"
+                }), 400
+
+            # Validate that variables exist
+            from_var = db.session.query(Object).filter_by(
+                id=rel['from_variable_id'], 
+                user_id=user_id
+            ).first()
+            to_var = db.session.query(Object).filter_by(
+                id=rel['to_variable_id'], 
+                user_id=user_id
+            ).first()
+
+            if not from_var or not to_var:
+                db.session.rollback()
+                return jsonify({
+                    'message': 'One or more variables not found or do not belong to the user'
+                }), 404
+
+            # Create the relationship
+            variable_cld = VariableCLD(
+                cld_id=cld.id,
+                from_variable_id=rel['from_variable_id'],
+                to_variable_id=rel['to_variable_id'],
+                type=RelationshipType(rel['type'])
+            )
+            db.session.add(variable_cld)
+
+        # Commit all changes
+        db.session.commit()
+
+        return jsonify({
+            'message': 'CLD created successfully',
+            'cld_id': cld.id
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': f'Error creating CLD: {str(e)}'}), 500
 
 @routes.route('/clds', methods=['GET'])
 @token_required

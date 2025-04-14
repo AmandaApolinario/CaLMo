@@ -9,15 +9,13 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=app
     volumes:
-      - ./db_data:/var/lib/postgresql/data
-      - ./db_init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
 
   app:
     image: python:3.9-slim-bullseye
     platform: linux/arm64/v8
     working_dir: /app
     command: sh -c "pip install -r requirements.txt && python main.py"
-    # tty: true
     volumes:
       - ./:/app
     ports:
@@ -27,3 +25,6 @@ services:
     environment:
       - DATABASE_URL=postgresql://app:postgres@db:5432/app
       - JWT_SECRET_KEY=supersecretkey
+
+volumes:
+  postgres_data:

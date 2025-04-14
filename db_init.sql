@@ -25,7 +25,7 @@ CREATE TABLE clds (
 CREATE TABLE variable_clds (
     id SERIAL PRIMARY KEY,
     cld_id INTEGER REFERENCES clds(id) ON DELETE CASCADE,
-    source_id INTEGER NOT NULL,
-    target_id INTEGER NOT NULL,
+    from_variable_id INTEGER REFERENCES objects(id) ON DELETE CASCADE,
+    to_variable_id INTEGER REFERENCES objects(id) ON DELETE CASCADE,
     type relationship_type NOT NULL
 );

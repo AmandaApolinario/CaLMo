@@ -26,10 +26,15 @@ def create_app():
     
     db.init_app(app)
     
-    # Create database tables
     with app.app_context():
+        # Import models to ensure they are registered with SQLAlchemy
+        from . import models
+        
+        # Create all tables
         try:
-            db.create_all()
+            db.drop_all()  # First drop all tables
+            db.create_all()  # Then create them again
+            print("Database tables created successfully!")
         except Exception as e:
             print(f"Database initialization error: {e}")
     
