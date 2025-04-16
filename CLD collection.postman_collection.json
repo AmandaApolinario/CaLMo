@@ -1,0 +1,332 @@
+{
+	"info": {
+		"_postman_id": "714fb15f-d876-474c-9643-52f25e248708",
+		"name": "CLD collection",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "18111974"
+	},
+	"item": [
+		{
+			"name": "register",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\"name\": \"amanda\", \"email\":\"amanda@gmail.com\",\"password\":\"teste123\"}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://localhost:5001/register"
+			},
+			"response": []
+		},
+		{
+			"name": "login",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\"email\":\"amanda@gmail.com\",\"password\":\"teste123\"}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://localhost:5001/login"
+			},
+			"response": []
+		},
+		{
+			"name": "post object",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "{{tokenValue}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": " {\"name\": \"Defects fixed through rework\", \"description\": \"Defects fixed through rework\"}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://localhost:5001/variable"
+			},
+			"response": []
+		},
+		{
+			"name": "get objects",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "{{tokenValue}}",
+						"type": "text"
+					}
+				],
+				"url": "http://localhost:5001/variables"
+			},
+			"response": []
+		},
+		{
+			"name": "update variable",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "{{tokenValue}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\"name\": \"att nome\"}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://localhost:5001/variable/<variable id>"
+			},
+			"response": []
+		},
+		{
+			"name": "delete variable",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "{{tokenValue}}",
+						"type": "text"
+					}
+				],
+				"url": "http://localhost:5001/variable/<variable id>"
+			},
+			"response": []
+		},
+		{
+			"name": "post cld",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "{{tokenValue}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"name\": \"Urban Growth Dynamics\",\n  \"date\": \"2025-04-14\",\n  \"description\": \"A CLD to model how urban population and infrastructure interact\",\n  \"variable_clds\": [\n    {\n      \"from_variable_id\": 1,\n      \"to_variable_id\": 2,\n      \"type\": \"Positive\"\n    },\n    {\n      \"from_variable_id\": 2,\n      \"to_variable_id\": 1,\n      \"type\": \"Negative\"\n    }\n  ]\n}\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://localhost:5001/cld"
+			},
+			"response": []
+		},
+		{
+			"name": "get clds",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "{{tokenValue}}",
+						"type": "text"
+					}
+				],
+				"url": "http://localhost:5001/clds"
+			},
+			"response": []
+		},
+		{
+			"name": "update cld",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "{{tokenValue}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"Updated CLD Name\",\n    \"description\": \"Updated description of the causal loop diagram\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://localhost:5001/cld/<cld id>"
+			},
+			"response": []
+		},
+		{
+			"name": "delete cld",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "{{tokenValue}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://localhost:5001/cld/<cld id>"
+			},
+			"response": []
+		},
+		{
+			"name": "get relationships",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "{{tokenValue}}",
+						"type": "text"
+					}
+				],
+				"url": "http://localhost:5001/cld/{{cldId}}/relationships"
+			},
+			"response": []
+		},
+		{
+			"name": "post feedbackloops",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "{{tokenValue}}",
+						"type": "text"
+					}
+				],
+				"url": "http://localhost:5001/cld/{{cldId}}/feedback-loops"
+			},
+			"response": []
+		},
+		{
+			"name": "get feedbackloops",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "{{tokenValue}}",
+						"type": "text"
+					}
+				],
+				"url": "http://localhost:5001/cld/{{cldId}}/feedback-loops"
+			},
+			"response": []
+		},
+		{
+			"name": "post archetypes",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "{{tokenValue}}",
+						"type": "text"
+					}
+				],
+				"url": "http://localhost:5001/cld/{{cldId}}/archetypes"
+			},
+			"response": []
+		},
+		{
+			"name": "get archetypes",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "{{tokenValue}}",
+						"type": "text"
+					}
+				],
+				"url": "http://localhost:5001/cld/{{cldId}}/archetypes"
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "tokenValue",
+			"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMiIsImV4cCI6MTc0NDU5OTE0Nn0.4-v3STEJ8piAQbQekYqho_O5XxYTpfg2DgZ3kRA9MxQ",
+			"type": "string"
+		},
+		{
+			"key": "cldId",
+			"value": "967e4cc6-2b28-4600-97bb-11ce4686a1bd",
+			"type": "string"
+		}
+	]
+}

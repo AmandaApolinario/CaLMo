@@ -2,6 +2,7 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from dotenv import load_dotenv
+from sqlalchemy import text
 import os
 
 load_dotenv()
@@ -32,11 +33,28 @@ def create_app():
         
         # Create all tables
         try:
-            db.drop_all()  # First drop all tables
-            db.create_all()  # Then create them again
+            # Drop existing enum types if they exist
+            db.session.execute(text('DROP TYPE IF EXISTS relationship_type CASCADE'))
+            db.session.execute(text('DROP TYPE IF EXISTS loop_type CASCADE'))
+            db.session.execute(text('DROP TYPE IF EXISTS archetype_type CASCADE'))
+            db.session.commit()
+            
+            # Create enum types
+            db.session.execute(text('CREATE TYPE relationship_type AS ENUM (\'POSITIVE\', \'NEGATIVE\')'))
+            db.session.execute(text('CREATE TYPE loop_type AS ENUM (\'BALANCING\', \'REINFORCING\')'))
+            db.session.execute(text('CREATE TYPE archetype_type AS ENUM (\'SHIFTING_THE_BURDEN\')'))
+            db.session.commit()
+            
+            # Drop all existing tables
+            db.drop_all()
+            
+            # Create all tables
+            db.create_all()
             print("Database tables created successfully!")
         except Exception as e:
             print(f"Database initialization error: {e}")
+            db.session.rollback()
+            raise e
     
         from .routes import routes
         app.register_blueprint(routes)

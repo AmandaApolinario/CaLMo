@@ -1,93 +1,171 @@
-# Flask API with PostgreSQL
+# Causal Loop Diagram (CLD) Analysis API
 
-A RESTful API built with Flask and PostgreSQL for managing users and objects with authentication.
+A RESTful API built with Flask and PostgreSQL for creating and analyzing Causal Loop Diagrams, including feedback loop and archetype identification.
 
 ## Project Structure
 ```
 .
 ├── src/
-│   ├── __init__.py
-│   ├── routes.py
-│   ├── models.py
-│   ├── database.py
-│   └── auth.py
-├── main.py
-├── docker-compose.yml
-├── db_init.sql
+│ ├── init.py # App initialization and configuration
+│ ├── routes.py # API endpoints
+│ ├── models.py # Database models
+│ ├── database.py # Database operations
+│ └── auth.py # Authentication utilities
+├── main.py # Application entry point
+├── docker-compose.yml # Docker configuration
+├── requirements.txt # Python dependencies
+├── CLD collection.postman_collection.json # Postman API documentation
 └── README.md
 ```
 
-## Setup
+## Postman Documentation
+The file `CLD collection.postman_collection.json` contains the complete Postman collection for testing the API.
+## Setup and Installation
 
-1. Build and run with Docker Compose:
+### Prerequisites
+- Docker and Docker Compose
+
+### Running the Application
+
+1. Clone the repository:
 ```bash
-docker-compose up -d
+git clone <repository-url>
+cd casualLoopDiagramApp
 ```
 
-## API Endpoints
+2. Start the application using Docker Compose:
+```bash
+# Remove any existing containers and volumes
+docker-compose down
+docker volume rm $(docker volume ls -q)
+
+# Build and start the containers
+docker-compose up --build
+```
+
+The API will be available at `http://localhost:5001`
+
+## API Documentation
 
 ### Authentication
-- `POST /register`
-    - Register new user
-    - Body: `{"name": "string", "email": "string", "password": "string"}`
-- `POST /login`
-    - Login user
-    - Body: `{"email": "string", "password": "string"}`
-    - Returns: JWT token
+All routes except registration and login require a JWT token in the Authorization header.
+
+#### Register User
+```http
+POST /register
+Content-Type: application/json
+
+{
+    "name": "Test User",
+    "email": "test@example.com",
+    "password": "password123"
+}
+```
+
+#### Login
+```http
+POST /login
+Content-Type: application/json
+
+{
+    "email": "test@example.com",
+    "password": "password123"
+}
+```
+Returns a JWT token to use in subsequent requests.
 
 ### Variables
-- `POST /object`
-    - Create new object
-    - Requires Authorization header with JWT token
-    - Body: `{"name": "string", "description": "string"}`
-- `GET /variables`
-    - Get user's variables
-    - Requires Authorization header with JWT token
 
-## Development
+#### Create Variable
+```http
+POST /variable
+Authorization: <jwt-token>
+Content-Type: application/json
 
-To run the application locally:
-
-```bash
-# Start database only
-docker-compose up db -d
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the application
-python3 main.py
+{
+    "name": "Population",
+    "description": "Urban population size"
+}
 ```
 
-## Testing
-
-Use curl or Postman to test the endpoints. Example:
-
-```bash
-# Health check
-curl http://localhost:5001/health
-
-# Register user
-curl -X POST http://localhost:5001/register \
-    -H "Content-Type: application/json" \
-    -d '{"name":"Test User","email":"test@example.com","password":"secret"}'
+#### Get Variables
+```http
+GET /variables
+Authorization: <jwt-token>
 ```
 
-## Database Schema
+### Causal Loop Diagrams (CLDs)
 
-### Users Table
-- `id`: SERIAL PRIMARY KEY
-- `name`: VARCHAR
-- `email`: VARCHAR UNIQUE
-- `password`: VARCHAR (hashed)
+#### Create CLD
+```http
+POST /cld
+Authorization: <jwt-token>
+Content-Type: application/json
 
-### Variable Table
-- `id`: SERIAL PRIMARY KEY
-- `user_id`: INTEGER
-- `name`: VARCHAR
-- `description`: VARCHAR
+{
+    "name": "Population Dynamics",
+    "date": "2024-03-14",
+    "description": "Basic population dynamics model",
+    "variables": ["variable_id_1", "variable_id_2"],
+    "relationships": [
+        {
+            "source_id": "variable_id_1",
+            "target_id": "variable_id_2",
+            "type": "POSITIVE"
+        }
+    ]
+}
+```
 
-## Security
-- Passwords are hashed using Werkzeug's security functions
-- JWT tokens for authentication
-- CORS enabled for cross-origin requests
+#### Get All CLDs
+```http
+GET /clds
+Authorization: <jwt-token>
+```
+
+#### Get CLD Relationships
+```http
+GET /cld/<cld_id>/relationships
+Authorization: <jwt-token>
+```
+
+#### Create Relationship in CLD
+```http
+POST /cld/<cld_id>/relationships
+Authorization: <jwt-token>
+Content-Type: application/json
+
+{
+    "source_id": "variable_id_1",
+    "target_id": "variable_id_2",
+    "type": "POSITIVE"
+}
+```
+
+### Feedback Loops
+
+#### Identify Feedback Loops
+```http
+POST /cld/<cld_id>/feedback-loops
+Authorization: <jwt-token>
+```
+
+#### Get Feedback Loops
+```http
+GET /cld/<cld_id>/feedback-loops
+Authorization: <jwt-token>
+```
+
+### System Archetypes
+
+#### Identify Archetypes
+```http
+POST /cld/<cld_id>/archetypes
+Authorization: <jwt-token>
+```
+
+#### Get Archetypes
+```http
+GET /cld/<cld_id>/archetypes
+Authorization: <jwt-token>
+```
