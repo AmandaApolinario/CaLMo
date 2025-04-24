@@ -1,7 +1,10 @@
 <template>
   <div class="landing-container">
-    <div class="landing-content">
-      <h1>CLD Analysis Tool</h1>
+    <div class="landing-panel">
+      <div class="branding">
+        <h1>CausalPatterns</h1>
+        <p class="tagline">Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+      </div>
       <div class="auth-form">
         <div class="form-group">
           <label for="email">Email</label>
@@ -47,7 +50,7 @@ const login = async () => {
       email: email.value,
       password: password.value
     })
-    
+
     if (response.data.token) {
       localStorage.setItem('token', response.data.token)
       router.push('/dashboard')
@@ -66,31 +69,47 @@ const goToRegister = () => {
 .landing-container {
   min-height: 100vh;
   display: flex;
-  align-items: center;
   justify-content: center;
-  background-color: #f5f7fa;
+  align-items: center;
+  background: linear-gradient(to right, #f5f7fa, #e2e8f0);
+  padding: 2rem;
 }
 
-.landing-content {
+.landing-panel {
   background-color: white;
-  padding: 3rem;
   border-radius: 16px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  display: flex;
+  max-width: 960px;
   width: 100%;
-  max-width: 500px;
+  padding: 3rem;
+  gap: 3rem;
+  align-items: center;
+  justify-content: space-between;
 }
 
-h1 {
-  text-align: center;
-  color: #1a252f;
-  font-size: 2.5rem;
-  margin-bottom: 2rem;
+.branding {
+  flex: 1;
+  padding-right: 2rem;
+  border-right: 1px solid #e2e8f0;
+}
+
+.branding h1 {
+  font-size: 3rem;
+  color: #2c3e50;
+  margin-bottom: 1rem;
+}
+
+.tagline {
+  font-size: 1.25rem;
+  color: #6b7280;
 }
 
 .auth-form {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
 .form-group {
@@ -100,14 +119,13 @@ h1 {
 }
 
 label {
-  font-size: 1.1rem;
-  color: #1a252f;
-  font-weight: 500;
+  font-weight: 600;
+  color: #374151;
 }
 
 input {
-  padding: 1rem;
-  border: 2px solid #e2e8f0;
+  padding: 0.75rem;
+  border: 2px solid #d1d5db;
   border-radius: 8px;
   font-size: 1rem;
   transition: border-color 0.3s ease;
@@ -126,13 +144,13 @@ input:focus {
 
 button {
   flex: 1;
-  padding: 1rem;
+  padding: 0.75rem;
   border: none;
   border-radius: 8px;
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: bold;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: background-color 0.3s ease, transform 0.2s ease;
 }
 
 .btn-login {
@@ -141,7 +159,7 @@ button {
 }
 
 .btn-login:hover {
-  background-color: #3aa876;
+  background-color: #36966b;
   transform: translateY(-2px);
 }
 
@@ -158,7 +176,6 @@ button {
 .error-message {
   color: #dc3545;
   text-align: center;
-  margin-top: 1rem;
-  font-size: 1rem;
+  font-size: 0.95rem;
 }
-</style> 
+</style>

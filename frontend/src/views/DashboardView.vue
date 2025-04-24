@@ -5,25 +5,23 @@
       <button @click="logout" class="btn-logout">Logout</button>
     </div>
 
-    <div class="dashboard-content">
-      <div class="action-cards">
-        <div class="action-card" @click="goToVariables">
-          <h2>Variables</h2>
-          <p>Manage your system variables</p>
-          <button class="btn-action">Manage Variables</button>
-        </div>
+    <div class="dashboard-grid">
+      <div class="dashboard-card" @click="goToVariables">
+        <h2>Variables</h2>
+        <p>Define and manage your system variables</p>
+        <button class="card-btn">Manage Variables</button>
+      </div>
 
-        <div class="action-card" @click="createNewCLD">
-          <h2>Create CLD</h2>
-          <p>Create a new Causal Loop Diagram</p>
-          <button class="btn-action">Create New</button>
-        </div>
+      <div class="dashboard-card" @click="createNewCLD">
+        <h2>Create CLD</h2>
+        <p>Design a new Causal Loop Diagram</p>
+        <button class="card-btn">Create New</button>
+      </div>
 
-        <div class="action-card" @click="viewCLDs">
-          <h2>My CLDs</h2>
-          <p>View and manage your CLDs</p>
-          <button class="btn-action">View CLDs</button>
-        </div>
+      <div class="dashboard-card" @click="viewCLDs">
+        <h2>My CLDs</h2>
+        <p>Access and manage your saved diagrams</p>
+        <button class="card-btn">View CLDs</button>
       </div>
     </div>
   </div>
@@ -55,20 +53,20 @@ const viewCLDs = () => {
 <style scoped>
 .dashboard-container {
   min-height: 100vh;
-  padding: 2rem;
-  background-color: white;
+  padding: 3rem 5%;
+  background-color: #f8fafc;
 }
 
 .dashboard-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 3rem;
+  margin-bottom: 2rem;
 }
 
-h1 {
-  font-size: 2.5rem;
-  color: #1a252f;
+.dashboard-header h1 {
+  font-size: 2.8rem;
+  color: #1e293b;
   margin: 0;
 }
 
@@ -76,11 +74,12 @@ h1 {
   background-color: #dc3545;
   color: white;
   padding: 0.75rem 1.5rem;
+  font-size: 1rem;
   border: none;
   border-radius: 8px;
   font-weight: bold;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: background 0.3s ease, transform 0.2s ease;
 }
 
 .btn-logout:hover {
@@ -88,57 +87,53 @@ h1 {
   transform: translateY(-2px);
 }
 
-.dashboard-content {
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.action-cards {
+.dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 2rem;
 }
 
-.action-card {
-  background-color: white;
+.dashboard-card {
+  background: white;
   border-radius: 16px;
   padding: 2rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   cursor: pointer;
-  transition: all 0.3s ease;
-  text-align: left;
 }
 
-.action-card:hover {
+.dashboard-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 8px 14px rgba(0, 0, 0, 0.1);
 }
 
-.action-card h2 {
-  font-size: 1.8rem;
-  color: #1a252f;
-  margin-bottom: 1rem;
+.dashboard-card h2 {
+  font-size: 1.6rem;
+  margin-bottom: 0.5rem;
+  color: #0f172a;
 }
 
-.action-card p {
-  color: #666;
+.dashboard-card p {
+  flex-grow: 1;
+  color: #475569;
   margin-bottom: 1.5rem;
-  line-height: 1.5;
 }
 
-.btn-action {
+.card-btn {
   background-color: #42b983;
   color: white;
-  padding: 0.75rem 1.5rem;
+  padding: 0.75rem;
+  font-weight: bold;
   border: none;
   border-radius: 8px;
-  font-weight: bold;
   cursor: pointer;
-  transition: all 0.3s ease;
-  width: 100%;
+  transition: background 0.3s ease;
 }
 
-.btn-action:hover {
+.card-btn:hover {
   background-color: #3aa876;
 }
-</style> 
+</style>
