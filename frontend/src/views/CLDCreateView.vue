@@ -7,6 +7,7 @@
 
     <div class="form-container">
       <form @submit.prevent="createCLD" class="cld-form">
+        <!-- CLD Name -->
         <div class="form-group">
           <label for="name">CLD Name</label>
           <input 
@@ -18,6 +19,7 @@
           >
         </div>
 
+        <!-- Description -->
         <div class="form-group">
           <label for="description">Description</label>
           <textarea 
@@ -29,6 +31,41 @@
           ></textarea>
         </div>
 
+        <!-- Date -->
+        <div class="form-group">
+          <label for="date">Date</label>
+          <input 
+            type="date" 
+            id="date" 
+            v-model="cld.date" 
+            required
+          >
+        </div>
+
+        <!-- Variable Relationships -->
+        <div class="form-group">
+          <label>Variable Relationships</label>
+          <div v-for="(relationship, index) in cld.variable_clds" :key="index" class="variable-relationship">
+            <select v-model="relationship.from_variable_id" required>
+              <option v-for="variable in variables" :key="variable.id" :value="variable.id">
+                {{ variable.name }} - {{ variable.description }}
+              </option>
+            </select>
+            <select v-model="relationship.to_variable_id" required :disabled="relationship.from_variable_id === relationship.to_variable_id">
+              <option v-for="variable in variables" :key="variable.id" :value="variable.id">
+                {{ variable.name }} - {{ variable.description }}
+              </option>
+            </select>
+            <select v-model="relationship.type" required>
+              <option value="Positive">Positive</option>
+              <option value="Negative">Negative</option>
+            </select>
+            <button type="button" @click="removeRelationship(index)">Remove</button>
+          </div>
+          <button type="button" @click="addRelationship">Add Relationship</button>
+        </div>
+
+        <!-- Submit and Cancel -->
         <div class="form-actions">
           <button type="submit" class="btn-submit">Create CLD</button>
           <button type="button" @click="goToDashboard" class="btn-cancel">Cancel</button>
@@ -39,21 +76,59 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 
 const router = useRouter()
+
+// Reactive references for the CLD and the list of variables
+const variables = ref([])
 const cld = ref({
   name: '',
-  description: ''
+  description: '',
+  date: '',
+  variable_clds: []
 })
+
+// Fetch variables from the API when the component is mounted
+onMounted(async () => {
+  try {
+    const response = await axios.get('/variables')
+    variables.value = response.data
+  } catch (err) {
+    console.error('Error fetching variables:', err)
+  }
+})
+
+const addRelationship = () => {
+  cld.value.variable_clds.push({
+    from_variable_id: null,
+    to_variable_id: null,
+    type: 'Positive'
+  })
+}
+
+const removeRelationship = (index) => {
+  cld.value.variable_clds.splice(index, 1)
+}
 
 const createCLD = async () => {
   try {
-    const response = await axios.post('/cld', cld.value)
+    const requestData = {
+      name: cld.value.name,
+      date: cld.value.date,
+      description: cld.value.description,
+      variable_clds: cld.value.variable_clds
+    }
+
+    // Log the request data to the console before sending the POST request
+    console.log('Request Body:', JSON.stringify(requestData, null, 2))
+
+    const response = await axios.post('/cld', requestData)
     if (response.data.id) {
       router.push(`/cld/${response.data.id}`)
+      console.log('CLD created successfully:', response.data)
     }
   } catch (err) {
     console.error('Error creating CLD:', err)
@@ -110,7 +185,7 @@ label {
   font-weight: 500;
 }
 
-input, textarea {
+input, textarea, select {
   padding: 1rem;
   border: 2px solid #e2e8f0;
   border-radius: 8px;
@@ -118,7 +193,7 @@ input, textarea {
   transition: border-color 0.3s ease;
 }
 
-input:focus, textarea:focus {
+input:focus, textarea:focus, select:focus {
   outline: none;
   border-color: #42b983;
 }
@@ -126,6 +201,16 @@ input:focus, textarea:focus {
 textarea {
   resize: vertical;
   min-height: 100px;
+}
+
+.variable-relationship {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.variable-relationship select {
+  width: 30%;
 }
 
 .form-actions {
@@ -172,4 +257,5 @@ button {
   background-color: #1a252f;
   transform: translateY(-2px);
 }
-</style> 
+</style>
+

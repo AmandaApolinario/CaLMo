@@ -103,13 +103,15 @@ onMounted(() => {
 
 <style scoped>
 .app-container {
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
   background-color: #f5f7fa;
 }
 
 .navbar {
   background-color: white;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
   padding: 1rem 0;
   margin-bottom: 2rem;
 }
@@ -126,15 +128,15 @@ onMounted(() => {
 .navbar h2 {
   margin: 0;
   color: #1a252f;
-  font-size: 1.5rem;
+  font-size: 1.8rem;
 }
 
 .btn-logout {
   background-color: #dc3545;
   color: white;
-  padding: 0.75rem 1.5rem;
+  padding: 0.6rem 1.2rem;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   font-weight: bold;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -142,39 +144,61 @@ onMounted(() => {
 
 .btn-logout:hover {
   background-color: #c82333;
-  transform: translateY(-2px);
+  transform: translateY(-1px);
 }
 
 .cld-list-container {
   max-width: 1400px;
   margin: 0 auto;
   padding: 0 2rem 2rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 3rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
 h1 {
-  font-size: 2.5rem;
+  font-size: 2.2rem;
   color: #1a252f;
   margin: 0;
 }
 
+.btn-create {
+  background-color: #42b983;
+  color: white;
+  font-size: 1rem;
+  padding: 0.9rem 1.8rem;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  transition: all 0.3s ease;
+}
+
+.btn-create:hover {
+  background-color: #3aa876;
+  transform: translateY(-2px);
+}
+
 .cld-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-  gap: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 1.5rem;
 }
 
 .cld-card {
   background-color: white;
   border-radius: 12px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
   transition: transform 0.3s ease;
 }
 
@@ -183,61 +207,52 @@ h1 {
 }
 
 .cld-card-content {
-  padding: 2rem;
+  padding: 1.5rem 2rem;
+  flex: 1;
 }
 
 .cld-card h3 {
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   color: #1a252f;
-  margin: 0 0 1rem 0;
+  margin: 0 0 0.75rem 0;
 }
 
 .description {
-  color: #666;
-  margin-bottom: 1.5rem;
+  color: #555;
+  margin-bottom: 1.2rem;
   line-height: 1.5;
 }
 
 .cld-meta {
   display: flex;
   justify-content: space-between;
-  color: #666;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  color: #888;
 }
 
 .cld-actions {
   display: flex;
-  border-top: 1px solid #eee;
+  justify-content: space-around;
   padding: 1rem;
+  border-top: 1px solid #eee;
+  background-color: #f8f9fa;
   gap: 0.5rem;
 }
 
 button {
-  padding: 0.75rem 1.5rem;
+  padding: 0.6rem 1.2rem;
   border: none;
-  border-radius: 8px;
-  font-weight: bold;
+  border-radius: 6px;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-}
-
-.btn-create {
-  background-color: #42b983;
-  color: white;
-  font-size: 1.1rem;
-  padding: 1rem 2rem;
-}
-
-.btn-create:hover {
-  background-color: #3aa876;
-  transform: translateY(-2px);
+  font-size: 0.95rem;
 }
 
 .btn-view {
   background-color: #2c3e50;
   color: white;
 }
-
 .btn-view:hover {
   background-color: #1a252f;
 }
@@ -246,7 +261,6 @@ button {
   background-color: #42b983;
   color: white;
 }
-
 .btn-edit:hover {
   background-color: #3aa876;
 }
@@ -255,19 +269,20 @@ button {
   background-color: #dc3545;
   color: white;
 }
-
 .btn-delete:hover {
   background-color: #c82333;
 }
 
-.loading, .error, .empty {
+.loading,
+.error,
+.empty {
   text-align: center;
-  padding: 3rem;
-  font-size: 1.2rem;
+  padding: 2rem;
+  font-size: 1.1rem;
   color: #666;
 }
 
 .error {
   color: #dc3545;
 }
-</style> 
+</style>
