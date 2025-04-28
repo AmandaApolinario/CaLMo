@@ -87,47 +87,73 @@ const createDiagram = () => {
     return
   }
 
-  console.log(JSON.stringify(cld, removeCircularReferences(), 2))
-
   if (!cld.value.variables || !cld.value.relationships) {
     console.error("Missing data for diagram:", cld.value)
     return
   }
 
-  const nodes = new DataSet(
-    cld.value.variables.map(variable => ({
-      id: variable.id,
-      label: variable.name,
-      shape: 'ellipse',
-      color: {
-        background: '#42b983',
-        border: '#2c8a68',
-        highlight: { background: '#4ccf9c', border: '#2c8a68' }
-      },
-      font: { size: 18, color: '#ffffff', face: 'Arial' },
-      borderWidth: 2
-    }))
-  )
+  // Get all variable IDs that are part of archetypes
+  const archetypeVariableIds = new Set();
+  if (cld.value.archetypes && cld.value.archetypes.length > 0) {
+    cld.value.archetypes.forEach(archetype => {
+      archetype.variables.forEach(variableId => {
+        archetypeVariableIds.add(variableId);
+      });
+    });
+  }
 
+  const nodes = new DataSet(
+    cld.value.variables.map(variable => {
+      // Default node properties
+      const node = {
+        id: variable.id,
+        label: variable.name,
+        shape: 'ellipse',
+        font: { size: 18, color: '#000000', face: 'Arial' },
+        borderWidth: 2
+      };
+
+      // Check if variable is part of an archetype
+      if (archetypeVariableIds.has(variable.id)) {
+        // Archetype variables get special coloring
+        node.color = {
+          background: '#BED7ED', 
+          border: '#BED7ED',
+          highlight: { background: '#79A5CB', border: '#79A5CB' }
+        };
+      } else {
+        // Regular variables
+        node.color = {
+          background: '#FFF0CE',
+          border: '#FFF0CE',
+          highlight: { background: '#C3A869', border: '#C3A869' }
+        };
+      }
+
+      return node;
+    })
+  );
+
+  // Rest of your createDiagram function remains the same...
   const edges = new DataSet(
     cld.value.relationships.map(relationship => ({
       from: relationship.source_id,
       to: relationship.target_id,
       arrows: 'to',
-      label: relationship.type === 'Positive' ? '+' : '-', // you could change here later
+      label: relationship.type === 'Positive' ? '+' : '-',
       font: { size: 18, align: 'middle' },
       color: {
         color: relationship.type === 'Positive' ? '#28a745' : '#dc3545',
         highlight: relationship.type === 'Positive' ? '#28a745' : '#dc3545',
-        opacity: 0.9 // stronger visibility
+        opacity: 0.9
       },
-      width: 3, // thicker arrows
+      width: 3,
       smooth: {
-        type: 'curvedCCW', // changed to curvedCCW (stronger loop visualization)
-        roundness: 0.5      // much more rounded to emphasize loops
+        type: 'curvedCCW',
+        roundness: 0.5
       }
     }))
-  )
+  );
 
   const container = network.value
   const data = { nodes, edges }
@@ -137,14 +163,14 @@ const createDiagram = () => {
       enabled: true,
       solver: 'repulsion',
       repulsion: {
-        nodeDistance: 300,    // nodes farther apart
+        nodeDistance: 300,
         centralGravity: 0.0,
         springLength: 300,
         springConstant: 0.2,
         damping: 0.09
       },
       stabilization: {
-        iterations: 300,      // a bit more stabilization
+        iterations: 300,
         fit: true
       }
     },
@@ -160,7 +186,7 @@ const createDiagram = () => {
         to: {
           enabled: true,
           type: 'arrow',
-          scaleFactor: 0.8 // slightly bigger arrows
+          scaleFactor: 0.8
         }
       },
       smooth: {
