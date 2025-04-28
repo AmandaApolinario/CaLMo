@@ -12,6 +12,16 @@
           <span class="variables-count">{{ cld.variables.length }} variables</span>
         </div>
         
+        <!-- Diagram Container -->
+        <div class="diagram-container">
+  <div class="zoom-controls">
+    <button @click="zoomIn" class="zoom-button">+</button>
+    <button @click="zoomOut" class="zoom-button">-</button>
+  </div>
+  <div ref="network" class="network"></div>
+</div>
+
+
         <div class="cld-actions">
           <button @click="goBack" class="btn-back">Back</button>
           <button @click="editCLD" class="btn-edit">Edit</button>
@@ -22,21 +32,33 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import NavBar from '../components/NavBar.vue'
+import { Network } from 'vis-network'
+import { DataSet } from 'vis-data'
+import 'vis-network/styles/vis-network.css'
+import { watch } from 'vue'
+
 
 const route = useRoute()
 const router = useRouter()
 const cld = ref({})
 const loading = ref(true)
 const error = ref('')
+const network = ref(null)
 
 const fetchCLD = async () => {
   try {
+    console.log("Fetching CLD data...")
     const response = await axios.get(`/cld/${route.params.id}`)
     cld.value = response.data
+    console.log("CLD data fetched:", cld.value)
+    
+    // Wait for the DOM to update before creating the diagram
+    await nextTick()
+    createDiagram()
   } catch (err) {
     error.value = 'Failed to fetch CLD details'
     console.error('Error fetching CLD:', err)
@@ -57,8 +79,157 @@ const editCLD = () => {
   router.push(`/cld/${route.params.id}/edit`)
 }
 
+const createDiagram = () => {
+  console.log("Creating improved diagram...")
+
+  if (!network.value) {
+    console.error("Network container not found")
+    return
+  }
+
+  console.log(JSON.stringify(cld, removeCircularReferences(), 2))
+
+  if (!cld.value.variables || !cld.value.relationships) {
+    console.error("Missing data for diagram:", cld.value)
+    return
+  }
+
+  const nodes = new DataSet(
+    cld.value.variables.map(variable => ({
+      id: variable.id,
+      label: variable.name,
+      shape: 'ellipse',
+      color: {
+        background: '#42b983',
+        border: '#2c8a68',
+        highlight: { background: '#4ccf9c', border: '#2c8a68' }
+      },
+      font: { size: 18, color: '#ffffff', face: 'Arial' },
+      borderWidth: 2
+    }))
+  )
+
+  const edges = new DataSet(
+    cld.value.relationships.map(relationship => ({
+      from: relationship.source_id,
+      to: relationship.target_id,
+      arrows: 'to',
+      label: relationship.type === 'Positive' ? '+' : '-', // you could change here later
+      font: { size: 18, align: 'middle' },
+      color: {
+        color: relationship.type === 'Positive' ? '#28a745' : '#dc3545',
+        highlight: relationship.type === 'Positive' ? '#28a745' : '#dc3545',
+        opacity: 0.9 // stronger visibility
+      },
+      width: 3, // thicker arrows
+      smooth: {
+        type: 'curvedCCW', // changed to curvedCCW (stronger loop visualization)
+        roundness: 0.5      // much more rounded to emphasize loops
+      }
+    }))
+  )
+
+  const container = network.value
+  const data = { nodes, edges }
+
+  const options = {
+    physics: {
+      enabled: true,
+      solver: 'repulsion',
+      repulsion: {
+        nodeDistance: 300,    // nodes farther apart
+        centralGravity: 0.0,
+        springLength: 300,
+        springConstant: 0.2,
+        damping: 0.09
+      },
+      stabilization: {
+        iterations: 300,      // a bit more stabilization
+        fit: true
+      }
+    },
+    layout: {
+      improvedLayout: true,
+      randomSeed: 42
+    },
+    nodes: {
+      shape: 'ellipse'
+    },
+    edges: {
+      arrows: {
+        to: {
+          enabled: true,
+          type: 'arrow',
+          scaleFactor: 0.8 // slightly bigger arrows
+        }
+      },
+      smooth: {
+        type: 'curvedCCW',
+        roundness: 0.5
+      },
+      color: {
+        opacity: 0.9
+      },
+      width: 3
+    },
+    interaction: {
+      hover: true,
+      tooltipDelay: 200,
+      dragNodes: true,
+      zoomView: true,
+      dragView: true
+    }
+  }
+
+  networkInstance = new Network(container, data, options)
+}
+
+function removeCircularReferences() {
+  const seen = new WeakSet()
+  return (key, value) => {
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) {
+        return undefined // remove circular reference
+      }
+      seen.add(value)
+    }
+    return value
+  }
+}
+
+let networkInstance = null  // Add this near your refs
+
+const zoomIn = () => {
+  if (networkInstance) {
+    const scale = networkInstance.getScale()
+    networkInstance.moveTo({
+      scale: scale * 1.2,   // Zoom in by 20%
+      animation: true
+    })
+  }
+}
+
+const zoomOut = () => {
+  if (networkInstance) {
+    const scale = networkInstance.getScale()
+    networkInstance.moveTo({
+      scale: scale / 1.2,   // Zoom out by 20%
+      animation: true
+    })
+  }
+}
+
 onMounted(() => {
+  console.log("Component mounted, fetching CLD...")
   fetchCLD()
+})
+
+watch(loading, (newVal) => {
+  if (!newVal) {
+    nextTick(() => {
+      createDiagram()
+    })
+  }
 })
 </script>
 
@@ -96,6 +267,19 @@ h1 {
   gap: 1rem;
   color: #888;
   margin-bottom: 2rem;
+}
+
+.diagram-container {
+  height: 600px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+  overflow: hidden;
+}
+
+.network {
+  width: 100%;
+  height: 100%;
 }
 
 .cld-actions {
@@ -139,4 +323,42 @@ button {
 .error {
   color: #dc3545;
 }
+
+.zoom-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 10;
+}
+
+.zoom-button {
+  background-color: #42b983;
+  color: white;
+  border: none;
+  padding: 0.5rem;
+  font-size: 1.5rem;
+  border-radius: 50%;
+  cursor: pointer;
+  width: 3rem;
+  height: 3rem;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  transition: background-color 0.3s;
+}
+
+.zoom-button:hover {
+  background-color: #3aa876;
+}
+
+.diagram-container {
+  position: relative; /* IMPORTANT to make zoom buttons float inside */
+  height: 600px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+  overflow: hidden;
+}
+
 </style> 
