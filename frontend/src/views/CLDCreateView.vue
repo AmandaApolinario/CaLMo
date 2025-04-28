@@ -183,7 +183,9 @@ const createCLD = async () => {
     console.log('Relationships:', requestData.relationships)
 
     const response = await axios.post('/cld', requestData)
+    console.log("cld created")
     if (response.data.id) {
+      console.log(response.data.id)
       successMessage.value = 'CLD created successfully!'
       showPopup.value = true
       setTimeout(() => {

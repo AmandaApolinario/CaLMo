@@ -14,13 +14,12 @@
         
         <!-- Diagram Container -->
         <div class="diagram-container">
-  <div class="zoom-controls">
-    <button @click="zoomIn" class="zoom-button">+</button>
-    <button @click="zoomOut" class="zoom-button">-</button>
-  </div>
-  <div ref="network" class="network"></div>
-</div>
-
+          <div class="zoom-controls">
+            <button @click="zoomIn" class="zoom-button">+</button>
+            <button @click="zoomOut" class="zoom-button">-</button>
+          </div>
+          <div ref="network" class="network"></div>
+        </div>
 
         <div class="cld-actions">
           <button @click="goBack" class="btn-back">Back</button>
@@ -28,6 +27,36 @@
         </div>
       </div>
     </div>
+
+    <!-- Archetype Popup - placed here so it overlays everything -->
+    <!-- Popup for Loops and Archetypes -->
+<div v-if="selectedNodeInfo.loops.length > 0 || selectedNodeInfo.archetypes.length > 0" class="archetype-popup">
+  <div class="popup-content">
+    <h3>Node Details</h3>
+
+    <div v-if="selectedNodeInfo.loops.length > 0">
+      <h4>Feedback Loops:</h4>
+      <ul>
+        <li v-for="(loop, index) in selectedNodeInfo.loops" :key="'loop-' + index">
+          <strong>{{ loop.type }} Loop</strong><br/>
+          Variables: {{ loop.variables.join(', ') }}
+        </li>
+      </ul>
+    </div>
+
+    <div v-if="selectedNodeInfo.archetypes.length > 0" style="margin-top: 1rem;">
+      <h4>Archetypes:</h4>
+      <ul>
+        <li v-for="archetype in selectedNodeInfo.archetypes" :key="'arch-' + archetype.id">
+          {{ archetype.type }}
+        </li>
+      </ul>
+    </div>
+
+    <button @click="selectedNodeInfo = { loops: [], archetypes: [] }" class="close-btn">Close</button>
+  </div>
+</div>
+
   </div>
 </template>
 
@@ -86,6 +115,8 @@ const createDiagram = () => {
     console.error("Network container not found")
     return
   }
+
+  console.log(JSON.stringify(cld, removeCircularReferences(), 2))
 
   if (!cld.value.variables || !cld.value.relationships) {
     console.error("Missing data for diagram:", cld.value)
@@ -208,7 +239,57 @@ const createDiagram = () => {
   }
 
   networkInstance = new Network(container, data, options)
+
+  networkInstance.on("click", function(params) {
+  if (params.nodes.length > 0) {
+    const nodeId = params.nodes[0];
+    showNodeDetails(nodeId);
+  }
+});
 }
+
+const selectedNodeArchetypes = ref([]);
+
+const selectedNodeInfo = ref({
+  loops: [],
+  archetypes: []
+});
+
+const showNodeDetails = (nodeId) => {
+  const loops = [];
+  const archetypes = [];
+
+  // Check feedback loops
+  if (cld.value.feedback_loops) {
+    cld.value.feedback_loops.forEach(loop => {
+      if (loop.variables.includes(nodeId)) {
+        const variableNames = loop.variables.map(varId => {
+          const variable = cld.value.variables.find(v => v.id === varId);
+          return variable ? variable.name : '';
+        }).filter(name => name !== '');
+
+        loops.push({
+          type: loop.type,
+          variables: variableNames
+        });
+      }
+    });
+  }
+
+  // Check archetypes
+  if (cld.value.archetypes) {
+    cld.value.archetypes.forEach(archetype => {
+      if (archetype.variables.includes(nodeId)) {
+        archetypes.push({
+          id: archetype.id,
+          type: archetype.type
+        });
+      }
+    });
+  }
+
+  selectedNodeInfo.value = { loops, archetypes };
+};
 
 function removeCircularReferences() {
   const seen = new WeakSet()
@@ -244,6 +325,8 @@ const zoomOut = () => {
     })
   }
 }
+
+
 
 onMounted(() => {
   console.log("Component mounted, fetching CLD...")
@@ -385,6 +468,38 @@ button {
   border-radius: 8px;
   margin-bottom: 2rem;
   overflow: hidden;
+}
+
+.archetype-popup {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.popup-content {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.close-btn {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  background: #42b983;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
 </style> 
