@@ -69,7 +69,7 @@ const handleRegister = async () => {
   try {
     const success = await authStore.register(name.value, email.value, password.value)
     if (success) {
-      router.push('/dashboard')
+      router.push('/')
     } else {
       error.value = 'Registration failed'
     }

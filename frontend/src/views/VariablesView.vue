@@ -1,54 +1,68 @@
 <template>
-  <div class="variables-container">
-    <h2>Variables Management</h2>
-
-    <div class="layout">
-      <!-- Create/Edit Variable Form -->
-      <div class="form-panel">
-        <h3>{{ isEditing ? 'Edit Variable' : 'Create New Variable' }}</h3>
-        <form @submit.prevent="submitForm" class="variable-form">
-          <div class="form-group">
-            <label for="name">Name</label>
-            <input
-              type="text"
-              id="name"
-              v-model="newVariable.name"
-              required
-              placeholder="Enter variable name"
-            />
-          </div>
-          <div class="form-group">
-            <label for="description">Description</label>
-            <textarea
-              id="description"
-              v-model="newVariable.description"
-              placeholder="Enter variable description"
-            ></textarea>
-          </div>
-          <div class="form-actions">
-            <button type="submit" :disabled="loading">
-              {{ loading ? (isEditing ? 'Updating...' : 'Creating...') : (isEditing ? 'Update Variable' : 'Create Variable') }}
-            </button>
-            <button type="button" v-if="isEditing" @click="cancelEdit" class="btn-cancel">
-              Cancel
-            </button>
-          </div>
-        </form>
+  <div>
+    <!-- Add Navigation Bar -->
+    <nav class="navbar">
+      <div class="navbar-content">
+        <router-link to="/dashboard" class="nav-button">
+          Dashboard
+        </router-link>
+        <button @click="handleLogout" class="nav-button logout">
+          Log Out
+        </button>
       </div>
+    </nav>
 
-      <!-- Variables List -->
-      <div class="list-panel">
-        <h3>Your Variables</h3>
-        <div v-if="loading" class="loading">Loading variables...</div>
-        <div v-else-if="error" class="error">{{ error }}</div>
-        <div v-else-if="variables.length === 0" class="empty">No variables created yet</div>
-        <div v-else class="variable-grid">
-          <div v-for="variable in variables" :key="variable.id" class="variable-card">
-            <h4>{{ variable.name }}</h4>
-            <p>{{ variable.description }}</p>
-            <div class="variable-actions">
-              <button @click="editVariable(variable)" class="btn-edit">Edit</button>
-              <button @click="deleteVariable(variable.id)" class="btn-delete">Delete</button>
+    <div class="variables-container">
+      <h2>Variables Management</h2>
+
+      <div class="layout">
+        <!-- Create/Edit Variable Form -->
+        <div class="form-panel">
+          <h3>{{ isEditing ? 'Edit Variable' : 'Create New Variable' }}</h3>
+          <form @submit.prevent="submitForm" class="variable-form">
+            <div class="form-group">
+              <label for="name">Name</label>
+              <input
+                type="text"
+                id="name"
+                v-model="newVariable.name"
+                required
+                placeholder="Enter variable name"
+              />
+            </div>
+            <div class="form-group">
+              <label for="description">Description</label>
+              <textarea
+                id="description"
+                v-model="newVariable.description"
+                placeholder="Enter variable description"
+              ></textarea>
+            </div>
+            <div class="form-actions">
+              <button type="submit" :disabled="loading">
+                {{ loading ? (isEditing ? 'Updating...' : 'Creating...') : (isEditing ? 'Update Variable' : 'Create Variable') }}
+              </button>
+              <button type="button" v-if="isEditing" @click="cancelEdit" class="btn-cancel">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Variables List -->
+        <div class="list-panel">
+          <h3>Your Variables</h3>
+          <div v-if="loading" class="loading">Loading variables...</div>
+          <div v-else-if="error" class="error">{{ error }}</div>
+          <div v-else-if="variables.length === 0" class="empty">No variables created yet</div>
+          <div v-else class="variable-grid">
+            <div v-for="variable in variables" :key="variable.id" class="variable-card">
+              <h4>{{ variable.name }}</h4>
+              <p>{{ variable.description }}</p>
+              <div class="variable-actions">
+                <button @click="editVariable(variable)" class="btn-edit">Edit</button>
+                <button @click="deleteVariable(variable.id)" class="btn-delete">Delete</button>
+              </div>
             </div>
           </div>
         </div>
@@ -60,24 +74,35 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
 const variables = ref([])
-const loading = ref(false)
+const loading = ref(true)
 const error = ref('')
 const isEditing = ref(false)
 const editingId = ref(null)
+const message = ref('')
 
 const newVariable = ref({
   name: '',
   description: ''
 })
 
+const router = useRouter()
+const authStore = useAuthStore()
+
 const fetchVariables = async () => {
   loading.value = true
   error.value = ''
   try {
     const response = await axios.get('/variables')
-    variables.value = response.data
+    const data = await response.data
+    if (data.message) {
+      message.value = data.message
+    } else {
+      variables.value = data
+    }
   } catch (err) {
     error.value = 'Failed to fetch variables'
     console.error('Error fetching variables:', err)
@@ -135,6 +160,15 @@ const deleteVariable = async (id) => {
     console.error('Error deleting variable:', err)
   } finally {
     loading.value = false
+  }
+}
+
+const handleLogout = async () => {
+  try {
+    await authStore.logout()
+    router.push('/')
+  } catch (error) {
+    console.error('Logout failed:', error)
   }
 }
 
@@ -266,5 +300,46 @@ button:disabled {
 
 .error {
   color: #dc3545;
+}
+
+.no-variables-message {
+  color: #666;
+  font-style: italic;
+  text-align: center;
+  margin-top: 20px;
+}
+
+/* Add navbar styles */
+.navbar {
+  background-color: #2c3e50;
+  padding: 1rem;
+  margin-bottom: 2rem;
+}
+
+.navbar-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+.nav-button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: none;
+  color: white;
+  background-color: #42b983;
+  transition: background-color 0.3s ease;
+}
+
+.nav-button.logout {
+  background-color: #dc3545;
+}
+
+.nav-button:hover {
+  opacity: 0.9;
 }
 </style>

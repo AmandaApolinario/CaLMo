@@ -4,6 +4,7 @@ import RegisterView from '../views/RegisterView.vue'
 import DashboardView from '../views/DashboardView.vue'
 import CLDListView from '../views/CLDListView.vue'
 import CLDDetailView from '../views/CLDDetailView.vue'
+import CLDEditView from '../views/CLDEditView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -40,6 +41,11 @@ const router = createRouter({
       path: '/cld/:id',
       name: 'cld-detail',
       component: CLDDetailView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/cld/:id/edit',
+      component: CLDEditView,
       meta: { requiresAuth: true }
     },
     {
