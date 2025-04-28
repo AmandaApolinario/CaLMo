@@ -91,8 +91,7 @@ def create_new_variable(user_id):
 def get_variables(user_id):
     variables = get_user_variables(db.session, user_id)
     if not variables:
-        return jsonify({'message': 'No variables found'}), 404
-
+        return jsonify({"message": "No variables created so far"}), 200
     variable_list = [{'id': var.id, 'name': var.name, 'description': var.description} for var in variables]
     return jsonify(variable_list), 200
 
@@ -115,6 +114,28 @@ def create_cld(user_id):
         return jsonify({'message': 'Invalid date format. Use YYYY-MM-DD'}), 400
 
     try:
+        # Validate relationships
+        for rel in data['relationships']:
+            # Check if source and target are the same
+            if rel['source_id'] == rel['target_id']:
+                return jsonify({
+                    'message': 'Cannot create relationship with the same source and target variable'
+                }), 400
+
+            # Validate relationship structure
+            if not all(k in rel for k in ['source_id', 'target_id', 'type']):
+                return jsonify({
+                    'message': 'Each relationship must include source_id, target_id, and type'
+                }), 400
+
+            # Validate relationship type
+            try:
+                rel_type = RelationshipType[rel['type'].upper()]
+            except KeyError:
+                return jsonify({
+                    'message': f'Invalid relationship type. Must be one of: {[t.name for t in RelationshipType]}'
+                }), 400
+
         # Create the CLD
         cld = CLD(
             user_id=user_id,
@@ -140,37 +161,42 @@ def create_cld(user_id):
 
         # Create relationships
         for rel in data['relationships']:
-            # Validate relationship structure
-            if not all(k in rel for k in ['source_id', 'target_id', 'type']):
-                db.session.rollback()
-                return jsonify({
-                    'message': 'Each relationship must include source_id, target_id, and type'
-                }), 400
-
-            # Validate relationship type
-            try:
-                rel_type = RelationshipType[rel['type'].upper()]
-            except KeyError:
-                db.session.rollback()
-                return jsonify({
-                    'message': f'Invalid relationship type. Must be one of: {[t.name for t in RelationshipType]}'
-                }), 400
-
-            # Create the relationship
             relationship = Relationship(
-            cld_id=cld.id,
+                cld_id=cld.id,
                 source_id=rel['source_id'],
                 target_id=rel['target_id'],
-                type=rel_type
+                type=RelationshipType[rel['type'].upper()]
             )
             db.session.add(relationship)
 
         # Commit all changes
         db.session.commit()
 
+        # Update the CLD model with relationships and archetypes
+        cld = db.session.query(CLD).filter_by(id=cld.id).first()
+        relationships = db.session.query(Relationship).filter_by(cld_id=cld.id).all()
+        archetypes = db.session.query(Archetype).filter_by(cld_id=cld.id).all()
+
         return jsonify({
             'message': 'CLD created successfully',
-            'cld_id': cld.id
+            'cld': {
+                'id': cld.id,
+                'name': cld.name,
+                'description': cld.description,
+                'date': cld.date.isoformat(),
+                'variables': [var.id for var in cld.variables],
+                'relationships': [{
+                    'id': rel.id,
+                    'source_id': rel.source_id,
+                    'target_id': rel.target_id,
+                    'type': rel.type.value
+                } for rel in relationships],
+                'archetypes': [{
+                    'id': arch.id,
+                    'type': arch.type.value,
+                    'variables': [var.id for var in arch.variables]
+                } for arch in archetypes]
+            }
         }), 201
 
     except Exception as e:
@@ -470,9 +496,9 @@ def delete_variable_route(user_id, variable_id):
         db.session.rollback()
         return jsonify({'message': f'Error deleting variable: {str(e)}'}), 500
 
-@routes.route('/cld/<cld_id>', methods=['PUT'])
+@routes.route('/cld/<string:cld_id>', methods=['PUT'])
 @token_required
-def update_cld_route(user_id, cld_id):
+def update_cld(user_id, cld_id):
     try:
         data = request.get_json()
         if not data:
@@ -480,36 +506,85 @@ def update_cld_route(user_id, cld_id):
 
         # Check if CLD exists and belongs to user
         cld = db.session.query(CLD).filter_by(
-            id=cld_id, user_id=user_id
+            id=cld_id,
+            user_id=user_id
         ).first()
         if not cld:
             return jsonify({'message': 'CLD not found or access denied'}), 404
 
-        # Validate date format if provided
-        date = None
+        # Update CLD fields
+        if 'name' in data:
+            cld.name = data['name']
+        if 'description' in data:
+            cld.description = data['description']
         if 'date' in data:
             try:
-                date = datetime.strptime(data['date'], "%Y-%m-%d").date()
+                cld.date = datetime.strptime(data['date'], "%Y-%m-%d").date()
             except ValueError:
                 return jsonify({'message': 'Invalid date format. Use YYYY-MM-DD'}), 400
 
-        # Update CLD
-        updated_cld = update_cld(
-            db.session,
-            cld_id,
-            user_id,
-            name=data.get('name'),
-            description=data.get('description'),
-            date=date
-        )
+        # Update variables
+        if 'variables' in data:
+            # Clear existing variables
+            cld.variables = []
+            # Add new variables
+            for var_id in data['variables']:
+                variable = db.session.query(Variable).filter_by(
+                    id=var_id,
+                    user_id=user_id
+                ).first()
+                if not variable:
+                    db.session.rollback()
+                    return jsonify({
+                        'message': f'Variable {var_id} not found or does not belong to user'
+                    }), 404
+                cld.variables.append(variable)
+
+        # Update relationships
+        if 'relationships' in data:
+            # Delete existing relationships
+            db.session.query(Relationship).filter_by(cld_id=cld_id).delete()
+            # Add new relationships
+            for rel in data['relationships']:
+                if rel['source_id'] == rel['target_id']:
+                    return jsonify({
+                        'message': 'Cannot create relationship with the same source and target variable'
+                    }), 400
+                relationship = Relationship(
+                    cld_id=cld_id,
+                    source_id=rel['source_id'],
+                    target_id=rel['target_id'],
+                    type=RelationshipType[rel['type'].upper()]
+                )
+                db.session.add(relationship)
+
+        # Commit all changes
+        db.session.commit()
+
+        # Update the CLD model with relationships and archetypes
+        cld = db.session.query(CLD).filter_by(id=cld_id).first()
+        relationships = db.session.query(Relationship).filter_by(cld_id=cld_id).all()
+        archetypes = db.session.query(Archetype).filter_by(cld_id=cld_id).all()
 
         return jsonify({
             'message': 'CLD updated successfully',
             'cld': {
-                'id': updated_cld.id,
-                'name': updated_cld.name,
-                'description': updated_cld.description,
-                'date': updated_cld.date.isoformat()
+                'id': cld.id,
+                'name': cld.name,
+                'description': cld.description,
+                'date': cld.date.isoformat(),
+                'variables': [var.id for var in cld.variables],
+                'relationships': [{
+                    'id': rel.id,
+                    'source_id': rel.source_id,
+                    'target_id': rel.target_id,
+                    'type': rel.type.value
+                } for rel in relationships],
+                'archetypes': [{
+                    'id': arch.id,
+                    'type': arch.type.value,
+                    'variables': [var.id for var in arch.variables]
+                } for arch in archetypes]
             }
         }), 200
 
@@ -536,3 +611,65 @@ def delete_cld_route(user_id, cld_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'message': f'Error deleting CLD: {str(e)}'}), 500
+
+@routes.route('/cld/<string:cld_id>', methods=['GET'])
+@token_required
+def get_cld(user_id, cld_id):
+    try:
+        # Get the CLD
+        cld = db.session.query(CLD).filter_by(
+            id=cld_id,
+            user_id=user_id
+        ).first()
+        
+        if not cld:
+            return jsonify({'message': 'CLD not found or access denied'}), 404
+
+        # Get related data
+        variables = [{
+            'id': var.id,
+            'name': var.name,
+            'description': var.description
+        } for var in cld.variables]
+
+        relationships = db.session.query(Relationship).filter_by(
+            cld_id=cld_id
+        ).all()
+
+        archetypes = db.session.query(Archetype).filter_by(
+            cld_id=cld_id
+        ).all()
+
+        feedback_loops = db.session.query(FeedbackLoop).filter_by(
+            cld_id=cld_id
+        ).all()
+
+        # Format the response
+        response = {
+            'id': cld.id,
+            'name': cld.name,
+            'description': cld.description,
+            'date': cld.date.isoformat(),
+            'variables': variables,
+            'relationships': [{
+                'id': rel.id,
+                'source_id': rel.source_id,
+                'target_id': rel.target_id,
+                'type': rel.type.value
+            } for rel in relationships],
+            'archetypes': [{
+                'id': arch.id,
+                'type': arch.type.value,
+                'variables': [var.id for var in arch.variables]
+            } for arch in archetypes],
+            'feedback_loops': [{
+                'id': loop.id,
+                'type': loop.type.value,
+                'variables': [var.id for var in loop.variables]
+            } for loop in feedback_loops]
+        }
+
+        return jsonify(response), 200
+
+    except Exception as e:
+        return jsonify({'message': f'Error fetching CLD: {str(e)}'}), 500
