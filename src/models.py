@@ -71,8 +71,17 @@ class CLD(db.Model):
     user = relationship("User", back_populates="clds")
     variables = relationship('Variable', secondary=cld_variables)
     relationships = relationship('Relationship', back_populates='cld')
-    feedback_loops = relationship('FeedbackLoop', back_populates='cld')
-    archetypes = relationship('Archetype', back_populates='cld')
+    feedback_loops = relationship(
+        'FeedbackLoop',
+        back_populates='cld',
+        cascade='all, delete-orphan'
+    )
+
+    archetypes = relationship(
+        'Archetype',
+        back_populates='cld',
+        cascade='all, delete-orphan'
+    )
 
     def identify_feedback_loops(self, session):
         """Identifies feedback loops within the CLD using networkx."""

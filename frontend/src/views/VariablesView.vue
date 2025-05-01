@@ -139,6 +139,11 @@ const editVariable = (variable) => {
   }
   editingId.value = variable.id
   isEditing.value = true
+
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  })
 }
 
 const cancelEdit = () => {

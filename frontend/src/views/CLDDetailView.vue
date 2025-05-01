@@ -80,6 +80,17 @@ const network = ref(null)
 
 const fetchCLD = async () => {
   try {
+    console.log("Starting CLD data fetch process...")
+    
+    // First POST request to generate feedback loops
+    console.log("Generating feedback loops...")
+    await axios.post(`/cld/${route.params.id}/feedback-loops`)
+    
+    // Second POST request to generate archetypes (runs after first completes)
+    console.log("Generating archetypes...")
+    await axios.post(`/cld/${route.params.id}/archetypes`)
+    
+    // Now fetch the CLD data
     console.log("Fetching CLD data...")
     const response = await axios.get(`/cld/${route.params.id}`)
     cld.value = response.data
@@ -89,8 +100,8 @@ const fetchCLD = async () => {
     await nextTick()
     createDiagram()
   } catch (err) {
-    error.value = 'Failed to fetch CLD details'
-    console.error('Error fetching CLD:', err)
+    error.value = 'Failed to process CLD details'
+    console.error('Error processing CLD:', err)
   } finally {
     loading.value = false
   }

@@ -27,7 +27,6 @@
             v-model="cld.description" 
             placeholder="Enter CLD description"
             rows="4"
-            required
           ></textarea>
         </div>
 

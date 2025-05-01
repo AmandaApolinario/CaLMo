@@ -274,7 +274,12 @@ def identify_feedback_loops(user_id, cld_id):
         if not cld:
             return jsonify({'message': 'CLD not found or access denied'}), 404
 
-        # Identify feedback loops
+        # Clear existing feedback loops
+        for loop in cld.feedback_loops:
+            db.session.delete(loop)
+        db.session.flush()  # Ensure deletion is processed before inserting new ones
+
+        # Identify new feedback loops
         cld.identify_feedback_loops(db.session)
         db.session.commit()
 
@@ -357,7 +362,12 @@ def identify_archetypes(user_id, cld_id):
         if not cld:
             return jsonify({'message': 'CLD not found or access denied'}), 404
 
-        # Identify archetypes
+        # Clear existing archetypes
+        for archetype in cld.archetypes:
+            db.session.delete(archetype)
+        db.session.flush()  # Ensure deletion is processed before inserting new ones
+
+        # Identify new archetypes
         cld.identify_archetypes(db.session)
         db.session.commit()
 
