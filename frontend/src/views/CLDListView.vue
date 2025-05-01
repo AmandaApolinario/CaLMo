@@ -1,37 +1,49 @@
 <template>
-  <div class="app-container">
-    <nav class="navbar">
-      <div class="nav-content">
-        <h2>CLD Analysis Tool</h2>
-        <button @click="logout" class="btn-logout">Logout</button>
-      </div>
-    </nav>
-
-    <div class="cld-list-container">
+  <div class="cld-list-container">
+    <NavBar />
+    <div class="cld-content">
       <div class="header">
         <h1>Causal Loop Diagrams</h1>
-        <button @click="createNewCLD" class="btn-create">Create New CLD</button>
+        <button @click="createNewCLD" class="btn-create">
+          <i class="fas fa-plus"></i> Create New CLD
+        </button>
       </div>
 
-      <div v-if="loading" class="loading">Loading CLDs...</div>
-      <div v-else-if="error" class="error">{{ error }}</div>
+      <div v-if="loading" class="loading">
+        <i class="fas fa-spinner fa-spin"></i> Loading CLDs...
+      </div>
+      <div v-else-if="error" class="error">
+        <i class="fas fa-exclamation-circle"></i> {{ error }}
+      </div>
       <div v-else-if="clds.length === 0" class="empty">
+        <i class="fas fa-diagram-project"></i>
         <p>No CLDs found. Create your first CLD!</p>
       </div>
       <div v-else class="cld-grid">
         <div v-for="cld in clds" :key="cld.id" class="cld-card">
           <div class="cld-card-content">
-            <h3>{{ cld.name }}</h3>
+            <div class="card-header">
+              <h3>{{ cld.name }}</h3>
+              <div class="badge">{{ cld.variables.length }} variables</div>
+            </div>
             <p class="description">{{ cld.description }}</p>
             <div class="cld-meta">
-              <span class="date">Created: {{ formatDate(cld.date) }}</span>
-              <span class="variables-count">{{ cld.variables.length }} variables</span>
+              <span class="date"><i class="far fa-calendar"></i> {{ formatDate(cld.date) }}</span>
+              <span class="last-modified" v-if="cld.updated_at">
+                <i class="far fa-clock"></i> Modified: {{ formatDate(cld.updated_at) }}
+              </span>
             </div>
           </div>
           <div class="cld-actions">
-            <button @click="viewCLD(cld.id)" class="btn-view">View</button>
-            <button @click="editCLD(cld.id)" class="btn-edit">Edit</button>
-            <button @click="deleteCLD(cld.id)" class="btn-delete">Delete</button>
+            <button @click="viewCLD(cld.id)" class="btn-view">
+              <i class="fas fa-eye"></i> View
+            </button>
+            <button @click="editCLD(cld.id)" class="btn-edit">
+              <i class="fas fa-edit"></i> Edit
+            </button>
+            <button @click="deleteCLD(cld.id)" class="btn-delete">
+              <i class="fas fa-trash-alt"></i> Delete
+            </button>
           </div>
         </div>
       </div>
@@ -43,16 +55,12 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
+import NavBar from '../components/NavBar.vue'
 
 const router = useRouter()
 const clds = ref([])
 const loading = ref(false)
 const error = ref('')
-
-const logout = () => {
-  localStorage.removeItem('token')
-  router.push('/')
-}
 
 const fetchCLDs = async () => {
   loading.value = true
@@ -102,150 +110,149 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.app-container {
-  display: flex;
-  flex-direction: column;
+.cld-list-container {
   min-height: 100vh;
   background-color: #f5f7fa;
 }
 
-.navbar {
-  background-color: white;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-  padding: 1rem 0;
-  margin-bottom: 2rem;
-}
-
-.nav-content {
-  max-width: 1400px;
+.cld-content {
+  max-width: 2000px;
   margin: 0 auto;
-  padding: 0 2rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.navbar h2 {
-  margin: 0;
-  color: #1a252f;
-  font-size: 1.8rem;
-}
-
-.btn-logout {
-  background-color: #dc3545;
-  color: white;
-  padding: 0.6rem 1.2rem;
-  border: none;
-  border-radius: 6px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.btn-logout:hover {
-  background-color: #c82333;
-  transform: translateY(-1px);
-}
-
-.cld-list-container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 0 2rem 2rem;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+  padding: 2rem 3rem;
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
-  flex-wrap: wrap;
-  gap: 1rem;
+  margin-bottom: 2.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 h1 {
-  font-size: 2.2rem;
   color: #1a252f;
+  font-size: 2.5rem;
   margin: 0;
+  font-weight: 600;
 }
 
 .btn-create {
   background-color: #42b983;
   color: white;
-  font-size: 1rem;
   padding: 0.9rem 1.8rem;
   border: none;
-  border-radius: 6px;
-  font-weight: bold;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
   transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.05rem;
+  box-shadow: 0 2px 4px rgba(66, 185, 131, 0.3);
 }
 
 .btn-create:hover {
   background-color: #3aa876;
   transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(66, 185, 131, 0.3);
 }
 
 .cld-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 2rem;
 }
 
 .cld-card {
   background-color: white;
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
-  transition: transform 0.3s ease;
+  height: 100%;
+  border: 1px solid #e2e8f0;
 }
 
 .cld-card:hover {
-  transform: translateY(-4px);
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+  border-color: #cbd5e0;
 }
 
 .cld-card-content {
-  padding: 1.5rem 2rem;
+  padding: 1.8rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.2rem;
+}
+
+.card-header h3 {
+  color: #1a252f;
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
   flex: 1;
 }
 
-.cld-card h3 {
-  font-size: 1.3rem;
-  color: #1a252f;
-  margin: 0 0 0.75rem 0;
+.badge {
+  background-color: #e2f3eb;
+  color: #42b983;
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-left: 1rem;
 }
 
 .description {
   color: #555;
-  margin-bottom: 1.2rem;
-  line-height: 1.5;
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+  flex: 1;
 }
 
 .cld-meta {
   display: flex;
   justify-content: space-between;
-  font-size: 0.85rem;
-  color: #888;
+  color: #718096;
+  font-size: 0.9rem;
+  margin-top: auto;
+}
+
+.cld-meta i {
+  margin-right: 0.4rem;
+  opacity: 0.8;
 }
 
 .cld-actions {
   display: flex;
-  justify-content: space-around;
+  border-top: 1px solid #edf2f7;
   padding: 1rem;
-  border-top: 1px solid #eee;
-  background-color: #f8f9fa;
-  gap: 0.5rem;
+  gap: 0.8rem;
 }
 
-button {
-  padding: 0.6rem 1.2rem;
+.cld-actions button {
+  flex: 1;
+  padding: 0.7rem;
   border: none;
   border-radius: 6px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
   font-size: 0.95rem;
 }
 
@@ -253,6 +260,7 @@ button {
   background-color: #2c3e50;
   color: white;
 }
+
 .btn-view:hover {
   background-color: #1a252f;
 }
@@ -261,28 +269,63 @@ button {
   background-color: #42b983;
   color: white;
 }
+
 .btn-edit:hover {
   background-color: #3aa876;
 }
 
 .btn-delete {
-  background-color: #dc3545;
-  color: white;
+  background-color: #fef2f2;
+  color: #dc3545;
 }
+
 .btn-delete:hover {
-  background-color: #c82333;
+  background-color: #fee2e2;
 }
 
 .loading,
 .error,
 .empty {
   text-align: center;
-  padding: 2rem;
-  font-size: 1.1rem;
-  color: #666;
+  padding: 3rem 2rem;
+  font-size: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.loading i,
+.error i,
+.empty i {
+  font-size: 2.5rem;
+  color: #42b983;
+  opacity: 0.8;
+}
+
+.loading i {
+  color: #718096;
+}
+
+.error i {
+  color: #dc3545;
+}
+
+.empty i {
+  color: #a0aec0;
+}
+
+.empty p {
+  color: #718096;
+  margin: 0;
 }
 
 .error {
   color: #dc3545;
+}
+
+/* Font Awesome icons */
+.fas, .far {
+  font-size: 1rem;
 }
 </style>

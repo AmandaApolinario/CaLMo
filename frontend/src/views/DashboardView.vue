@@ -53,33 +53,37 @@ const viewCLDs = () => {
 <style scoped>
 .dashboard-container {
   min-height: 100vh;
-  padding: 3rem 5%;
-  background-color: #f8fafc;
+  background-color: #f5f7fa;
+  padding: 2rem;
 }
 
 .dashboard-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
+  margin-bottom: 2.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 .dashboard-header h1 {
-  font-size: 2.8rem;
-  color: #1e293b;
+  font-size: 2.5rem;
+  color: #1a252f;
   margin: 0;
+  font-weight: 600;
 }
 
 .btn-logout {
   background-color: #dc3545;
   color: white;
   padding: 0.75rem 1.5rem;
-  font-size: 1rem;
   border: none;
   border-radius: 8px;
-  font-weight: bold;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.3s ease, transform 0.2s ease;
+  transition: all 0.3s ease;
 }
 
 .btn-logout:hover {
@@ -89,51 +93,72 @@ const viewCLDs = () => {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
   gap: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 .dashboard-card {
-  background: white;
-  border-radius: 16px;
+  background-color: white;
+  border-radius: 12px;
   padding: 2rem;
-  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.06);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  cursor: pointer;
+  border: 1px solid #e2e8f0;
 }
 
 .dashboard-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 14px rgba(0, 0, 0, 0.1);
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+  border-color: #cbd5e0;
 }
 
 .dashboard-card h2 {
-  font-size: 1.6rem;
-  margin-bottom: 0.5rem;
-  color: #0f172a;
+  font-size: 1.4rem;
+  color: #1a252f;
+  margin: 0 0 1rem 0;
+  font-weight: 600;
 }
 
 .dashboard-card p {
-  flex-grow: 1;
-  color: #475569;
-  margin-bottom: 1.5rem;
+  color: #555;
+  margin: 0 0 1.5rem 0;
+  line-height: 1.6;
+  flex: 1;
 }
 
 .card-btn {
   background-color: #42b983;
   color: white;
   padding: 0.75rem;
-  font-weight: bold;
   border: none;
   border-radius: 8px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.3s ease;
+  transition: all 0.3s ease;
+  width: 100%;
 }
 
 .card-btn:hover {
   background-color: #3aa876;
+}
+
+@media (max-width: 768px) {
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .dashboard-header h1 {
+    font-size: 2rem;
+  }
+  
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
