@@ -52,22 +52,25 @@
 </template>
 
 <script setup>
+// Import necessary dependencies and components
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import NavBar from '../components/NavBar.vue'
 
+// Initialize router and reactive state variables
 const router = useRouter()
-const clds = ref([])
-const loading = ref(false)
-const error = ref('')
+const clds = ref([])  // Stores the list of Causal Loop Diagrams
+const loading = ref(false)  // Controls loading state during API calls
+const error = ref('')  // Stores error messages if API calls fail
 
+// Fetches all CLDs from the backend API
 const fetchCLDs = async () => {
   loading.value = true
   error.value = ''
   try {
     const response = await axios.get('/clds')
-    clds.value = response.data
+    clds.value = response.data  // Update the CLDs list with fetched data
   } catch (err) {
     error.value = 'Failed to fetch CLDs'
     console.error('Error fetching CLDs:', err)
@@ -76,24 +79,26 @@ const fetchCLDs = async () => {
   }
 }
 
+// Navigation handlers for CLD operations
 const createNewCLD = () => {
-  router.push('/cld/new')
+  router.push('/cld/new')  // Navigate to new CLD creation page
 }
 
 const viewCLD = (id) => {
-  router.push(`/cld/${id}`)
+  router.push(`/cld/${id}`)  // Navigate to CLD view page
 }
 
 const editCLD = (id) => {
-  router.push(`/cld/${id}/edit`)
+  router.push(`/cld/${id}/edit`)  // Navigate to CLD edit page
 }
 
+// Handles CLD deletion with user confirmation
 const deleteCLD = async (id) => {
   if (!confirm('Are you sure you want to delete this CLD?')) return
   
   try {
-    await axios.delete(`/cld/${id}`)
-    clds.value = clds.value.filter(cld => cld.id !== id)
+    await axios.delete(`/cld/${id}`)  // Send delete request to backend
+    clds.value = clds.value.filter(cld => cld.id !== id)  // Remove deleted CLD from list
   } catch (err) {
     error.value = 'Failed to delete CLD'
     console.error('Error deleting CLD:', err)

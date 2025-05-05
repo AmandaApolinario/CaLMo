@@ -28,35 +28,60 @@
       </div>
     </div>
 
-    <!-- Archetype Popup - placed here so it overlays everything -->
-    <!-- Popup for Loops and Archetypes -->
-<div v-if="selectedNodeInfo.loops.length > 0 || selectedNodeInfo.archetypes.length > 0" class="archetype-popup">
-  <div class="popup-content">
-    <h3>Node Details</h3>
+        <!-- Improved Archetype Popup -->
+        <div v-if="selectedNodeInfo.loops.length > 0 || selectedNodeInfo.archetypes.length > 0" class="archetype-popup">
+    <div class="popup-overlay" @click="closePopup"></div>
+    <div class="popup-card">
+      <div class="popup-header">
+        <h3>Node Details</h3>
+        <button @click="closePopup" class="close-button">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      
+      <div class="popup-body">
+        <!-- Added node name section here -->
+        <div class="node-name-section">
+          <h4 class="section-title">
+            <i class="fas fa-circle"></i> Node Name
+          </h4>
+          <div class="node-name">{{ selectedNodeInfo.nodeName }}</div>
+        </div>
 
-    <div v-if="selectedNodeInfo.loops.length > 0">
-      <h4>Feedback Loops:</h4>
-      <ul>
-        <li v-for="(loop, index) in selectedNodeInfo.loops" :key="'loop-' + index">
-          <strong>{{ loop.type }} Loop</strong><br/>
-          Variables: {{ loop.variables.join(', ') }}
-        </li>
-      </ul>
+          <div v-if="selectedNodeInfo.loops.length > 0" class="loop-section">
+            <h4 class="section-title">
+              <i class="fas fa-circle-notch"></i> Feedback Loops
+            </h4>
+            <div class="loop-container">
+              <div v-for="(loop, index) in selectedNodeInfo.loops" :key="'loop-' + index" 
+                   class="loop-item" :class="loop.type.toLowerCase()">
+                <div class="loop-badge">{{ loop.type }}</div>
+                <div class="loop-variables">
+                  <span v-for="(variable, idx) in loop.variables" :key="idx" class="variable-tag">
+                    {{ variable }}<span v-if="idx < loop.variables.length - 1">, </span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="selectedNodeInfo.archetypes.length > 0" class="archetype-section">
+            <h4 class="section-title">
+              <i class="fas fa-shapes"></i> Archetypes
+            </h4>
+            <div class="archetype-container">
+              <div v-for="archetype in selectedNodeInfo.archetypes" :key="'arch-' + archetype.id" 
+                   class="archetype-item">
+                <div class="archetype-icon">
+                  <i class="fas" :class="getArchetypeIcon(archetype.type)"></i>
+                </div>
+                <div class="archetype-name">{{ formatArchetypeName(archetype.type) }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-
-    <div v-if="selectedNodeInfo.archetypes.length > 0" style="margin-top: 1rem;">
-      <h4>Archetypes:</h4>
-      <ul>
-        <li v-for="archetype in selectedNodeInfo.archetypes" :key="'arch-' + archetype.id">
-          {{ archetype.type }}
-        </li>
-      </ul>
-    </div>
-
-    <button @click="selectedNodeInfo = { loops: [], archetypes: [] }" class="close-btn">Close</button>
-  </div>
-</div>
-
   </div>
 </template>
 
@@ -203,27 +228,59 @@ const createDiagram = () => {
   const options = {
     physics: {
       enabled: true,
-      solver: 'repulsion',
-      repulsion: {
-        nodeDistance: 300,
-        centralGravity: 0.0,
-        springLength: 300,
-        springConstant: 0.2,
-        damping: 0.09
+      solver: 'forceAtlas2Based', // Better for preventing overlaps
+      forceAtlas2Based: {
+        gravitationalConstant: -50,
+        centralGravity: 0.01,
+        springLength: 200,
+        springConstant: 0.08,
+        damping: 0.4,
+        avoidOverlap: 1 // This is key to prevent node overlaps
       },
       stabilization: {
-        iterations: 300,
+        enabled: true,
+        iterations: 1000, // Increased iterations for better layout
+        updateInterval: 25,
+        onlyDynamicEdges: false,
         fit: true
-      }
+      },
+      timestep: 0.5,
+      adaptiveTimestep: true
     },
     layout: {
       improvedLayout: true,
-      randomSeed: 42
+      hierarchical: {
+        enabled: false,
+        nodeSpacing: 150,
+        treeSpacing: 200,
+        direction: 'UD',
+        sortMethod: 'directed'
+      }
     },
     nodes: {
-      shape: 'ellipse'
+      shape: 'ellipse',
+      margin: 10, // Add margin around node labels
+      size: 30, // Standardize node size
+      font: {
+        size: 14,
+        face: 'Arial',
+        strokeWidth: 3,
+        strokeColor: '#ffffff'
+      },
+      borderWidth: 2,
+      shadow: {
+        enabled: true,
+        color: 'rgba(0,0,0,0.2)',
+        size: 10,
+        x: 5,
+        y: 5
+      }
     },
     edges: {
+      smooth: {
+        type: 'continuous', // Smoother curves
+        roundness: 0.5
+      },
       arrows: {
         to: {
           enabled: true,
@@ -231,32 +288,68 @@ const createDiagram = () => {
           scaleFactor: 0.8
         }
       },
-      smooth: {
-        type: 'curvedCCW',
-        roundness: 0.5
-      },
       color: {
         opacity: 0.9
       },
-      width: 3
+      width: 2,
+      selectionWidth: 3,
+      font: {
+        size: 14,
+        align: 'middle',
+        strokeWidth: 3,
+        strokeColor: '#ffffff'
+      }
     },
     interaction: {
       hover: true,
       tooltipDelay: 200,
       dragNodes: true,
       zoomView: true,
-      dragView: true
+      dragView: true,
+      hideEdgesOnDrag: false,
+      hideNodesOnDrag: false,
+      multiselect: false,
+      navigationButtons: false,
+      keyboard: false
     }
+  }
+
+  // Add repulsion to prevent overlap
+  options.physics.repulsion = {
+    nodeDistance: 300, // Increased distance between nodes
+    centralGravity: 0.2,
+    springLength: 200,
+    springConstant: 0.05,
+    damping: 0.09
+  }
+
+  // Configure the barnesHut physics model for better node distribution
+  options.physics.barnesHut = {
+    gravitationalConstant: -2000,
+    centralGravity: 0.3,
+    springLength: 200,
+    springConstant: 0.04,
+    damping: 0.09,
+    avoidOverlap: 0.5
   }
 
   networkInstance = new Network(container, data, options)
 
+  // After stabilization, run another layout pass to ensure no overlaps
+  networkInstance.once('stabilizationIterationsDone', function() {
+    networkInstance.setOptions({
+      physics: {
+        enabled: false // Turn off physics after stabilization
+      }
+    })
+  })
+
   networkInstance.on("click", function(params) {
-  if (params.nodes.length > 0) {
-    const nodeId = params.nodes[0];
-    showNodeDetails(nodeId);
-  }
-});
+    if (params.nodes.length > 0) {
+      const nodeId = params.nodes[0]
+      showNodeDetails(nodeId)
+    }
+  })
 }
 
 const selectedNodeArchetypes = ref([]);
@@ -269,6 +362,13 @@ const selectedNodeInfo = ref({
 const showNodeDetails = (nodeId) => {
   const loops = [];
   const archetypes = [];
+  let nodeName = '';
+
+  // Get the node name first
+  const node = cld.value.variables.find(v => v.id === nodeId);
+  if (node) {
+    nodeName = node.name;
+  }
 
   // Check feedback loops
   if (cld.value.feedback_loops) {
@@ -299,7 +399,11 @@ const showNodeDetails = (nodeId) => {
     });
   }
 
-  selectedNodeInfo.value = { loops, archetypes };
+  selectedNodeInfo.value = { 
+    nodeName,  // Add node name to the info
+    loops, 
+    archetypes 
+  };
 };
 
 function removeCircularReferences() {
@@ -351,6 +455,29 @@ watch(loading, (newVal) => {
     })
   }
 })
+
+const closePopup = () => {
+  selectedNodeInfo.value = { loops: [], archetypes: [] }
+}
+
+const formatArchetypeName = (name) => {
+  return name.split('_').map(word => 
+    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  ).join(' ')
+}
+
+const getArchetypeIcon = (type) => {
+  const icons = {
+    'FIXES_THAT_FAIL': 'fa-tools',
+    'SHIFTING_THE_BURDEN': 'fa-balance-scale',
+    'LIMITS_TO_GROWTH': 'fa-chart-line',
+    'GROWTH_AND_UNDERINVESTMENT': 'fa-seedling',
+    'SUCCESS_TO_THE_SUCCESSFUL': 'fa-trophy',
+    'TRAAGEDY_OF_THE_COMMONS': 'fa-users',
+    'ESCALATION': 'fa-arrow-up'
+  }
+  return icons[type] || 'fa-puzzle-piece'
+}
 </script>
 
 <style scoped>
@@ -473,7 +600,7 @@ button {
 }
 
 .diagram-container {
-  position: relative; /* IMPORTANT to make zoom buttons float inside */
+  position: relative;
   height: 600px;
   border: 1px solid #ddd;
   border-radius: 8px;
@@ -485,32 +612,208 @@ button {
   position: fixed;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  width: 100%;
+  height: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1000;
 }
 
-.popup-content {
+.popup-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(3px);
+}
+
+.popup-card {
+  position: relative;
   background: white;
-  padding: 2rem;
-  border-radius: 8px;
-  max-width: 500px;
+  border-radius: 12px;
   width: 90%;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  max-width: 500px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  animation: popupFadeIn 0.3s ease-out;
+  z-index: 1001;
 }
 
-.close-btn {
-  margin-top: 1rem;
-  padding: 0.5rem 1rem;
-  background: #42b983;
-  color: white;
+@keyframes popupFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 1.5rem 1rem;
+  border-bottom: 1px solid #eee;
+}
+
+.popup-header h3 {
+  margin: 0;
+  font-size: 1.3rem;
+  color: #2c3e50;
+}
+
+.close-button {
+  background: none;
   border: none;
-  border-radius: 4px;
+  font-size: 1.2rem;
+  color: #7f8c8d;
   cursor: pointer;
+  transition: color 0.2s;
+  padding: 0.5rem;
 }
 
-</style> 
+.close-button:hover {
+  color: #e74c3c;
+}
+
+.popup-body {
+  padding: 1.5rem;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+  color: #3498db;
+  margin: 0 0 1rem 0;
+}
+
+.section-title i {
+  color: #3498db;
+}
+
+.loop-container, .archetype-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-bottom: 1.5rem;
+}
+
+.loop-item {
+  padding: 0.8rem;
+  border-radius: 8px;
+  background: #f8f9fa;
+  border-left: 4px solid #42b983;
+}
+
+.loop-item.reinforcing {
+  border-left-color: #e74c3c;
+}
+
+.loop-item.balancing {
+  border-left-color: #3498db;
+}
+
+.loop-badge {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+.loop-item.reinforcing .loop-badge {
+  background: #fde8e8;
+  color: #e74c3c;
+}
+
+.loop-item.balancing .loop-badge {
+  background: #e8f4fc;
+  color: #3498db;
+}
+
+.loop-variables {
+  font-size: 0.95rem;
+  color: #34495e;
+}
+
+.variable-tag {
+  background: #e8f4fc;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  margin-right: 0.3rem;
+  display: inline-block;
+}
+
+.archetype-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.8rem;
+  border-radius: 8px;
+  background: #f8f9fa;
+  transition: transform 0.2s;
+}
+
+.archetype-item:hover {
+  transform: translateX(5px);
+  background: #f1f8fe;
+}
+
+.archetype-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #e8f4fc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #3498db;
+}
+
+.archetype-name {
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .popup-card {
+    width: 95%;
+  }
+  
+  .loop-item, .archetype-item {
+    padding: 0.6rem;
+  }
+}
+
+.node-name-section {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #eee;
+}
+
+.node-name {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #2c3e50;
+  padding: 0.5rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+  margin-top: 0.5rem;
+}
+
+/* Adjust spacing for sections to account for new node name section */
+.loop-section, .archetype-section {
+  margin-top: 1.5rem;
+}
+
+</style>

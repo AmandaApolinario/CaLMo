@@ -103,26 +103,6 @@
           </div>
         </div>
       </div>
-
-      <!-- Popup for success message -->
-      <div v-if="showPopup" class="popup-overlay">
-        <div class="popup-content">
-          <div class="popup-message">
-            {{ successMessage }}
-          </div>
-          <button @click="closePopup" class="popup-close">OK</button>
-        </div>
-      </div>
-
-      <!-- Popup for error message -->
-      <div v-if="error" class="popup-overlay">
-        <div class="popup-content error">
-          <div class="popup-message">
-            {{ error }}
-          </div>
-          <button @click="error = ''" class="popup-close">OK</button>
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -147,9 +127,6 @@ const cld = ref({
 // Add success message ref
 const successMessage = ref('')
 const error = ref('')
-
-// Add showPopup ref
-const showPopup = ref(false)
 
 // Fetch variables from the API when the component is mounted
 onMounted(async () => {
@@ -178,7 +155,6 @@ const createCLD = async () => {
     // Reset messages
     successMessage.value = ''
     error.value = ''
-    showPopup.value = false
 
     // Prepare the request data
     const requestData = {
@@ -196,12 +172,9 @@ const createCLD = async () => {
     }
 
     const response = await axios.post('/cld', requestData)
-    if (response.data.id) {
+    if (response.status === 201) {
       successMessage.value = 'CLD created successfully!'
-      showPopup.value = true
-      setTimeout(() => {
-        router.push(`/cld/${response.data.id}`)
-      }, 2000) // Redirect after 2 seconds
+      router.push('/clds')
     }
   } catch (err) {
     error.value = 'Failed to create CLD: ' + (err.response?.data?.message || err.message)
@@ -233,10 +206,6 @@ const submitForm = async () => {
     error.value = validationError
     return
   }
-}
-
-const closePopup = () => {
-  showPopup.value = false
 }
 </script>
 
@@ -440,56 +409,5 @@ button {
 /* Font Awesome icons */
 .fas {
   font-size: 1.2rem;
-}
-
-.popup-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.popup-content {
-  background-color: white;
-  padding: 2rem;
-  border-radius: 8px;
-  width: 400px;
-  max-width: 90%;
-  text-align: center;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-.popup-content.error {
-  background-color: #f8d7da;
-  border: 1px solid #f5c6cb;
-}
-
-.popup-message {
-  font-size: 1.2rem;
-  margin-bottom: 1.5rem;
-  color: #155724;
-}
-
-.popup-content.error .popup-message {
-  color: #721c24;
-}
-
-.popup-close {
-  background-color: #42b983;
-  color: white;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.popup-content.error .popup-close {
-  background-color: #dc3545;
 }
 </style>

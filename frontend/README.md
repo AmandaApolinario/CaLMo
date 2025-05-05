@@ -1,29 +1,54 @@
-# frontend
+# Casual Loop Diagram (CLD) Frontend Application
 
-This template should help get you started developing with Vue 3 in Vite.
+A modern Vue.js application for creating, managing, and visualizing Casual Loop Diagrams (CLDs). This frontend provides an intuitive interface for working with CLDs, allowing users to create, edit, and analyze complex system relationships.
 
-## Recommended IDE Setup
+## Features
 
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+- Create and manage multiple CLDs
+- Interactive diagram editing
+- Variable relationship management
+- Real-time visualization
+- Responsive design for various screen sizes
 
-## Customize configuration
+## Prerequisites
 
-See [Vite Configuration Reference](https://vite.dev/config/).
+- Node.js (v14 or higher)
+- npm (Node Package Manager)
 
-## Project Setup
+## Getting Started
 
-```sh
+1. Install dependencies:
+```bash
 npm install
 ```
 
-### Compile and Hot-Reload for Development
-
-```sh
+2. Start the development server:
+```bash
 npm run dev
 ```
 
-### Compile and Minify for Production
+The application will be available at `http://localhost:5001`.
 
-```sh
+## Project Structure
+
+- `src/views/` - Main view components including CLDListView and CLDEditView
+- `src/components/` - Reusable Vue components
+- `src/assets/` - Static assets like images and styles
+
+## Development
+
+This project uses:
+- Vue 3 with Composition API
+- Vite as the build tool
+- Axios for API requests
+- Modern CSS with flexbox and grid layouts
+
+## Building for Production
+
+To create a production build:
+
+```bash
 npm run build
 ```
+
+The built files will be in the `dist` directory.

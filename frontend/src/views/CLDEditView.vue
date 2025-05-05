@@ -127,42 +127,51 @@
 </template>
 
 <script setup>
+// Import necessary dependencies and components
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import NavBar from '../components/NavBar.vue'
 
+// Initialize route and router for navigation
 const route = useRoute()
 const router = useRouter()
+
+// Initialize the CLD data structure with reactive properties
 const cld = ref({
   name: '',
   description: '',
   date: '',
-  variables: [],
-  relationships: []
+  variables: [],      // Array of variable IDs used in this CLD
+  relationships: []   // Array of relationships between variables
 })
-const variables = ref([])
-const loading = ref(true)
-const updating = ref(false)
-const error = ref('')
 
+// State management variables
+const variables = ref([])  // List of all available variables
+const loading = ref(true)  // Controls loading state during API calls
+const updating = ref(false)  // Controls state during save operations
+const error = ref('')  // Stores error messages
+
+// Fetches CLD data and available variables from the backend
 const fetchCLD = async () => {
   try {
+    // Fetch both CLD and variables data in parallel for better performance
     const [cldResponse, variablesResponse] = await Promise.all([
       axios.get(`/cld/${route.params.id}`),
       axios.get('/variables')
     ])
     
+    // Transform the CLD data to match our frontend data structure
     cld.value = {
-  ...cldResponse.data,
-  variables: cldResponse.data.variables.map(v => v.id),
-  relationships: cldResponse.data.relationships.map(r => ({
-    ...r,
-    type: r.type.toUpperCase() === 'POSITIVE' ? 'POSITIVE' : 'NEGATIVE'
-  }))
-}
+      ...cldResponse.data,
+      variables: cldResponse.data.variables.map(v => v.id),  // Extract variable IDs
+      relationships: cldResponse.data.relationships.map(r => ({
+        ...r,
+        type: r.type.toUpperCase() === 'POSITIVE' ? 'POSITIVE' : 'NEGATIVE'  // Normalize relationship types
+      }))
+    }
 
-    variables.value = variablesResponse.data
+    variables.value = variablesResponse.data  // Store available variables
   } catch (err) {
     error.value = 'Failed to fetch CLD details'
     console.error('Error fetching CLD:', err)
@@ -171,14 +180,16 @@ const fetchCLD = async () => {
   }
 }
 
+// Adds a new blank relationship to the CLD
 const addRelationship = () => {
   cld.value.relationships.push({
-    source_id: '',
-    target_id: '',
-    type: 'POSITIVE'
+    source_id: '',     // ID of the source variable
+    target_id: '',     // ID of the target variable
+    type: 'POSITIVE'   // Default relationship type
   })
 }
 
+// Removes a relationship from the CLD at the specified index
 const removeRelationship = (index) => {
   cld.value.relationships.splice(index, 1)
 }
