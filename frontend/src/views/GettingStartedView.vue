@@ -208,43 +208,6 @@
         </div>
       </section>
       
-      <!-- Tips Section -->
-      <section class="gs-section">
-        <h2>Tips for Creating Effective CLDs</h2>
-        
-        <div class="tips-container">
-          <div class="tip">
-            <h3>Start Simple</h3>
-            <p>Begin with just a few core variables and relationships, then expand gradually as your understanding grows.</p>
-          </div>
-          
-          <div class="tip">
-            <h3>Use Clear Variable Names</h3>
-            <p>Choose variable names that clearly convey what is increasing or decreasing (e.g., "Customer Satisfaction" rather than "Customers").</p>
-          </div>
-          
-          <div class="tip">
-            <h3>Be Consistent with Polarity</h3>
-            <p>Always use the same convention: "+" means variables change in the same direction, "-" means they change in opposite directions.</p>
-          </div>
-          
-          <div class="tip">
-            <h3>Focus on Causality, Not Correlation</h3>
-            <p>Only include relationships where one variable directly causes a change in another, not just where they happen to change together.</p>
-          </div>
-          
-          <div class="tip">
-            <h3>Look for Feedback</h3>
-            <p>The real power of CLDs is in identifying circular feedback. Make sure your diagram includes complete loops, not just linear chains.</p>
-          </div>
-          
-          <div class="tip">
-            <h3>Validate with Others</h3>
-            <p>Share your CLD with stakeholders to get different perspectives and refine your understanding of the system.</p>
-          </div>
-        </div>
-      </section>
-      
       <div class="return-dashboard">
         <button @click="returnToDashboard" class="btn-return">Return to Dashboard</button>
       </div>
@@ -254,6 +217,7 @@
 
 <script setup>
 import { useRouter } from 'vue-router'
+import { onMounted } from 'vue'
 import NavBar from '../components/NavBar.vue'
 
 const router = useRouter()
@@ -261,6 +225,11 @@ const router = useRouter()
 const returnToDashboard = () => {
   router.push('/dashboard')
 }
+
+// Ensure the page scrolls to the top when loaded
+onMounted(() => {
+  window.scrollTo(0, 0)
+})
 </script>
 
 <style scoped>
@@ -502,32 +471,6 @@ h1 {
 .step-content li {
   margin-bottom: 0.5rem;
   color: #4a5568;
-}
-
-/* Tips Styles */
-.tips-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1.5rem;
-}
-
-.tip {
-  background-color: #f8fafc;
-  border-radius: 8px;
-  padding: 1.5rem;
-  border: 1px solid #e2e8f0;
-}
-
-.tip h3 {
-  font-size: 1.1rem;
-  color: #42b983;
-  margin-bottom: 0.8rem;
-  font-weight: 600;
-}
-
-.tip p {
-  color: #4a5568;
-  line-height: 1.6;
 }
 
 .return-dashboard {

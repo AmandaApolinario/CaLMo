@@ -281,6 +281,8 @@ const goToGettingStarted = () => {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
+  width: auto;
+  display: inline-block;
 }
 
 .btn-learn-more:hover {
