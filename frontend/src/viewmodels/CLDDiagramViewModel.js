@@ -124,7 +124,7 @@ export function useCLDDiagramViewModel() {
         zoomView: true
       },
       physics: {
-        enabled: savedPositions ? false : true, // Disable physics if we have saved positions
+        enabled: false, // Disable physics initially - no rotation or movement
         stabilization: {
           enabled: true,
           iterations: 1000,
@@ -132,7 +132,7 @@ export function useCLDDiagramViewModel() {
         },
         barnesHut: {
           gravitationalConstant: -3000, // Stronger repulsion
-          centralGravity: 0.2,
+          centralGravity: 0.1, // Reduced central gravity to prevent pulling nodes to center
           springLength: 200, // Longer springs for more separation
           springConstant: 0.05,
           damping: 0.09,
@@ -182,25 +182,16 @@ export function useCLDDiagramViewModel() {
       });
     }, 500);
     
-    // If we have saved positions, disable physics after stabilization and ensure no overlap
-    if (savedPositions) {
-      network.value.once('stabilizationIterationsDone', () => {
-        ensureNoOverlap();
-        network.value.setOptions({ physics: false });
-        // Fit to view to ensure all nodes are visible
-        network.value.fit({
-          animation: {
-            duration: 1000,
-            easingFunction: 'easeInOutQuad'
-          }
-        });
-      });
-    } else {
-      // If no saved positions, stabilize then disable physics
+    // For diagrams without saved positions, run stabilization once to position nodes, then disable physics
+    if (!savedPositions) {
+      // Temporarily enable physics for initial layout
+      network.value.setOptions({ physics: { enabled: true } });
+      
+      // After stabilization completes, disable physics to stop movement
       network.value.once('stabilized', () => {
         setTimeout(() => {
           ensureNoOverlap();
-          network.value.setOptions({ physics: false });
+          network.value.setOptions({ physics: { enabled: false } });
           // Fit to view to ensure all nodes are visible
           network.value.fit({
             animation: {
@@ -211,6 +202,15 @@ export function useCLDDiagramViewModel() {
           saveNodePositions(diagram.id);
         }, 1000);
       });
+    } else {
+      // If we have saved positions, quickly check for overlaps and ensure diagram is static
+      setTimeout(() => {
+        ensureNoOverlap();
+        // Make sure physics remains disabled
+        network.value.setOptions({ physics: { enabled: false } });
+        // Fit to view to ensure all nodes are visible
+        network.value.fit();
+      }, 100);
     }
   }
   
@@ -408,7 +408,23 @@ export function useCLDDiagramViewModel() {
     }
     
     let overlapsFixed = 0;
-    const minDistance = 80; // Minimum distance between node centers
+    
+    // Dynamically adjust minimum distance based on number of nodes
+    // For more nodes, we need more spacing to prevent overlaps
+    let minDistance = 120; // Base minimum distance
+    
+    // Increase spacing for diagrams with many nodes
+    if (nodeCount > 10) {
+      minDistance = 150;
+    }
+    if (nodeCount > 20) {
+      minDistance = 180;
+    }
+    if (nodeCount > 30) {
+      minDistance = 200;
+    }
+    
+    console.log(`Using minimum distance of ${minDistance}px for ${nodeCount} nodes`);
     
     // Check each pair of nodes for overlap
     for (let i = 0; i < nodeCount; i++) {
@@ -458,7 +474,86 @@ export function useCLDDiagramViewModel() {
     
     if (overlapsFixed > 0) {
       console.log(`Fixed ${overlapsFixed} node overlaps`);
+      
+      // After fixing overlaps, make sure the diagram fits in the view
+      network.value.fit({
+        animation: {
+          duration: 500,
+          easingFunction: 'easeOutQuad'
+        }
+      });
     }
+  }
+
+  // Function to redistribute nodes in a more organized manner
+  function redistributeNodes() {
+    if (!network.value) return;
+    
+    const nodeIds = network.value.getNodeIds();
+    const nodeCount = nodeIds.length;
+    
+    if (nodeCount <= 1) return;
+    
+    console.log('Redistributing nodes for better visibility');
+    
+    // Temporarily enable physics for better layout
+    network.value.setOptions({ physics: { enabled: true } });
+    
+    // Spread nodes out in a circle or grid layout
+    if (nodeCount <= 10) {
+      // For fewer nodes, use a circle layout
+      const radius = Math.max(300, nodeCount * 50);
+      const angleStep = (2 * Math.PI) / nodeCount;
+      
+      nodeIds.forEach((id, index) => {
+        const angle = index * angleStep;
+        const x = radius * Math.cos(angle);
+        const y = radius * Math.sin(angle);
+        network.value.moveNode(id, x, y);
+      });
+    } else {
+      // For more nodes, use a grid layout
+      // Calculate grid dimensions based on square root of node count
+      const gridSize = Math.ceil(Math.sqrt(nodeCount));
+      const spacingX = 200;
+      const spacingY = 200;
+      
+      nodeIds.forEach((id, index) => {
+        const row = Math.floor(index / gridSize);
+        const col = index % gridSize;
+        
+        // Center the grid
+        const offsetX = -((gridSize - 1) * spacingX) / 2;
+        const offsetY = -((gridSize - 1) * spacingY) / 2;
+        
+        const x = offsetX + col * spacingX;
+        const y = offsetY + row * spacingY;
+        
+        network.value.moveNode(id, x, y);
+      });
+    }
+    
+    // Run stabilization briefly
+    setTimeout(() => {
+      // Ensure no overlaps
+      ensureNoOverlap();
+      
+      // Disable physics again
+      network.value.setOptions({ physics: { enabled: false } });
+      
+      // Fit the network to the view
+      network.value.fit({
+        animation: {
+          duration: 1000,
+          easingFunction: 'easeInOutQuad'
+        }
+      });
+      
+      // Save the new node positions
+      if (diagram.value && diagram.value.id) {
+        saveNodePositions(diagram.value.id);
+      }
+    }, 1500);
   }
 
   return {
@@ -469,6 +564,7 @@ export function useCLDDiagramViewModel() {
     clearNodeSelection,
     zoomIn,
     zoomOut,
+    redistributeNodes,
     getArchetypeIcon,
     formatArchetypeName
   };

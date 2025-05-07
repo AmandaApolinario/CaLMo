@@ -12,11 +12,28 @@
           <span class="variables-count">{{ diagram?.nodes?.length || 0 }} variables</span>
         </div>
         
+        <!-- Info Panel with Interaction Tips -->
+        <div class="info-panel" v-if="showInfoPanel">
+          <div class="info-icon"><i class="fas fa-info-circle"></i></div>
+          <div class="info-content">
+            <p><strong>How to interact with this diagram:</strong></p>
+            <ul class="interaction-tips">
+              <li><i class="fas fa-mouse-pointer"></i> Click on variables to see feedback loops and archetypes they participate in</li>
+              <li><i class="fas fa-hand-paper"></i> Drag variables to reposition them for better visibility</li>
+              <li><i class="fas fa-search-plus"></i> Use the zoom controls to adjust your view</li>
+              <li><i class="fas fa-project-diagram"></i> Hover over relationships to highlight connections</li>
+            </ul>
+          </div>
+          <button class="dismiss-info" @click="hideInfoPanel">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        
         <!-- Diagram Container -->
         <div class="diagram-container">
           <div class="zoom-controls">
-            <button @click="zoomIn" class="zoom-button">+</button>
-            <button @click="zoomOut" class="zoom-button">-</button>
+            <button @click="zoomIn" class="zoom-button" title="Zoom In">+</button>
+            <button @click="zoomOut" class="zoom-button" title="Zoom Out">-</button>
           </div>
           <div ref="networkContainer" class="network"></div>
         </div>
@@ -95,6 +112,7 @@ import { useCLDDiagramViewModel } from '@/viewmodels/CLDDiagramViewModel'
 const route = useRoute()
 const router = useRouter()
 const networkContainer = ref(null)
+const showInfoPanel = ref(true)
 
 // Initialize ViewModels
 const { 
@@ -117,6 +135,11 @@ const {
 // Format date for display
 const formatDate = (dateString) => {
   return new Date(dateString).toLocaleDateString()
+}
+
+// Toggle info panel visibility
+const hideInfoPanel = () => {
+  showInfoPanel.value = false
 }
 
 // Navigation handlers
@@ -147,7 +170,7 @@ onMounted(async () => {
 }
 
 .cld-content {
-  max-width: 1200px;
+  max-width: 100%;
   margin: 0 auto;
   padding: 2rem;
 }
@@ -176,12 +199,85 @@ h1 {
   margin-bottom: 2rem;
 }
 
+.info-panel {
+  display: flex;
+  align-items: flex-start;
+  background-color: #e8f4fd;
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+  border-left: 4px solid #3498db;
+}
+
+.info-icon {
+  color: #3498db;
+  font-size: 1.5rem;
+  margin-right: 1rem;
+  padding-top: 0.2rem;
+}
+
+.info-content {
+  flex: 1;
+}
+
+.info-content p {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  color: #2c3e50;
+}
+
+.info-content ul {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.info-content li {
+  margin-bottom: 0.3rem;
+  color: #555;
+}
+
+.info-content ul.interaction-tips {
+  margin: 0;
+  padding-left: 0;
+  list-style-type: none;
+}
+
+.info-content ul.interaction-tips li {
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.info-content ul.interaction-tips li i {
+  width: 24px;
+  margin-right: 10px;
+  color: #3498db;
+}
+
+.dismiss-info {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.3rem;
+  margin-left: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dismiss-info:hover {
+  color: #64748b;
+}
+
 .diagram-container {
-  height: 600px;
+  height: 70vh; /* Make the diagram taller to utilize screen space better */
   border: 1px solid #ddd;
   border-radius: 8px;
   margin-bottom: 2rem;
   overflow: hidden;
+  position: relative;
 }
 
 .network {
@@ -257,15 +353,6 @@ button {
 
 .zoom-button:hover {
   background-color: #3aa876;
-}
-
-.diagram-container {
-  position: relative;
-  height: 600px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  margin-bottom: 2rem;
-  overflow: hidden;
 }
 
 .archetype-popup {
