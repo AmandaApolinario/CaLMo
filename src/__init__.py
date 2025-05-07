@@ -29,7 +29,10 @@ def create_app():
     
     with app.app_context():
         # Import models to ensure they are registered with SQLAlchemy
-        from . import models
+        from .models.entities import (
+            User, Variable, CLD, Relationship, FeedbackLoop, Archetype,
+            RelationshipType, LoopType, ArchetypeType
+        )
         
         # Create all tables
         try:
@@ -56,9 +59,11 @@ def create_app():
             db.session.rollback()
             raise e
     
-        from .routes import routes
-        app.register_blueprint(routes)
+        # Register all routes
+        from .views import register_routes
+        register_routes(app)
     
+    # Error handlers
     @app.errorhandler(500)
     def handle_500(e):
         return {"error": "Internal Server Error"}, 500

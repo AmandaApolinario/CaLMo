@@ -43,14 +43,34 @@ class CLDService {
 
   async updateCLD(id, cldData) {
     try {
-      console.log(`CLD Service - Updating CLD ${id} with data:`, cldData);
-      const response = await ApiService.put(`cld/${id}`, cldData);
+      // Make sure we're sending all necessary CLD data, including variables and relationships
+      const dataToSend = {
+        name: cldData.name,
+        description: cldData.description,
+        date: cldData.date
+      };
+      
+      // Include variables and relationships if present
+      if (cldData.variables) {
+        dataToSend.variables = cldData.variables;
+      }
+      
+      if (cldData.relationships) {
+        dataToSend.relationships = cldData.relationships;
+      }
+      
+      console.log(`CLD Service - Updating CLD ${id} with data:`, dataToSend);
+      const response = await ApiService.put(`cld/${id}`, dataToSend);
       console.log('CLD Service - Update response:', response.data);
+      
+      // The backend now returns the CLD data directly without nesting in a 'cld' property
+      const updatedCLD = CLDModel.fromJSON(response.data);
       
       // Re-generate feedback loops and archetypes after update
       await this.generateLoopsAndArchetypes(id);
       
-      return CLDModel.fromJSON(response.data);
+      // Fetch the latest CLD with all regenerated data
+      return await this.getCLDById(id);
     } catch (error) {
       console.error(`Error updating CLD with ID ${id}:`, error);
       console.error('Error response:', error.response?.data);
