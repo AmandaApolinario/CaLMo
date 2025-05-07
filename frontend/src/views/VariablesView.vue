@@ -35,7 +35,7 @@
               ></textarea>
             </div>
             <div class="form-actions">
-              <button type="button" v-if="isEditing" @click="cancelEdit" class="btn-cancel">
+              <button type="button" v-if="isEditing" @click="cancelEditing" class="btn-cancel">
                 <i class="fas fa-times"></i> Cancel
               </button>
               <button type="submit" :disabled="loading" class="btn-submit">
@@ -70,10 +70,10 @@
                 <p class="description">{{ variable.description || 'No description provided' }}</p>
               </div>
               <div class="variable-actions">
-                <button @click="editVariable(variable)" class="btn-edit">
+                <button @click="editVariableHandler(variable)" class="btn-edit">
                   <i class="fas fa-edit"></i> Edit
                 </button>
-                <button @click="deleteVariable(variable.id)" class="btn-delete">
+                <button @click="deleteVariableHandler(variable.id)" class="btn-delete">
                   <i class="fas fa-trash-alt"></i> Delete
                 </button>
               </div>
@@ -86,110 +86,39 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import axios from 'axios'
-import { useRouter } from 'vue-router'
-import { useAuthStore } from '../stores/auth'
+import { onMounted } from 'vue'
 import NavBar from '../components/NavBar.vue'
+import { useVariablesViewModel } from '@/viewmodels/VariablesViewModel'
 
-const variables = ref([])
-const loading = ref(true)
-const error = ref('')
-const isEditing = ref(false)
-const editingId = ref(null)
-const message = ref('')
+// Initialize ViewModel
+const {
+  variables,
+  loading,
+  error,
+  message,
+  isEditing,
+  newVariable,
+  fetchVariables,
+  submitForm,
+  deleteVariable,
+  startEditing,
+  cancelEditing
+} = useVariablesViewModel()
 
-const newVariable = ref({
-  name: '',
-  description: ''
-})
-
-const router = useRouter()
-const authStore = useAuthStore()
-
-const fetchVariables = async () => {
-  loading.value = true
-  error.value = ''
-  try {
-    const response = await axios.get('/variables')
-    const data = await response.data
-    if (data.message) {
-      message.value = data.message
-    } else {
-      variables.value = data
-    }
-  } catch (err) {
-    error.value = 'Failed to fetch variables'
-    console.error('Error fetching variables:', err)
-  } finally {
-    loading.value = false
-  }
-}
-
-const submitForm = async () => {
-  loading.value = true
-  error.value = ''
-  try {
-    if (isEditing.value && editingId.value !== null) {
-      await axios.put(`/variable/${editingId.value}`, newVariable.value)
-    } else {
-      await axios.post('/variable', newVariable.value)
-    }
-    newVariable.value = { name: '', description: '' }
-    isEditing.value = false
-    editingId.value = null
-    await fetchVariables()
-  } catch (err) {
-    error.value = isEditing.value ? 'Failed to update variable' : 'Failed to create variable'
-    console.error('Error submitting variable:', err)
-  } finally {
-    loading.value = false
-  }
-}
-
-const editVariable = (variable) => {
-  newVariable.value = {
-    name: variable.name,
-    description: variable.description || ''
-  }
-  editingId.value = variable.id
-  isEditing.value = true
-
+// Handler functions
+const editVariableHandler = (variable) => {
+  startEditing(variable)
+  
+  // Scroll to form
   window.scrollTo({
     top: 0,
     behavior: 'smooth'
   })
 }
 
-const cancelEdit = () => {
-  isEditing.value = false
-  editingId.value = null
-  newVariable.value = { name: '', description: '' }
-}
-
-const deleteVariable = async (id) => {
+const deleteVariableHandler = async (id) => {
   if (!confirm('Are you sure you want to delete this variable?')) return
-
-  loading.value = true
-  error.value = ''
-  try {
-    await axios.delete(`/variable/${id}`)
-    await fetchVariables()
-  } catch (err) {
-    error.value = 'Failed to delete variable'
-    console.error('Error deleting variable:', err)
-  } finally {
-    loading.value = false
-  }
-}
-
-const handleLogout = async () => {
-  try {
-    await authStore.logout()
-    router.push('/')
-  } catch (error) {
-    console.error('Logout failed:', error)
-  }
+  await deleteVariable(id)
 }
 
 onMounted(() => {

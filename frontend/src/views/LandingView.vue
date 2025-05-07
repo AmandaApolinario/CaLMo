@@ -11,7 +11,7 @@
           <input 
             type="email" 
             id="email" 
-            v-model="email" 
+            v-model="credentials.email" 
             placeholder="Enter your email"
           >
         </div>
@@ -20,12 +20,14 @@
           <input 
             type="password" 
             id="password" 
-            v-model="password" 
+            v-model="credentials.password" 
             placeholder="Enter your password"
           >
         </div>
         <div class="button-group">
-          <button @click="login" class="btn-login">Login</button>
+          <button @click="handleLogin" :disabled="loading" class="btn-login">
+            {{ loading ? 'Logging in...' : 'Login' }}
+          </button>
           <button @click="goToRegister" class="btn-register">Register</button>
         </div>
         <div v-if="error" class="error-message">{{ error }}</div>
@@ -35,28 +37,26 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import { useAuthViewModel } from '@/viewmodels/AuthViewModel'
 
+// Initialize router
 const router = useRouter()
-const email = ref('')
-const password = ref('')
-const error = ref('')
 
-const login = async () => {
-  try {
-    const response = await axios.post('/login', {
-      email: email.value,
-      password: password.value
-    })
+// Initialize the AuthViewModel
+const { loading, error, login } = useAuthViewModel()
 
-    if (response.data.token) {
-      localStorage.setItem('token', response.data.token)
-      router.push('/dashboard')
-    }
-  } catch (err) {
-    error.value = err.response?.data?.message || 'Login failed'
+// Create a reactive object for form data
+const credentials = reactive({
+  email: '',
+  password: ''
+})
+
+const handleLogin = async () => {
+  const success = await login(credentials)
+  if (success) {
+    router.push('/dashboard')
   }
 }
 

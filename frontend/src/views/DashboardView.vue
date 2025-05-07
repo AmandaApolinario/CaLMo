@@ -2,7 +2,7 @@
   <div class="dashboard-container">
     <div class="dashboard-header">
       <h1>Dashboard</h1>
-      <button @click="logout" class="btn-logout">Logout</button>
+      <button @click="handleLogout" class="btn-logout">Logout</button>
     </div>
 
     <div class="dashboard-grid">
@@ -29,11 +29,24 @@
 
 <script setup>
 import { useRouter } from 'vue-router'
+import { useAuthViewModel } from '@/viewmodels/AuthViewModel'
+import { onMounted } from 'vue'
 
+// Initialize router
 const router = useRouter()
 
-const logout = () => {
-  localStorage.removeItem('token')
+// Initialize the AuthViewModel
+const { logout, isAuthenticated } = useAuthViewModel()
+
+// Check authentication on mount
+onMounted(() => {
+  if (!isAuthenticated.value) {
+    router.push('/')
+  }
+})
+
+const handleLogout = async () => {
+  await logout()
   router.push('/')
 }
 

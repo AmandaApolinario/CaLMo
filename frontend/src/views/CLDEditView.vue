@@ -6,7 +6,7 @@
       
       <div v-if="loading" class="loading-message">Loading CLD...</div>
       <div v-else-if="error" class="error-message">{{ error }}</div>
-      <form v-else @submit.prevent="updateCLD" class="cld-form">
+      <form v-else @submit.prevent="handleSubmit" class="cld-form">
         <!-- Basic CLD Info -->
         <div class="form-section card">
           <h2 class="section-title">Basic Information</h2>
@@ -16,7 +16,7 @@
               <input
                 type="text"
                 id="name"
-                v-model="cld.name"
+                v-model="diagram.title"
                 required
                 placeholder="Enter CLD name"
                 class="form-input"
@@ -28,9 +28,10 @@
               <input
                 type="date"
                 id="date"
-                v-model="cld.date"
+                v-model="diagram.createdAt"
                 required
                 class="form-input"
+                @focus="ensureDateFormat"
               />
             </div>
           </div>
@@ -39,7 +40,7 @@
             <label for="description">Description</label>
             <textarea
               id="description"
-              v-model="cld.description"
+              v-model="diagram.description"
               placeholder="Enter CLD description"
               rows="4"
               class="form-textarea"
@@ -52,30 +53,30 @@
           <h2 class="section-title">Relationships</h2>
           
           <div class="relationships-container">
-            <div v-for="(relationship, index) in cld.relationships" :key="index" class="relationship-card">
+            <div v-for="(edge, index) in diagram.edges" :key="index" class="relationship-card">
               <div class="relationship-controls">
-                <select v-model="relationship.source_id" required class="form-select">
+                <select v-model="edge.source" required class="form-select">
                   <option value="" disabled>Select source</option>
                   <option v-for="variable in variables" :key="variable.id" :value="variable.id">
                     {{ variable.name }}
                   </option>
                 </select>
                 
-                <select v-model="relationship.type" required class="form-select type-select">
-                  <option value="POSITIVE">+ (Positive)</option>
-                  <option value="NEGATIVE">- (Negative)</option>
+                <select v-model="edge.polarity" required class="form-select type-select">
+                  <option value="positive">+ (Positive)</option>
+                  <option value="negative">- (Negative)</option>
                 </select>
                 
-                <select v-model="relationship.target_id" required class="form-select">
+                <select v-model="edge.target" required class="form-select">
                   <option value="" disabled>Select target</option>
-                  <option v-for="variable in variables" :key="variable.id" :value="variable.id">
+                  <option v-for="variable in filteredTargetVariables(edge.source)" :key="variable.id" :value="variable.id">
                     {{ variable.name }}
                   </option>
                 </select>
               </div>
               <button 
                 type="button" 
-                @click="removeRelationship(index)" 
+                @click="() => removeEdge(index)" 
                 class="btn-icon"
                 aria-label="Remove relationship"
               >
@@ -87,7 +88,7 @@
             
             <button 
               type="button" 
-              @click="addRelationship" 
+              @click="addEdge" 
               class="btn-add-relationship"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" class="icon">
@@ -109,10 +110,10 @@
           </button>
           <button 
             type="submit" 
-            :disabled="updating" 
+            :disabled="saving" 
             class="btn-primary"
           >
-            <span v-if="updating">
+            <span v-if="saving">
               <svg class="spinner" viewBox="0 0 50 50">
                 <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="5"></circle>
               </svg>
@@ -127,105 +128,84 @@
 </template>
 
 <script setup>
-// Import necessary dependencies and components
-import { ref, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
 import NavBar from '../components/NavBar.vue'
+import { useCLDEditorViewModel } from '@/viewmodels/CLDEditorViewModel'
 
 // Initialize route and router for navigation
 const route = useRoute()
 const router = useRouter()
 
-// Initialize the CLD data structure with reactive properties
-const cld = ref({
-  name: '',
-  description: '',
-  date: '',
-  variables: [],      // Array of variable IDs used in this CLD
-  relationships: []   // Array of relationships between variables
-})
+// Initialize the CLD Editor ViewModel
+const { 
+  diagram,
+  variables,
+  loading,
+  saving,
+  error,
+  successMessage,
+  fetchDiagram,
+  updateDiagram,
+  addEdge,
+  removeEdge,
+  filteredTargetVariables,
+  validateDiagram
+} = useCLDEditorViewModel()
 
-// State management variables
-const variables = ref([])  // List of all available variables
-const loading = ref(true)  // Controls loading state during API calls
-const updating = ref(false)  // Controls state during save operations
-const error = ref('')  // Stores error messages
-
-// Fetches CLD data and available variables from the backend
-const fetchCLD = async () => {
+// Make sure date is in the proper format for date input (YYYY-MM-DD)
+const ensureDateFormat = () => {
+  if (!diagram.value || !diagram.value.createdAt) {
+    // If date is missing, set it to today
+    diagram.value.createdAt = new Date().toISOString().split('T')[0];
+    return;
+  }
+  
   try {
-    // Fetch both CLD and variables data in parallel for better performance
-    const [cldResponse, variablesResponse] = await Promise.all([
-      axios.get(`/cld/${route.params.id}`),
-      axios.get('/variables')
-    ])
-    
-    // Transform the CLD data to match our frontend data structure
-    cld.value = {
-      ...cldResponse.data,
-      variables: cldResponse.data.variables.map(v => v.id),  // Extract variable IDs
-      relationships: cldResponse.data.relationships.map(r => ({
-        ...r,
-        type: r.type.toUpperCase() === 'POSITIVE' ? 'POSITIVE' : 'NEGATIVE'  // Normalize relationship types
-      }))
+    // Check if it's already in the right format (YYYY-MM-DD)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(diagram.value.createdAt)) {
+      // Try to convert it to a date object and then format it
+      const date = new Date(diagram.value.createdAt);
+      diagram.value.createdAt = date.toISOString().split('T')[0];
     }
-
-    variables.value = variablesResponse.data  // Store available variables
   } catch (err) {
-    error.value = 'Failed to fetch CLD details'
-    console.error('Error fetching CLD:', err)
-  } finally {
-    loading.value = false
+    console.error('Error formatting date:', err);
+    // Fallback to today's date
+    diagram.value.createdAt = new Date().toISOString().split('T')[0];
   }
 }
 
-// Adds a new blank relationship to the CLD
-const addRelationship = () => {
-  cld.value.relationships.push({
-    source_id: '',     // ID of the source variable
-    target_id: '',     // ID of the target variable
-    type: 'POSITIVE'   // Default relationship type
-  })
-}
-
-// Removes a relationship from the CLD at the specified index
-const removeRelationship = (index) => {
-  cld.value.relationships.splice(index, 1)
-}
-
-const updateCLD = async () => {
-  updating.value = true
-  error.value = ''
-  try {
-    // Automatically determine used variable IDs from relationships
-    const usedVariableIds = new Set()
-    cld.value.relationships.forEach(rel => {
-      if (rel.source_id) usedVariableIds.add(rel.source_id)
-      if (rel.target_id) usedVariableIds.add(rel.target_id)
-    })
-    cld.value.variables = Array.from(usedVariableIds)
-
-    const response = await axios.put(`/cld/${route.params.id}`, {
-      ...cld.value,
-      date: new Date(cld.value.date).toISOString().split('T')[0]
-    })
-    router.push(`/cld/${route.params.id}`)
-  } catch (err) {
-    error.value = 'Failed to update CLD'
-    console.error('Error updating CLD:', err)
-  } finally {
-    updating.value = false
-  }
-}
-
-const cancelEdit = () => {
-  router.push(`/cld/${route.params.id}`)
-}
-
-onMounted(() => {
-  fetchCLD()
+// Load the diagram data on component mount
+onMounted(async () => {
+  await fetchDiagram(route.params.id)
+  
+  // Ensure date is properly formatted after loading
+  ensureDateFormat();
 })
+
+// Handle form submission
+const handleSubmit = async () => {
+  // Validate the diagram data
+  const validationError = validateDiagram()
+  if (validationError) {
+    error.value = validationError
+    return
+  }
+  
+  // Update the diagram
+  const updatedDiagram = await updateDiagram(route.params.id, diagram.value)
+  if (updatedDiagram) {
+    // Redirect back to diagram detail after successful update
+    setTimeout(() => {
+      router.push(`/cld/${route.params.id}`)
+    }, 1000)
+  }
+}
+
+// Cancel edit and go back
+const cancelEdit = () => {
+  router.go(-1)
+}
 </script>
 
 <style scoped>

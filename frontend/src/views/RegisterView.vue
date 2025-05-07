@@ -6,13 +6,17 @@
     </div>
     <div class="register-container">
       <h2>Create Account</h2>
-      <form @submit.prevent="handleRegister" class="register-form">
+      <div v-if="successMessage" class="success-message">
+        {{ successMessage }}
+        <p>Redirecting to login page...</p>
+      </div>
+      <form v-else @submit.prevent="handleRegister" class="register-form">
         <div class="form-group">
           <label for="name">Name</label>
           <input
             type="text"
             id="name"
-            v-model="name"
+            v-model="userData.name"
             required
             placeholder="Enter your name"
           />
@@ -22,7 +26,7 @@
           <input
             type="email"
             id="email"
-            v-model="email"
+            v-model="userData.email"
             required
             placeholder="Enter your email"
           />
@@ -32,7 +36,7 @@
           <input
             type="password"
             id="password"
-            v-model="password"
+            v-model="userData.password"
             required
             placeholder="Enter your password"
           />
@@ -50,33 +54,31 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '../stores/auth'
+import { useAuthViewModel } from '@/viewmodels/AuthViewModel'
 
-const name = ref('')
-const email = ref('')
-const password = ref('')
-const loading = ref(false)
-const error = ref('')
+// Initialize router
 const router = useRouter()
-const authStore = useAuthStore()
+
+// Initialize the AuthViewModel
+const { loading, error, successMessage, register } = useAuthViewModel()
+
+// Create a reactive object for form data
+const userData = reactive({
+  name: '',
+  email: '',
+  password: ''
+})
 
 const handleRegister = async () => {
-  loading.value = true
-  error.value = ''
-
-  try {
-    const success = await authStore.register(name.value, email.value, password.value)
-    if (success) {
-      router.push('/')
-    } else {
-      error.value = 'Registration failed'
-    }
-  } catch (err) {
-    error.value = 'An error occurred during registration'
-  } finally {
-    loading.value = false
+  console.log('Registering with data:', userData);
+  const success = await register(userData);
+  if (success) {
+    // Redirect to login page after a short delay so user can see success message
+    setTimeout(() => {
+      router.push('/');
+    }, 2000);
   }
 }
 </script>
@@ -161,6 +163,25 @@ button:disabled {
   color: red;
   text-align: center;
   font-size: 0.95rem;
+}
+
+.success-message {
+  color: #42b983;
+  background-color: #e0f2e9;
+  padding: 1.5rem;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 500;
+  margin: 0 auto;
+  max-width: 400px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.success-message p {
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+  color: #767676;
 }
 
 .login-link {

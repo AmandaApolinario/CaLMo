@@ -4,8 +4,13 @@
     <div class="cld-content">
       <h1>Create New CLD</h1>
 
-      <div class="form-container">
-        <form @submit.prevent="createCLD" class="cld-form">
+      <div v-if="loading" class="loading-message">
+        <div class="spinner"></div>
+        <p>Loading...</p>
+      </div>
+
+      <div v-else class="form-container">
+        <form @submit.prevent="handleSubmit" class="cld-form">
           <div class="form-columns">
             <!-- Left Column -->
             <div class="form-left">
@@ -15,7 +20,7 @@
                 <input 
                   type="text" 
                   id="name" 
-                  v-model="cld.name" 
+                  v-model="diagram.title" 
                   placeholder="Enter CLD name"
                   required
                 >
@@ -26,7 +31,7 @@
                 <label for="description">Description</label>
                 <textarea 
                   id="description" 
-                  v-model="cld.description" 
+                  v-model="diagram.description" 
                   placeholder="Enter CLD description"
                   rows="6"
                 ></textarea>
@@ -38,7 +43,7 @@
                 <input 
                   type="date" 
                   id="date" 
-                  v-model="cld.date" 
+                  v-model="diagram.createdAt" 
                   required
                 >
               </div>
@@ -49,37 +54,48 @@
               <!-- Variable Relationships -->
               <div class="form-group">
                 <label>Variable Relationships</label>
-                <div class="relationships-container">
-                  <div v-for="(relationship, index) in cld.variable_clds" :key="index" class="relationship">
+                <div v-if="variables.length === 0" class="no-variables-message">
+                  <p>No variables available. Please create variables first.</p>
+                  <button type="button" @click="goToVariables" class="btn-secondary">
+                    Go to Variables
+                  </button>
+                </div>
+                <div v-else class="relationships-container">
+                  <div v-for="(edge, index) in diagram.edges" :key="index" class="relationship">
                     <div class="relationship-row">
-                      <select v-model="relationship.from_variable_id" required class="relationship-select">
+                      <select v-model="edge.source" required class="relationship-select">
                         <option value="">Select source variable</option>
                         <option v-for="variable in variables" :key="variable.id" :value="variable.id">
                           {{ variable.name }}
                         </option>
                       </select>
                       
-                      <select v-model="relationship.type" required class="relationship-type">
-                        <option value="Positive">+ (Positive)</option>
-                        <option value="Negative">- (Negative)</option>
+                      <select v-model="edge.polarity" required class="relationship-type">
+                        <option value="positive">+ (Positive)</option>
+                        <option value="negative">- (Negative)</option>
                       </select>
                       
-                      <select v-model="relationship.to_variable_id" required class="relationship-select">
+                      <select v-model="edge.target" required class="relationship-select">
                         <option value="">Select target variable</option>
-                        <option v-for="variable in filteredTargets(relationship.from_variable_id)" 
+                        <option v-for="variable in filteredTargetVariables(edge.source)" 
                                 :key="variable.id" 
                                 :value="variable.id">
                           {{ variable.name }}
                         </option>
                       </select>
                       
-                      <button type="button" @click="removeRelationship(index)" class="btn-delete">
+                      <button type="button" @click="() => removeEdge(index)" class="btn-delete">
                         <i class="fas fa-trash"></i>
                       </button>
                     </div>
                   </div>
                 </div>
-                <button type="button" @click="addRelationship" class="btn-add">
+                <button 
+                  v-if="variables.length > 0" 
+                  type="button" 
+                  @click="addEdge" 
+                  class="btn-add"
+                >
                   <i class="fas fa-plus"></i> Add Relationship
                 </button>
               </div>
@@ -89,7 +105,13 @@
           <!-- Submit and Cancel -->
           <div class="form-actions">
             <button type="button" @click="goToDashboard" class="btn-cancel">Cancel</button>
-            <button type="submit" class="btn-submit">Create CLD</button>
+            <button 
+              type="submit" 
+              :disabled="saving || variables.length === 0" 
+              class="btn-submit"
+            >
+              {{ saving ? 'Creating...' : 'Create CLD' }}
+            </button>
           </div>
         </form>
 
@@ -108,77 +130,74 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
 import NavBar from '../components/NavBar.vue'
+import { useCLDEditorViewModel } from '@/viewmodels/CLDEditorViewModel'
 
 const router = useRouter()
 
-// Reactive references for the CLD and the list of variables
-const variables = ref([])
-const cld = ref({
-  name: '',
-  description: '',
-  date: '',
-  variable_clds: []
-})
+// Initialize the CLD Editor ViewModel
+const { 
+  diagram,
+  variables,
+  loading,
+  saving,
+  error,
+  successMessage,
+  createEmptyDiagram,
+  resetDiagram,
+  fetchVariables,
+  createDiagram,
+  addEdge,
+  removeEdge,
+  filteredTargetVariables,
+  validateDiagram
+} = useCLDEditorViewModel()
 
-// Add success message ref
-const successMessage = ref('')
-const error = ref('')
-
-// Fetch variables from the API when the component is mounted
+// Initialize with an empty diagram
 onMounted(async () => {
+  console.log('CLDCreateView mounted');
   try {
-    const response = await axios.get('/variables')
-    variables.value = response.data
+    // Reset the diagram to start fresh
+    resetDiagram();
+    
+    // Fetch variables for relationships
+    await fetchVariables();
+    
+    // Add one empty relationship by default if we have variables
+    if (variables.value && variables.value.length > 0) {
+      addEdge();
+    }
   } catch (err) {
-    console.error('Error fetching variables:', err)
+    console.error('Error initializing CLDCreateView:', err);
   }
 })
 
-const addRelationship = () => {
-  cld.value.variable_clds.push({
-    from_variable_id: null,
-    to_variable_id: null,
-    type: 'Positive'
-  })
-}
+// Clean up on component unmount
+onBeforeUnmount(() => {
+  console.log('CLDCreateView unmounting');
+})
 
-const removeRelationship = (index) => {
-  cld.value.variable_clds.splice(index, 1)
-}
-
-const createCLD = async () => {
+const handleSubmit = async () => {
+  // Validate the diagram data
+  const validationError = validateDiagram()
+  if (validationError) {
+    error.value = validationError
+    return
+  }
+  
+  // Create the diagram
   try {
-    // Reset messages
-    successMessage.value = ''
-    error.value = ''
-
-    // Prepare the request data
-    const requestData = {
-      name: cld.value.name,
-      date: cld.value.date,
-      description: cld.value.description,
-      variables: cld.value.variable_clds.map(rel => rel.from_variable_id)
-        .concat(cld.value.variable_clds.map(rel => rel.to_variable_id))
-        .filter((value, index, self) => self.indexOf(value) === index), // Unique variables
-      relationships: cld.value.variable_clds.map(rel => ({
-        source_id: rel.from_variable_id,
-        target_id: rel.to_variable_id,
-        type: rel.type.toUpperCase()
-      }))
-    }
-
-    const response = await axios.post('/cld', requestData)
-    if (response.status === 201) {
-      successMessage.value = 'CLD created successfully!'
-      router.push('/clds')
+    const newDiagram = await createDiagram(diagram.value)
+    if (newDiagram) {
+      // Redirect to the diagram list after successful creation
+      setTimeout(() => {
+        router.push('/clds')
+      }, 1000)
     }
   } catch (err) {
-    error.value = 'Failed to create CLD: ' + (err.response?.data?.message || err.message)
-    console.error('Error creating CLD:', err)
+    console.error('Error creating diagram:', err);
   }
 }
 
@@ -186,26 +205,8 @@ const goToDashboard = () => {
   router.push('/dashboard')
 }
 
-const filteredTargets = (sourceId) => {
-  if (!sourceId) return variables.value
-  return variables.value.filter(v => v.id !== sourceId)
-}
-
-const validateRelationships = () => {
-  for (const rel of cld.value.variable_clds) {
-    if (rel.from_variable_id === rel.to_variable_id) {
-      return 'Cannot create relationship with the same source and target variable'
-    }
-  }
-  return null
-}
-
-const submitForm = async () => {
-  const validationError = validateRelationships()
-  if (validationError) {
-    error.value = validationError
-    return
-  }
+const goToVariables = () => {
+  router.push('/variables')
 }
 </script>
 
@@ -345,6 +346,12 @@ button {
   transform: translateY(-2px);
 }
 
+.btn-submit:disabled {
+  background-color: #a8d5c1;
+  transform: none;
+  cursor: not-allowed;
+}
+
 .btn-cancel {
   background-color: #e2e8f0;
   color: #1a252f;
@@ -362,6 +369,16 @@ button {
 
 .btn-add:hover {
   background-color: #1a252f;
+}
+
+.btn-secondary {
+  background-color: #4f46e5;
+  color: white;
+  margin-top: 1rem;
+}
+
+.btn-secondary:hover {
+  background-color: #4338ca;
 }
 
 .btn-delete {
@@ -404,6 +421,45 @@ button {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.loading-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  background-color: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.spinner {
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border-left-color: #42b983;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+.no-variables-message {
+  background-color: #f8fafc;
+  padding: 2rem;
+  text-align: center;
+  border-radius: 8px;
+  border: 1px dashed #cbd5e0;
+}
+
+.no-variables-message p {
+  margin-bottom: 1rem;
+  color: #64748b;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 /* Font Awesome icons */

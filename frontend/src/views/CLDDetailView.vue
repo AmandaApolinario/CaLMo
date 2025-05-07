@@ -5,11 +5,11 @@
       <div v-if="loading" class="loading">Loading CLD...</div>
       <div v-else-if="error" class="error">{{ error }}</div>
       <div v-else class="cld-details">
-        <h1>{{ cld.name }}</h1>
-        <p class="description">{{ cld.description }}</p>
+        <h1>{{ diagram?.title }}</h1>
+        <p class="description">{{ diagram?.description }}</p>
         <div class="cld-meta">
-          <span class="date">Created: {{ formatDate(cld.date) }}</span>
-          <span class="variables-count">{{ cld.variables.length }} variables</span>
+          <span class="date">Created: {{ formatDate(diagram?.createdAt) }}</span>
+          <span class="variables-count">{{ diagram?.nodes?.length || 0 }} variables</span>
         </div>
         
         <!-- Diagram Container -->
@@ -18,35 +18,35 @@
             <button @click="zoomIn" class="zoom-button">+</button>
             <button @click="zoomOut" class="zoom-button">-</button>
           </div>
-          <div ref="network" class="network"></div>
+          <div ref="networkContainer" class="network"></div>
         </div>
 
         <div class="cld-actions">
           <button @click="goBack" class="btn-back">Back</button>
-          <button @click="editCLD" class="btn-edit">Edit</button>
+          <button @click="editDiagram" class="btn-edit">Edit</button>
         </div>
       </div>
     </div>
 
-        <!-- Improved Archetype Popup -->
-        <div v-if="selectedNodeInfo.loops.length > 0 || selectedNodeInfo.archetypes.length > 0" class="archetype-popup">
-    <div class="popup-overlay" @click="closePopup"></div>
-    <div class="popup-card">
-      <div class="popup-header">
-        <h3>Node Details</h3>
-        <button @click="closePopup" class="close-button">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-      
-      <div class="popup-body">
-        <!-- Added node name section here -->
-        <div class="node-name-section">
-          <h4 class="section-title">
-            <i class="fas fa-circle"></i> Node Name
-          </h4>
-          <div class="node-name">{{ selectedNodeInfo.nodeName }}</div>
+    <!-- Improved Archetype Popup -->
+    <div v-if="selectedNodeInfo.loops.length > 0 || selectedNodeInfo.archetypes.length > 0" class="archetype-popup">
+      <div class="popup-overlay" @click="clearNodeSelection"></div>
+      <div class="popup-card">
+        <div class="popup-header">
+          <h3>Node Details</h3>
+          <button @click="clearNodeSelection" class="close-button">
+            <i class="fas fa-times"></i>
+          </button>
         </div>
+        
+        <div class="popup-body">
+          <!-- Added node name section here -->
+          <div class="node-name-section">
+            <h4 class="section-title">
+              <i class="fas fa-circle"></i> Node Name
+            </h4>
+            <div class="node-name">{{ selectedNodeInfo.nodeName }}</div>
+          </div>
 
           <div v-if="selectedNodeInfo.loops.length > 0" class="loop-section">
             <h4 class="section-title">
@@ -88,396 +88,56 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
 import NavBar from '../components/NavBar.vue'
-import { Network } from 'vis-network'
-import { DataSet } from 'vis-data'
-import 'vis-network/styles/vis-network.css'
-import { watch } from 'vue'
-
+import { useCLDDetailViewModel } from '@/viewmodels/CLDDetailViewModel'
+import { useCLDDiagramViewModel } from '@/viewmodels/CLDDiagramViewModel'
 
 const route = useRoute()
 const router = useRouter()
-const cld = ref({})
-const loading = ref(true)
-const error = ref('')
-const network = ref(null)
+const networkContainer = ref(null)
 
-const fetchCLD = async () => {
-  try {
-    console.log("Starting CLD data fetch process...")
-    
-    // First POST request to generate feedback loops
-    console.log("Generating feedback loops...")
-    await axios.post(`/cld/${route.params.id}/feedback-loops`)
-    
-    // Second POST request to generate archetypes (runs after first completes)
-    console.log("Generating archetypes...")
-    await axios.post(`/cld/${route.params.id}/archetypes`)
-    
-    // Now fetch the CLD data
-    console.log("Fetching CLD data...")
-    const response = await axios.get(`/cld/${route.params.id}`)
-    cld.value = response.data
-    console.log("CLD data fetched:", cld.value)
-    
-    // Wait for the DOM to update before creating the diagram
-    await nextTick()
-    createDiagram()
-  } catch (err) {
-    error.value = 'Failed to process CLD details'
-    console.error('Error processing CLD:', err)
-  } finally {
-    loading.value = false
-  }
-}
+// Initialize ViewModels
+const { 
+  diagram, 
+  loading, 
+  error, 
+  fetchDiagram 
+} = useCLDDetailViewModel()
 
+const { 
+  selectedNodeInfo, 
+  createDiagram, 
+  clearNodeSelection, 
+  zoomIn, 
+  zoomOut, 
+  getArchetypeIcon, 
+  formatArchetypeName 
+} = useCLDDiagramViewModel()
+
+// Format date for display
 const formatDate = (dateString) => {
   return new Date(dateString).toLocaleDateString()
 }
 
+// Navigation handlers
 const goBack = () => {
   router.go(-1)
 }
 
-const editCLD = () => {
+const editDiagram = () => {
   router.push(`/cld/${route.params.id}/edit`)
 }
 
-const createDiagram = () => {
-  console.log("Creating improved diagram...")
-
-  if (!network.value) {
-    console.error("Network container not found")
-    return
-  }
-
-  console.log(JSON.stringify(cld, removeCircularReferences(), 2))
-
-  if (!cld.value.variables || !cld.value.relationships) {
-    console.error("Missing data for diagram:", cld.value)
-    return
-  }
-
-  // Get all variable IDs that are part of archetypes
-  const archetypeVariableIds = new Set();
-  if (cld.value.archetypes && cld.value.archetypes.length > 0) {
-    cld.value.archetypes.forEach(archetype => {
-      archetype.variables.forEach(variableId => {
-        archetypeVariableIds.add(variableId);
-      });
-    });
-  }
-
-  const nodes = new DataSet(
-    cld.value.variables.map(variable => {
-      // Default node properties
-      const node = {
-        id: variable.id,
-        label: variable.name,
-        shape: 'ellipse',
-        font: { size: 18, color: '#000000', face: 'Arial' },
-        borderWidth: 2
-      };
-
-      // Check if variable is part of an archetype
-      if (archetypeVariableIds.has(variable.id)) {
-        // Archetype variables get special coloring
-        node.color = {
-          background: '#BED7ED', 
-          border: '#BED7ED',
-          highlight: { background: '#79A5CB', border: '#79A5CB' }
-        };
-      } else {
-        // Regular variables
-        node.color = {
-          background: '#FFF0CE',
-          border: '#FFF0CE',
-          highlight: { background: '#C3A869', border: '#C3A869' }
-        };
-      }
-
-      return node;
-    })
-  );
-
-  // Rest of your createDiagram function remains the same...
-  const edges = new DataSet(
-    cld.value.relationships.map(relationship => ({
-      from: relationship.source_id,
-      to: relationship.target_id,
-      arrows: 'to',
-      label: relationship.type === 'Positive' ? '+' : '-',
-      font: { size: 18, align: 'middle' },
-      color: {
-        color: relationship.type === 'Positive' ? '#28a745' : '#dc3545',
-        highlight: relationship.type === 'Positive' ? '#28a745' : '#dc3545',
-        opacity: 0.9
-      },
-      width: 3,
-      smooth: {
-        type: 'curvedCCW',
-        roundness: 0.5
-      }
-    }))
-  );
-
-  const container = network.value
-  const data = { nodes, edges }
-
-  const options = {
-    physics: {
-      enabled: true,
-      solver: 'forceAtlas2Based', // Better for preventing overlaps
-      forceAtlas2Based: {
-        gravitationalConstant: -50,
-        centralGravity: 0.01,
-        springLength: 200,
-        springConstant: 0.08,
-        damping: 0.4,
-        avoidOverlap: 1 // This is key to prevent node overlaps
-      },
-      stabilization: {
-        enabled: true,
-        iterations: 1000, // Increased iterations for better layout
-        updateInterval: 25,
-        onlyDynamicEdges: false,
-        fit: true
-      },
-      timestep: 0.5,
-      adaptiveTimestep: true
-    },
-    layout: {
-      improvedLayout: true,
-      hierarchical: {
-        enabled: false,
-        nodeSpacing: 150,
-        treeSpacing: 200,
-        direction: 'UD',
-        sortMethod: 'directed'
-      }
-    },
-    nodes: {
-      shape: 'ellipse',
-      margin: 10, // Add margin around node labels
-      size: 30, // Standardize node size
-      font: {
-        size: 14,
-        face: 'Arial',
-        strokeWidth: 3,
-        strokeColor: '#ffffff'
-      },
-      borderWidth: 2,
-      shadow: {
-        enabled: true,
-        color: 'rgba(0,0,0,0.2)',
-        size: 10,
-        x: 5,
-        y: 5
-      }
-    },
-    edges: {
-      smooth: {
-        type: 'continuous', // Smoother curves
-        roundness: 0.5
-      },
-      arrows: {
-        to: {
-          enabled: true,
-          type: 'arrow',
-          scaleFactor: 0.8
-        }
-      },
-      color: {
-        opacity: 0.9
-      },
-      width: 2,
-      selectionWidth: 3,
-      font: {
-        size: 14,
-        align: 'middle',
-        strokeWidth: 3,
-        strokeColor: '#ffffff'
-      }
-    },
-    interaction: {
-      hover: true,
-      tooltipDelay: 200,
-      dragNodes: true,
-      zoomView: true,
-      dragView: true,
-      hideEdgesOnDrag: false,
-      hideNodesOnDrag: false,
-      multiselect: false,
-      navigationButtons: false,
-      keyboard: false
-    }
-  }
-
-  // Add repulsion to prevent overlap
-  options.physics.repulsion = {
-    nodeDistance: 300, // Increased distance between nodes
-    centralGravity: 0.2,
-    springLength: 200,
-    springConstant: 0.05,
-    damping: 0.09
-  }
-
-  // Configure the barnesHut physics model for better node distribution
-  options.physics.barnesHut = {
-    gravitationalConstant: -2000,
-    centralGravity: 0.3,
-    springLength: 200,
-    springConstant: 0.04,
-    damping: 0.09,
-    avoidOverlap: 0.5
-  }
-
-  networkInstance = new Network(container, data, options)
-
-  // After stabilization, run another layout pass to ensure no overlaps
-  networkInstance.once('stabilizationIterationsDone', function() {
-    networkInstance.setOptions({
-      physics: {
-        enabled: false // Turn off physics after stabilization
-      }
-    })
-  })
-
-  networkInstance.on("click", function(params) {
-    if (params.nodes.length > 0) {
-      const nodeId = params.nodes[0]
-      showNodeDetails(nodeId)
-    }
-  })
-}
-
-const selectedNodeArchetypes = ref([]);
-
-const selectedNodeInfo = ref({
-  loops: [],
-  archetypes: []
-});
-
-const showNodeDetails = (nodeId) => {
-  const loops = [];
-  const archetypes = [];
-  let nodeName = '';
-
-  // Get the node name first
-  const node = cld.value.variables.find(v => v.id === nodeId);
-  if (node) {
-    nodeName = node.name;
-  }
-
-  // Check feedback loops
-  if (cld.value.feedback_loops) {
-    cld.value.feedback_loops.forEach(loop => {
-      if (loop.variables.includes(nodeId)) {
-        const variableNames = loop.variables.map(varId => {
-          const variable = cld.value.variables.find(v => v.id === varId);
-          return variable ? variable.name : '';
-        }).filter(name => name !== '');
-
-        loops.push({
-          type: loop.type,
-          variables: variableNames
-        });
-      }
-    });
-  }
-
-  // Check archetypes
-  if (cld.value.archetypes) {
-    cld.value.archetypes.forEach(archetype => {
-      if (archetype.variables.includes(nodeId)) {
-        archetypes.push({
-          id: archetype.id,
-          type: archetype.type
-        });
-      }
-    });
-  }
-
-  selectedNodeInfo.value = { 
-    nodeName,  // Add node name to the info
-    loops, 
-    archetypes 
-  };
-};
-
-function removeCircularReferences() {
-  const seen = new WeakSet()
-  return (key, value) => {
-    if (typeof value === 'object' && value !== null) {
-      if (seen.has(value)) {
-        return undefined // remove circular reference
-      }
-      seen.add(value)
-    }
-    return value
-  }
-}
-
-let networkInstance = null  // Add this near your refs
-
-const zoomIn = () => {
-  if (networkInstance) {
-    const scale = networkInstance.getScale()
-    networkInstance.moveTo({
-      scale: scale * 1.2,   // Zoom in by 20%
-      animation: true
-    })
-  }
-}
-
-const zoomOut = () => {
-  if (networkInstance) {
-    const scale = networkInstance.getScale()
-    networkInstance.moveTo({
-      scale: scale / 1.2,   // Zoom out by 20%
-      animation: true
-    })
-  }
-}
-
-
-
-onMounted(() => {
-  console.log("Component mounted, fetching CLD...")
-  fetchCLD()
-})
-
-watch(loading, (newVal) => {
-  if (!newVal) {
-    nextTick(() => {
-      createDiagram()
-    })
+onMounted(async () => {
+  // Fetch the diagram data
+  await fetchDiagram(route.params.id)
+  
+  // Once data is loaded, initialize the diagram
+  await nextTick()
+  if (diagram.value && networkContainer.value) {
+    createDiagram(diagram.value, networkContainer.value)
   }
 })
-
-const closePopup = () => {
-  selectedNodeInfo.value = { loops: [], archetypes: [] }
-}
-
-const formatArchetypeName = (name) => {
-  return name.split('_').map(word => 
-    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-  ).join(' ')
-}
-
-const getArchetypeIcon = (type) => {
-  const icons = {
-    'FIXES_THAT_FAIL': 'fa-tools',
-    'SHIFTING_THE_BURDEN': 'fa-balance-scale',
-    'LIMITS_TO_GROWTH': 'fa-chart-line',
-    'GROWTH_AND_UNDERINVESTMENT': 'fa-seedling',
-    'SUCCESS_TO_THE_SUCCESSFUL': 'fa-trophy',
-    'TRAAGEDY_OF_THE_COMMONS': 'fa-users',
-    'ESCALATION': 'fa-arrow-up'
-  }
-  return icons[type] || 'fa-puzzle-piece'
-}
 </script>
 
 <style scoped>

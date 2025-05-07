@@ -15,33 +15,33 @@
       <div v-else-if="error" class="error">
         <i class="fas fa-exclamation-circle"></i> {{ error }}
       </div>
-      <div v-else-if="clds.length === 0" class="empty">
+      <div v-else-if="diagrams.length === 0" class="empty">
         <i class="fas fa-diagram-project"></i>
         <p>No CLDs found. Create your first CLD!</p>
       </div>
       <div v-else class="cld-grid">
-        <div v-for="cld in clds" :key="cld.id" class="cld-card">
+        <div v-for="diagram in diagrams" :key="diagram.id" class="cld-card">
           <div class="cld-card-content">
             <div class="card-header">
-              <h3>{{ cld.name }}</h3>
-              <div class="badge">{{ cld.variables.length }} variables</div>
+              <h3>{{ diagram.title }}</h3>
+              <div class="badge">{{ diagram.variables ? diagram.variables.length : 0 }} variables</div>
             </div>
-            <p class="description">{{ cld.description }}</p>
+            <p class="description">{{ diagram.description }}</p>
             <div class="cld-meta">
-              <span class="date"><i class="far fa-calendar"></i> {{ formatDate(cld.date) }}</span>
-              <span class="last-modified" v-if="cld.updated_at">
-                <i class="far fa-clock"></i> Modified: {{ formatDate(cld.updated_at) }}
+              <span class="date"><i class="far fa-calendar"></i> {{ formatDate(diagram.createdAt) }}</span>
+              <span class="last-modified" v-if="diagram.updatedAt">
+                <i class="far fa-clock"></i> Modified: {{ formatDate(diagram.updatedAt) }}
               </span>
             </div>
           </div>
           <div class="cld-actions">
-            <button @click="viewCLD(cld.id)" class="btn-view">
+            <button @click="viewDiagram(diagram.id)" class="btn-view">
               <i class="fas fa-eye"></i> View
             </button>
-            <button @click="editCLD(cld.id)" class="btn-edit">
+            <button @click="editDiagram(diagram.id)" class="btn-edit">
               <i class="fas fa-edit"></i> Edit
             </button>
-            <button @click="deleteCLD(cld.id)" class="btn-delete">
+            <button @click="confirmDeleteDiagram(diagram.id)" class="btn-delete">
               <i class="fas fa-trash-alt"></i> Delete
             </button>
           </div>
@@ -53,56 +53,40 @@
 
 <script setup>
 // Import necessary dependencies and components
-import { ref, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
 import NavBar from '../components/NavBar.vue'
+import { useCLDListViewModel } from '@/viewmodels/CLDListViewModel'
 
-// Initialize router and reactive state variables
+// Initialize router
 const router = useRouter()
-const clds = ref([])  // Stores the list of Causal Loop Diagrams
-const loading = ref(false)  // Controls loading state during API calls
-const error = ref('')  // Stores error messages if API calls fail
 
-// Fetches all CLDs from the backend API
-const fetchCLDs = async () => {
-  loading.value = true
-  error.value = ''
-  try {
-    const response = await axios.get('/clds')
-    clds.value = response.data  // Update the CLDs list with fetched data
-  } catch (err) {
-    error.value = 'Failed to fetch CLDs'
-    console.error('Error fetching CLDs:', err)
-  } finally {
-    loading.value = false
-  }
-}
+// Initialize the ViewModel
+const { 
+  diagrams, 
+  loading, 
+  error, 
+  fetchDiagrams, 
+  deleteDiagram 
+} = useCLDListViewModel();
 
 // Navigation handlers for CLD operations
 const createNewCLD = () => {
-  router.push('/cld/new')  // Navigate to new CLD creation page
+  router.push('/cld/new')
 }
 
-const viewCLD = (id) => {
-  router.push(`/cld/${id}`)  // Navigate to CLD view page
+const viewDiagram = (id) => {
+  router.push(`/cld/${id}`)
 }
 
-const editCLD = (id) => {
-  router.push(`/cld/${id}/edit`)  // Navigate to CLD edit page
+const editDiagram = (id) => {
+  router.push(`/cld/${id}/edit`)
 }
 
 // Handles CLD deletion with user confirmation
-const deleteCLD = async (id) => {
+const confirmDeleteDiagram = async (id) => {
   if (!confirm('Are you sure you want to delete this CLD?')) return
-  
-  try {
-    await axios.delete(`/cld/${id}`)  // Send delete request to backend
-    clds.value = clds.value.filter(cld => cld.id !== id)  // Remove deleted CLD from list
-  } catch (err) {
-    error.value = 'Failed to delete CLD'
-    console.error('Error deleting CLD:', err)
-  }
+  await deleteDiagram(id)
 }
 
 const formatDate = (dateString) => {
@@ -110,7 +94,7 @@ const formatDate = (dateString) => {
 }
 
 onMounted(() => {
-  fetchCLDs()
+  fetchDiagrams()
 })
 </script>
 
