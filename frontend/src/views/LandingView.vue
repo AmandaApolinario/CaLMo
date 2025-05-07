@@ -2,8 +2,8 @@
   <div class="landing-container">
     <div class="landing-panel">
       <div class="branding">
-        <h1>CausalPatterns</h1>
-        <p class="tagline">Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+        <h1>CLD Mapper</h1>
+        <p class="tagline">Map variables, access your diagrams, and explore feedback loops.</p>
       </div>
       <div class="auth-form">
         <div class="form-group">

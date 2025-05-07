@@ -57,9 +57,7 @@ def get_user_clds(user_id):
     view_model = CLDViewModel(db.session)
     clds, message = view_model.get_user_clds(user_id)
     
-    if not clds:
-        return jsonify({"message": message}), 200
-        
+    # Always return an array (even if empty) for consistent frontend handling
     return jsonify(clds), 200
 
 @cld_routes.route('/cld/<string:cld_id>', methods=['GET'])

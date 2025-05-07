@@ -5,10 +5,21 @@ class CLDService {
   async getAllCLDs() {
     try {
       const response = await ApiService.get('clds');
-      return response.data.map(item => CLDModel.fromJSON(item));
+      console.log('CLD Service - Get all CLDs response:', response.data);
+      
+      // Make sure we're dealing with an array before mapping
+      if (Array.isArray(response.data)) {
+        return response.data.map(item => CLDModel.fromJSON(item));
+      } else {
+        // If the backend response is not an array (e.g., it's an object with a message)
+        console.warn('Expected array response from /clds, got:', response.data);
+        // Return an empty array
+        return [];
+      }
     } catch (error) {
       console.error('Error fetching all CLDs:', error);
-      throw new Error(error.response?.data?.message || error.message || 'Failed to fetch diagrams');
+      // Return an empty array instead of throwing an error
+      return [];
     }
   }
 

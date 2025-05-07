@@ -1,8 +1,8 @@
 <template>
   <div class="register-layout">
     <div class="register-branding">
-      <h1>CausalPatterns</h1>
-      <p>Create an account to Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+      <h1>CLD Mapper</h1>
+      <p>Create an account to build causal diagrams, detect loops, and spot reinforcing or balancing feedback.</p>
     </div>
     <div class="register-container">
       <h2>Create Account</h2>

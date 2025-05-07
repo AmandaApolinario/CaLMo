@@ -55,19 +55,28 @@
           <div class="relationships-container">
             <div v-for="(edge, index) in diagram.edges" :key="index" class="relationship-card">
               <div class="relationship-controls">
-                <select v-model="edge.source" required class="form-select">
+                <select v-model="edge.source" 
+                       @change="edge.target && checkForConflictingRelationship(index)"
+                       required 
+                       class="form-select">
                   <option value="" disabled>Select source</option>
                   <option v-for="variable in variables" :key="variable.id" :value="variable.id">
                     {{ variable.name }}
                   </option>
                 </select>
                 
-                <select v-model="edge.polarity" required class="form-select type-select">
+                <select v-model="edge.polarity" 
+                       @change="edge.source && edge.target && checkForConflictingRelationship(index)"
+                       required 
+                       class="form-select type-select">
                   <option value="positive">+ (Positive)</option>
                   <option value="negative">- (Negative)</option>
                 </select>
                 
-                <select v-model="edge.target" required class="form-select">
+                <select v-model="edge.target" 
+                       @change="checkForConflictingRelationship(index)"
+                       required 
+                       class="form-select">
                   <option value="" disabled>Select target</option>
                   <option v-for="variable in filteredTargetVariables(edge.source)" :key="variable.id" :value="variable.id">
                     {{ variable.name }}
@@ -205,6 +214,46 @@ const handleSubmit = async () => {
 // Cancel edit and go back
 const cancelEdit = () => {
   router.go(-1)
+}
+
+// Add the checkForConflictingRelationship method
+const checkForConflictingRelationship = (index) => {
+  const currentEdge = diagram.value.edges[index];
+  
+  // Skip if the edge is not fully defined
+  if (!currentEdge.source || !currentEdge.target || !currentEdge.polarity) {
+    return;
+  }
+  
+  // Check if there's already a relationship between these variables with a different polarity
+  for (let i = 0; i < diagram.value.edges.length; i++) {
+    if (i === index) continue; // Skip the current edge
+    
+    const otherEdge = diagram.value.edges[i];
+    
+    // Skip incomplete edges
+    if (!otherEdge.source || !otherEdge.target || !otherEdge.polarity) {
+      continue;
+    }
+    
+    // Check if exactly the same variables are connected in the same direction
+    const sameDirectionalRelationship = 
+      (currentEdge.source === otherEdge.source && currentEdge.target === otherEdge.target);
+    
+    if (sameDirectionalRelationship && currentEdge.polarity !== otherEdge.polarity) {
+      error.value = `Conflicting relationship: Cannot have both positive and negative relationships between the same variables in the same direction`;
+      
+      // Reset the last selection 
+      currentEdge.target = '';
+      
+      // Clear the error after 5 seconds
+      setTimeout(() => {
+        error.value = null;
+      }, 5000);
+      
+      break;
+    }
+  }
 }
 </script>
 

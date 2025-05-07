@@ -63,19 +63,28 @@
                 <div v-else class="relationships-container">
                   <div v-for="(edge, index) in diagram.edges" :key="index" class="relationship">
                     <div class="relationship-row">
-                      <select v-model="edge.source" required class="relationship-select">
+                      <select v-model="edge.source" 
+                              @change="edge.target && checkForConflictingRelationship(index)" 
+                              required 
+                              class="relationship-select">
                         <option value="">Select source variable</option>
                         <option v-for="variable in variables" :key="variable.id" :value="variable.id">
                           {{ variable.name }}
                         </option>
                       </select>
                       
-                      <select v-model="edge.polarity" required class="relationship-type">
+                      <select v-model="edge.polarity" 
+                              @change="edge.source && edge.target && checkForConflictingRelationship(index)"
+                              required 
+                              class="relationship-type">
                         <option value="positive">+ (Positive)</option>
                         <option value="negative">- (Negative)</option>
                       </select>
                       
-                      <select v-model="edge.target" required class="relationship-select">
+                      <select v-model="edge.target" 
+                              @change="checkForConflictingRelationship(index)"
+                              required 
+                              class="relationship-select">
                         <option value="">Select target variable</option>
                         <option v-for="variable in filteredTargetVariables(edge.source)" 
                                 :key="variable.id" 
@@ -85,7 +94,9 @@
                       </select>
                       
                       <button type="button" @click="() => removeEdge(index)" class="btn-delete">
-                        <i class="fas fa-trash"></i>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                          <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                        </svg>
                       </button>
                     </div>
                   </div>
@@ -207,6 +218,45 @@ const goToDashboard = () => {
 
 const goToVariables = () => {
   router.push('/variables')
+}
+
+const checkForConflictingRelationship = (index) => {
+  const currentEdge = diagram.value.edges[index];
+  
+  // Skip if the edge is not fully defined
+  if (!currentEdge.source || !currentEdge.target || !currentEdge.polarity) {
+    return;
+  }
+  
+  // Check if there's already a relationship between these variables with a different polarity
+  for (let i = 0; i < diagram.value.edges.length; i++) {
+    if (i === index) continue; // Skip the current edge
+    
+    const otherEdge = diagram.value.edges[i];
+    
+    // Skip incomplete edges
+    if (!otherEdge.source || !otherEdge.target || !otherEdge.polarity) {
+      continue;
+    }
+    
+    // Check if exactly the same variables are connected in the same direction
+    const sameDirectionalRelationship = 
+      (currentEdge.source === otherEdge.source && currentEdge.target === otherEdge.target);
+    
+    if (sameDirectionalRelationship && currentEdge.polarity !== otherEdge.polarity) {
+      error.value = `Conflicting relationship: Cannot have both positive and negative relationships between the same variables in the same direction`;
+      
+      // Reset the last selection 
+      currentEdge.target = '';
+      
+      // Clear the error after 5 seconds
+      setTimeout(() => {
+        error.value = null;
+      }, 5000);
+      
+      break;
+    }
+  }
 }
 </script>
 
@@ -382,19 +432,22 @@ button {
 }
 
 .btn-delete {
-  background-color: #f8f9fa;
+  background-color: #fee2e2;
   color: #dc3545;
   padding: 0.5rem;
   border-radius: 50%;
-  width: 36px;
+  min-width: 36px;
   height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-weight: bold;
+  font-size: 1rem;
+  flex-shrink: 0;
 }
 
 .btn-delete:hover {
-  background-color: #f1f1f1;
+  background-color: #fecaca;
 }
 
 .messages-container {

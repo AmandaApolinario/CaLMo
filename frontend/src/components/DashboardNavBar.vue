@@ -4,10 +4,6 @@
       <router-link to="/dashboard" class="nav-brand">
         CLD Mapper
       </router-link>
-      <div class="nav-links">
-        <router-link to="/variables" class="nav-link">Variables</router-link>
-        <router-link to="/clds" class="nav-link">CLDs</router-link>
-      </div>
       <button @click="logout" class="btn-logout">Log Out</button>
     </div>
   </nav>

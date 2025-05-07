@@ -1,27 +1,29 @@
 <template>
-  <div class="dashboard-container">
-    <div class="dashboard-header">
-      <h1>Dashboard</h1>
-      <button @click="handleLogout" class="btn-logout">Logout</button>
-    </div>
-
-    <div class="dashboard-grid">
-      <div class="dashboard-card" @click="goToVariables">
-        <h2>Variables</h2>
-        <p>Define and manage your system variables</p>
-        <button class="card-btn">Manage Variables</button>
+  <div>
+    <DashboardNavBar />
+    <div class="dashboard-container">
+      <div class="dashboard-header">
+        <h1>Dashboard</h1>
       </div>
 
-      <div class="dashboard-card" @click="createNewCLD">
-        <h2>Create CLD</h2>
-        <p>Design a new Causal Loop Diagram</p>
-        <button class="card-btn">Create New</button>
-      </div>
+      <div class="dashboard-grid">
+        <div class="dashboard-card" @click="goToVariables">
+          <h2>Variables</h2>
+          <p>Define and manage your system variables</p>
+          <button class="card-btn">Manage Variables</button>
+        </div>
 
-      <div class="dashboard-card" @click="viewCLDs">
-        <h2>My CLDs</h2>
-        <p>Access and manage your saved diagrams</p>
-        <button class="card-btn">View CLDs</button>
+        <div class="dashboard-card" @click="createNewCLD">
+          <h2>Create CLD</h2>
+          <p>Design a new Causal Loop Diagram</p>
+          <button class="card-btn">Create New</button>
+        </div>
+
+        <div class="dashboard-card" @click="viewCLDs">
+          <h2>My CLDs</h2>
+          <p>Access and manage your saved diagrams</p>
+          <button class="card-btn">View CLDs</button>
+        </div>
       </div>
     </div>
   </div>
@@ -31,6 +33,7 @@
 import { useRouter } from 'vue-router'
 import { useAuthViewModel } from '@/viewmodels/AuthViewModel'
 import { onMounted } from 'vue'
+import DashboardNavBar from '../components/DashboardNavBar.vue'
 
 // Initialize router
 const router = useRouter()
@@ -65,7 +68,7 @@ const viewCLDs = () => {
 
 <style scoped>
 .dashboard-container {
-  min-height: 100vh;
+  min-height: calc(100vh - 60px); /* Adjust for navbar height */
   background-color: #f5f7fa;
   padding: 2rem;
 }
@@ -86,22 +89,6 @@ const viewCLDs = () => {
   color: #1a252f;
   margin: 0;
   font-weight: 600;
-}
-
-.btn-logout {
-  background-color: #dc3545;
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.btn-logout:hover {
-  background-color: #c82333;
-  transform: translateY(-2px);
 }
 
 .dashboard-grid {

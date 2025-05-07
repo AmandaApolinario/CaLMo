@@ -248,39 +248,31 @@ export function useCLDEditorViewModel() {
   // Validate the diagram before saving
   const validateDiagram = () => {
     if (!diagram.value) return 'No diagram data';
+    if (!diagram.value.title) return 'Diagram title is required';
+    if (!diagram.value.edges || diagram.value.edges.length === 0) return 'At least one relationship is required';
     
-    if (!diagram.value.title) {
-      return 'Diagram name is required';
+    // Check for incomplete relationships
+    for (const edge of diagram.value.edges) {
+      if (!edge.source) return 'Source variable is required for all relationships';
+      if (!edge.target) return 'Target variable is required for all relationships';
+      if (!edge.polarity) return 'Relationship type (polarity) is required for all relationships';
     }
     
-    if (!diagram.value.createdAt) {
-      return 'Date is required';
-    }
+    // Check for duplicate relationships with the exact same source and target with different polarities
+    const relationshipMap = new Map();
     
-    if (!diagram.value.edges || diagram.value.edges.length === 0) {
-      return 'At least one relationship is required';
-    }
-    
-    // Check for duplicate or invalid relationships
-    const edgeErrors = [];
-    if (diagram.value.edges && diagram.value.edges.length > 0) {
-      diagram.value.edges.forEach((edge, index) => {
-        if (!edge.source) {
-          edgeErrors.push(`Relationship #${index + 1} is missing a source variable`);
+    for (const edge of diagram.value.edges) {
+      // Create a unique key for this exact relationship direction
+      const relationshipKey = `${edge.source}-${edge.target}`;
+      
+      if (relationshipMap.has(relationshipKey)) {
+        const existingPolarity = relationshipMap.get(relationshipKey);
+        if (existingPolarity !== edge.polarity) {
+          return `Conflicting relationship types: Cannot have both positive and negative relationships between the same variables in the same direction`;
         }
-        
-        if (!edge.target) {
-          edgeErrors.push(`Relationship #${index + 1} is missing a target variable`);
-        }
-        
-        if (edge.source === edge.target) {
-          edgeErrors.push(`Relationship #${index + 1} cannot have the same source and target`);
-        }
-      });
-    }
-    
-    if (edgeErrors.length > 0) {
-      return edgeErrors.join(', ');
+      }
+      
+      relationshipMap.set(relationshipKey, edge.polarity);
     }
     
     return null;
