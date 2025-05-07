@@ -6,6 +6,9 @@ export class CLDModel {
     this.description = data.description || '';
     this.date = data.date || data.createdAt || new Date().toISOString().split('T')[0];
     
+    // Store variable count that comes from the backend
+    this.variable_count = data.variable_count || 0;
+    
     // Store variable IDs
     if (data.variables) {
       this.variables = Array.isArray(data.variables) ? data.variables : [];
@@ -69,7 +72,8 @@ export class CLDModel {
       variables: this.variables,
       relationships: this.relationships,
       feedback_loops: this.feedback_loops,
-      archetypes: this.archetypes
+      archetypes: this.archetypes,
+      variable_count: this.variable_count || this.variables.length
     };
   }
   

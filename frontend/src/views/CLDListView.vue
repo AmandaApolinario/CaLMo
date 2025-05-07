@@ -24,7 +24,7 @@
           <div class="cld-card-content">
             <div class="card-header">
               <h3>{{ diagram.title }}</h3>
-              <div class="badge">{{ diagram.variables ? diagram.variables.length : 0 }} variables</div>
+              <div class="badge">{{ diagram.variable_count || 0 }} variables</div>
             </div>
             <p class="description">{{ diagram.description }}</p>
             <div class="cld-meta">

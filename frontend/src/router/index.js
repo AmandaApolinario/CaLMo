@@ -5,6 +5,7 @@ import DashboardView from '../views/DashboardView.vue'
 import CLDListView from '../views/CLDListView.vue'
 import CLDDetailView from '../views/CLDDetailView.vue'
 import CLDEditView from '../views/CLDEditView.vue'
+import GettingStartedView from '../views/GettingStartedView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -52,6 +53,12 @@ const router = createRouter({
       path: '/cld/new',
       name: 'cld-new',
       component: () => import('../views/CLDCreateView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/getting-started',
+      name: 'getting-started',
+      component: GettingStartedView,
       meta: { requiresAuth: true }
     }
   ]
