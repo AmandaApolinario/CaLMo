@@ -5,6 +5,7 @@
         CLD Mapper
       </router-link>
       <div class="nav-links">
+        <router-link to="/dashboard" class="nav-link">Home</router-link>
         <router-link to="/variables" class="nav-link">Variables</router-link>
         <router-link to="/clds" class="nav-link">CLDs</router-link>
       </div>
