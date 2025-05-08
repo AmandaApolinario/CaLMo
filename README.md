@@ -65,11 +65,14 @@ This application follows the MVVM (Model-View-ViewModel) architecture:
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/AmandaApolinario/casualLoopDiagramApp
 cd casualLoopDiagramApp
 ```
 
 2. Start the backend using Docker Compose:
+
+- ⚠️IMPORTANT: If you are on MacOS, you will need to uncomment the two settings lines `platform: linux/arm64/v8` on the `docker-compose.yml` file.
+
 ```bash
 # Remove any existing containers and volumes (optional)
 docker-compose down

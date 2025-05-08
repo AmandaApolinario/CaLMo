@@ -1,7 +1,7 @@
 services:
   db:
     image: postgres:15-alpine
-    platform: linux/arm64/v8
+    # platform: linux/arm64/v8 #If you are on MacOS you need to uncomment this line
     ports:
       - "5432:5432"
     environment:
@@ -13,7 +13,7 @@ services:
 
   app:
     image: python:3.9-slim-bullseye
-    platform: linux/arm64/v8
+    # platform: linux/arm64/v8 #If you are on MacOS you need to uncomment this line
     working_dir: /app
     command: sh -c "pip install -r requirements.txt && python main.py"
     volumes:
