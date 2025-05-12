@@ -124,27 +124,24 @@ export function useCLDDiagramViewModel() {
         zoomView: true
       },
       physics: {
-        enabled: false, // Disable physics initially - no rotation or movement
+        enabled: false, // Disable physics to prevent spinning
         stabilization: {
           enabled: true,
-          iterations: 1000,
+          iterations: 100, // Reduced for faster stabilization
           fit: true
         },
         barnesHut: {
-          gravitationalConstant: -3000, // Stronger repulsion
-          centralGravity: 0.1, // Reduced central gravity to prevent pulling nodes to center
-          springLength: 200, // Longer springs for more separation
-          springConstant: 0.05,
-          damping: 0.09,
-          avoidOverlap: 1.0 // Maximum value to prevent overlap
-        },
-        repulsion: {
-          nodeDistance: 150 // Minimum distance between nodes
+          gravitationalConstant: -2000,
+          centralGravity: 0.05, // Reduced to prevent center pull
+          springLength: 150,
+          springConstant: 0.04,
+          damping: 0.5, // Increased damping to prevent oscillations
+          avoidOverlap: 1.0
         }
       },
       layout: {
         improvedLayout: true,
-        randomSeed: undefined
+        randomSeed: 42 // Fixed seed for consistent layouts
       }
     };
 
@@ -188,10 +185,12 @@ export function useCLDDiagramViewModel() {
       network.value.setOptions({ physics: { enabled: true } });
       
       // After stabilization completes, disable physics to stop movement
-      network.value.once('stabilized', () => {
+      network.value.once('stabilizationIterationsDone', () => {
         setTimeout(() => {
           ensureNoOverlap();
           network.value.setOptions({ physics: { enabled: false } });
+          // Explicitly stop animation
+          network.value.stopSimulation();
           // Fit to view to ensure all nodes are visible
           network.value.fit({
             animation: {
@@ -200,7 +199,7 @@ export function useCLDDiagramViewModel() {
             }
           });
           saveNodePositions(diagram.id);
-        }, 1000);
+        }, 500);
       });
     } else {
       // If we have saved positions, quickly check for overlaps and ensure diagram is static
@@ -208,6 +207,8 @@ export function useCLDDiagramViewModel() {
         ensureNoOverlap();
         // Make sure physics remains disabled
         network.value.setOptions({ physics: { enabled: false } });
+        // Explicitly stop any ongoing simulation
+        network.value.stopSimulation();
         // Fit to view to ensure all nodes are visible
         network.value.fit();
       }, 100);
