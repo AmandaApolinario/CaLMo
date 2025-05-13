@@ -1,8 +1,11 @@
 <template>
   <div class="register-layout">
     <div class="register-branding">
-      <h1>CLD Mapper</h1>
-      <p>Create an account to build causal diagrams, detect loops, and spot reinforcing or balancing feedback.</p>
+      <div class="branding">
+        <h1>CaLMo</h1>
+        <p class="subtitle">Causal Loop Diagram Modeler</p>
+        <p class="tagline">Create your account to start modeling.</p>
+      </div>
     </div>
     <div class="register-container">
       <h2>Create Account</h2>
@@ -101,15 +104,26 @@ const handleRegister = async () => {
   padding: 3rem;
 }
 
-.register-branding h1 {
-  font-size: 3rem;
-  margin-bottom: 1rem;
+.branding {
+  text-align: center;
 }
 
-.register-branding p {
+.branding h1 {
+  font-size: 3rem;
+  color: white;
+  margin-bottom: 0.5rem;
+}
+
+.subtitle {
   font-size: 1.2rem;
-  max-width: 300px;
-  text-align: center;
+  color: #42b983;
+  margin-bottom: 1rem;
+  font-weight: 500;
+}
+
+.tagline {
+  font-size: 1.1rem;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .register-container {

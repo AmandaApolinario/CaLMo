@@ -2,7 +2,7 @@
   <div class="getting-started-container">
     <NavBar />
     <div class="getting-started-content">
-      <h1>Getting Started with CLD Mapper</h1>
+      <h1>Getting Started with CaLMo</h1>
       
       <!-- Introduction Section -->
       <section class="gs-section">

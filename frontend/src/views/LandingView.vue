@@ -2,7 +2,8 @@
   <div class="landing-container">
     <div class="landing-panel">
       <div class="branding">
-        <h1>CLD Mapper</h1>
+        <h1>CaLMo</h1>
+        <p class="subtitle">Causal Loop Diagram Modeler</p>
         <p class="tagline">Map variables, access your diagrams, and explore feedback loops.</p>
       </div>
       <div class="auth-form">
@@ -92,17 +93,26 @@ const goToRegister = () => {
   flex: 1;
   padding-right: 2rem;
   border-right: 1px solid #e2e8f0;
+  text-align: center;
+  margin-bottom: 2rem;
 }
 
 .branding h1 {
   font-size: 3rem;
   color: #2c3e50;
+  margin-bottom: 0.5rem;
+}
+
+.subtitle {
+  font-size: 1.2rem;
+  color: #42b983;
   margin-bottom: 1rem;
+  font-weight: 500;
 }
 
 .tagline {
-  font-size: 1.25rem;
-  color: #6b7280;
+  font-size: 1.1rem;
+  color: #666;
 }
 
 .auth-form {

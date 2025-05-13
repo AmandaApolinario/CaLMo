@@ -2,7 +2,7 @@
   <nav class="navbar">
     <div class="navbar-content">
       <router-link to="/dashboard" class="nav-brand">
-        CLD Mapper
+        CaLMo
       </router-link>
       <button @click="logout" class="btn-logout">Log Out</button>
     </div>
