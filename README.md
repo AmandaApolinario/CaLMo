@@ -297,3 +297,7 @@ The frontend is built with:
 - **Axios**: HTTP client
 - **D3.js**: Visualization library
 
+## License
+
+This work is licensed under a Creative Commons Attribution-NonCommercial License (CC BY-NC)
+
