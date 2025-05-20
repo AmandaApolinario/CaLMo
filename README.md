@@ -299,5 +299,6 @@ The frontend is built with:
 
 ## License
 
-This work is licensed under a Creative Commons Attribution-NonCommercial License (CC BY-NC)
+This work is licensed under a Creative Commons Attribution License (CC BY-NC)
+https://creativecommons.org/licenses/by/4.0/legalcode
 
