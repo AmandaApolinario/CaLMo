@@ -45,9 +45,13 @@
       </div>
     </div>
 
-    <!-- Improved Archetype Popup -->
-    <div v-if="selectedNodeInfo.loops.length > 0 || selectedNodeInfo.archetypes.length > 0" class="archetype-popup">
+    <!-- Archetype / Loops Popup -->
+    <div
+      v-if="selectedNodeInfo.loops.length > 0 || selectedNodeInfo.archetypes.length > 0"
+      class="archetype-popup"
+    >
       <div class="popup-overlay" @click="clearNodeSelection"></div>
+
       <div class="popup-card">
         <div class="popup-header">
           <h3>Node Details</h3>
@@ -55,9 +59,9 @@
             <i class="fas fa-times"></i>
           </button>
         </div>
-        
+
         <div class="popup-body">
-          <!-- Added node name section here -->
+          <!-- Node name (simple header) -->
           <div class="node-name-section">
             <h4 class="section-title">
               <i class="fas fa-circle"></i> Node Name
@@ -65,34 +69,85 @@
             <div class="node-name">{{ selectedNodeInfo.nodeName }}</div>
           </div>
 
+          <!-- Feedback Loops -->
           <div v-if="selectedNodeInfo.loops.length > 0" class="loop-section">
             <h4 class="section-title">
               <i class="fas fa-circle-notch"></i> Feedback Loops
             </h4>
+
             <div class="loop-container">
-              <div v-for="(loop, index) in selectedNodeInfo.loops" :key="'loop-' + index" 
-                   class="loop-item" :class="loop.type.toLowerCase()">
-                <div class="loop-badge">{{ loop.type }}</div>
+              <div
+                v-for="(loop, index) in selectedNodeInfo.loops"
+                :key="'loop-' + index"
+                class="loop-item"
+              >
+                <!-- light background from loop.color + dark text -->
+                <div
+                  class="loop-badge"
+                  :style="{
+                    backgroundColor: tint(loop.color, 0.18),
+                    color: '#0F172A',
+                    borderColor: tint(loop.color, 0.35)
+                  }"
+                >
+                  {{ loop.type }}
+                </div>
+
+                <!-- chips (no commas) -->
                 <div class="loop-variables">
-                  <span v-for="(variable, idx) in loop.variables" :key="idx" class="variable-tag">
-                    {{ variable }}<span v-if="idx < loop.variables.length - 1">, </span>
+                  <span
+                    v-for="(variable, idx) in loop.variables"
+                    :key="idx"
+                    class="variable-tag"
+                    :style="{
+                      backgroundColor: tint(loop.color, 0.12),
+                      color: '#0F172A',
+                      borderColor: tint(loop.color, 0.28)
+                    }"
+                  >
+                    {{ variable }}
                   </span>
                 </div>
               </div>
             </div>
           </div>
 
+          <!-- Archetypes -->
           <div v-if="selectedNodeInfo.archetypes.length > 0" class="archetype-section">
             <h4 class="section-title">
               <i class="fas fa-shapes"></i> Archetypes
             </h4>
+
             <div class="archetype-container">
-              <div v-for="archetype in selectedNodeInfo.archetypes" :key="'arch-' + archetype.id" 
-                   class="archetype-item">
-                <div class="archetype-icon">
-                  <i class="fas" :class="getArchetypeIcon(archetype.type)"></i>
+              <div
+                v-for="arch in selectedNodeInfo.archetypes"
+                :key="'arch-' + arch.id"
+                class="archetype-item"
+                :style="{ borderLeftColor: arch.color }"
+              >
+                <!-- coluna fixa só para o dot (não encolhe) -->
+                <div class="arch-col">
+                  <span class="arch-dot" :style="{ backgroundColor: arch.color }"></span>
                 </div>
-                <div class="archetype-name">{{ formatArchetypeName(archetype.type) }}</div>
+
+                <!-- conteúdo flexível -->
+                <div class="arch-content">
+                  <div class="archetype-header">
+                    <i class="fas" :class="getArchetypeIcon(arch.type)"></i>
+                    <span class="archetype-name">{{ formatArchetypeName(arch.type) }}</span>
+                  </div>
+
+                  <div class="archetype-variables" v-if="arch.variables?.length">
+                    <span
+                      v-for="(v, i) in arch.variables"
+                      :key="i"
+                      class="variable-chip"
+                      :style="{ borderColor: arch.color }"
+                    >
+                      {{ v }}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -161,6 +216,16 @@ onMounted(async () => {
     createDiagram(diagram.value, networkContainer.value)
   }
 })
+
+// Make a translucent version of a HEX color for light backgrounds
+const tint = (hex, alpha = 0.16) => {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!m) return hex; // fallback if not a HEX
+  const r = parseInt(m[1], 16);
+  const g = parseInt(m[2], 16);
+  const b = parseInt(m[3], 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
 </script>
 
 <style scoped>
@@ -382,7 +447,7 @@ button {
   background: white;
   border-radius: 12px;
   width: 90%;
-  max-width: 500px;
+  max-width: min(96vw, 980px);
   max-height: 80vh;
   overflow-y: auto;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
@@ -562,5 +627,85 @@ button {
 .loop-section, .archetype-section {
   margin-top: 1.5rem;
 }
+
+/* Loops */
+.loop-container { display: grid; gap: 12px; }
+.loop-item { padding: 10px; border-left: 4px solid #D0D7DE; border-radius: 10px; background: #F7FBFF; }
+.loop-badge { display: inline-block; color: #FFFFFF; padding: 4px 10px; border-radius: 8px; font-weight: 700; }
+.variable-tag { display: inline-block; margin: 2px 6px 0 0; padding: 2px 8px; border: 2px solid #CBD5E1; border-radius: 999px; background: #FFFFFF; }
+
+/* Archetypes */
+.archetype-popup .popup-card {
+  width: min(96vw, 980px);   /* wider popup but still responsive */
+  max-height: 84vh;
+}
+.archetype-popup .popup-body {
+  max-height: calc(84vh - 64px); /* scroll area below header */
+  overflow: auto;
+}
+
+/* ===== Archetypes layout ===== */
+.archetype-container {
+  display: grid;
+  gap: 14px;
+}
+
+/* two-column grid: fixed dot column + flexible content column */
+.archetype-item {
+  display: grid;
+  grid-template-columns: 28px 1fr; /* 28px reserved for the dot */
+  column-gap: 12px;
+  align-items: start;
+
+  border-left: 4px solid #D0D7DE; /* overridden inline with arch.color */
+  background: #F7FBFF;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+/* fixed column: dot never shrinks */
+.arch-col {
+  grid-column: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+/* the colored dot */
+.arch-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 3px #FFFFFF; /* WHITE ring for contrast */
+  flex: 0 0 16px; /* prevent grow/shrink */
+}
+
+/* flexible content column */
+.arch-content { grid-column: 2; }
+
+.archetype-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.archetype-name { font-weight: 700; line-height: 1.25; }
+
+/* variable chips (no commas) */
+.archetype-variables {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.variable-chip {
+  display: inline-block;
+  font-size: 12px;
+  padding: 2px 8px;
+  border: 2px solid #CBD5E1; /* overridden inline with arch.color */
+  border-radius: 999px;
+  background: #FFFFFF;
+}
+
 
 </style>

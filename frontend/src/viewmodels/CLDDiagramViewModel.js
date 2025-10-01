@@ -2,6 +2,13 @@ import { ref, computed } from 'vue';
 import CLDService from '@/services/cld.service';
 import { Network } from 'vis-network';
 import { DataSet } from 'vis-data';
+import {
+  NODE_COLORS,
+  EDGE_COLORS,
+  getArchetypeColor,
+  getLoopColor,
+} from '@/theme/colors';
+import { makePieEllipseDataUrl } from '@/theme/nodeImages';
 
 export function useCLDDiagramViewModel() {
   const networkContainer = ref(null);
@@ -35,6 +42,19 @@ export function useCLDDiagramViewModel() {
     // Get saved positions for this diagram
     const savedPositions = getSavedPositions(diagram.id);
 
+    // nodeId -> array of archetype types (in diagram order)
+    const archetypeTypesByNode = new Map();
+    if (diagram.archetypes?.length) {
+      diagram.archetypes.forEach(arch => {
+        (arch.variables || []).forEach(v => {
+          const id = typeof v === 'object' ? v.id : v;
+          if (id == null) return;
+          if (!archetypeTypesByNode.has(id)) archetypeTypesByNode.set(id, []);
+          archetypeTypesByNode.get(id).push(arch.type);
+        });
+      });
+    }
+
     // Create nodes
     const nodes = new DataSet(
       diagram.nodes.map(node => {
@@ -53,22 +73,44 @@ export function useCLDDiagramViewModel() {
           nodeObj.y = savedPositions[node.id].y;
         }
 
-        // Check if variable is part of an archetype
-        if (archetypeVariableIds.has(node.id)) {
-          // Archetype variables get special coloring
+
+        // === Node visual ===
+        const types = archetypeTypesByNode.get(node.id) || [];
+
+        // 2+ archetypes → pie-ellipse image with equal slices
+        if (types.length >= 2) {
+          const colors = [...new Set(types)].map(t => getArchetypeColor(t)); // dedupe, map to HEX
+          nodeObj.shape = 'image';
+          nodeObj.image = makePieEllipseDataUrl({
+            label: node.name,
+            colors
+          });
+          nodeObj.label = '';   // label is drawn inside the SVG
+          nodeObj.shadow = true;
+        }
+        // exactly 1 archetype → solid ellipse in that archetype color
+        else if (types.length === 1) {
+          const c = getArchetypeColor(types[0]);
+          nodeObj.shape = 'ellipse';
           nodeObj.color = {
-            background: '#BED7ED', 
-            border: '#BED7ED',
-            highlight: { background: '#79A5CB', border: '#79A5CB' }
-          };
-        } else {
-          // Regular variables
-          nodeObj.color = {
-            background: '#FFF0CE',
-            border: '#FFF0CE',
-            highlight: { background: '#C3A869', border: '#C3A869' }
+            background: c, // archetype color
+            border: c,     // archetype color
+            highlight: { background: c, border: c }
           };
         }
+        // no archetype → your regular palette
+        else {
+          nodeObj.shape = 'ellipse';
+          nodeObj.color = {
+            background: NODE_COLORS.regular.background,            // CREAM
+            border: NODE_COLORS.regular.border,                    // CREAM
+            highlight: {
+              background: NODE_COLORS.regular.highlightBackground, // GOLDENROD
+              border: NODE_COLORS.regular.highlightBorder          // GOLDENROD
+            }
+          };
+        }
+
 
         return nodeObj;
       })
@@ -77,21 +119,24 @@ export function useCLDDiagramViewModel() {
     // Create edges
     const edges = new DataSet(
       diagram.edges.map(edge => {
+        const isPositive = edge.polarity === 'positive';
+        const c = isPositive ? EDGE_COLORS.positive : EDGE_COLORS.negative;
         return {
           id: edge.id,
           from: edge.source,
           to: edge.target,
-          label: edge.polarity === 'positive' ? '+' : '-',
+          label: isPositive ? '+' : '-',
           arrows: 'to',
-          font: { size: 22, color: edge.polarity === 'positive' ? '#388E3C' : '#D32F2F' },
+          font: { size: 22, color: c.base }, // GREEN or RED
           width: 2,
           color: {
-            color: edge.polarity === 'positive' ? '#388E3C' : '#D32F2F',
-            highlight: edge.polarity === 'positive' ? '#4CAF50' : '#F44336'
+            color: c.base,        // GREEN or RED
+            highlight: c.highlight // LIGHT GREEN or LIGHT RED
           }
         };
       })
     );
+
 
     // Network options
     const options = {
@@ -308,40 +353,24 @@ export function useCLDDiagramViewModel() {
     
     selectedNodeInfo.value = {
       nodeName: node.name,
-      loops: loops.map(loop => ({
+      loops: (loops || []).map(loop => ({
         id: loop.id,
         type: loop.type,
+        color: getLoopColor(loop.type), // loop color for badges
         variables: Array.isArray(loop.variables) ? loop.variables.map(v => {
-          // If variable is an object with name, use it
-          if (typeof v === 'object' && v.name) {
-            return v.name;
-          }
-          // If it's an object with id, look up the name
-          else if (typeof v === 'object' && v.id) {
-            return getVariableName(v.id);
-          }
-          // If it's just an id string, look up the name
-          else {
-            return getVariableName(v);
-          }
+          if (typeof v === 'object' && v.name) return v.name;
+          if (typeof v === 'object' && v.id)   return getVariableName(v.id);
+          return getVariableName(v);
         }) : []
       })),
-      archetypes: archetypes.map(arch => ({
+      archetypes: (archetypes || []).map(arch => ({
         id: arch.id,
         type: arch.type,
+        color: getArchetypeColor(arch.type) || '#7F8C8D', // GRAY fallback
         variables: Array.isArray(arch.variables) ? arch.variables.map(v => {
-          // If variable is an object with name, use it
-          if (typeof v === 'object' && v.name) {
-            return v.name;
-          }
-          // If it's an object with id, look up the name
-          else if (typeof v === 'object' && v.id) {
-            return getVariableName(v.id);
-          }
-          // If it's just an id string, look up the name
-          else {
-            return getVariableName(v);
-          }
+          if (typeof v === 'object' && v.name) return v.name;
+          if (typeof v === 'object' && v.id)   return getVariableName(v.id);
+          return getVariableName(v);
         }) : []
       }))
     };
