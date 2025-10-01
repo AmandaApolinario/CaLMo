@@ -17,6 +17,13 @@ class LoopType(enum.Enum):
 
 class ArchetypeType(enum.Enum):
     SHIFTING_THE_BURDEN = "Shifting the Burden"
+    FIXES_THAT_FAIL = "Fixes that Fail"
+    LIMITS_TO_SUCCESS = "Limits to Success"
+    DRIFTING_GOALS = "Drifting Goals"
+    GROWTH_AND_UNDERINVESTMENT = "Growth and Underinvestment"
+    SUCCESS_TO_THE_SUCCESSFUL = "Success to the Successful"
+    ESCALATION = "Escalation"
+    TRAGEDY_OF_THE_COMMONS = "Tragedy of the Commons"
 
 # Association Tables
 cld_variables = Table(

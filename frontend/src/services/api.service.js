@@ -2,6 +2,7 @@ import axios from 'axios';
 
 // Create axios instance with baseURL
 const apiClient = axios.create({
+  // baseURL: 'http://dev.nemo.inf.ufes.br:8000',  // Direct connection to backend at port 5001
   baseURL: 'http://localhost:5001',  // Direct connection to backend at port 5001
   timeout: 10000,
   headers: {
