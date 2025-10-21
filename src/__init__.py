@@ -33,32 +33,29 @@ def create_app():
             User, Variable, CLD, Relationship, FeedbackLoop, Archetype,
             RelationshipType, LoopType, ArchetypeType
         )
-        
-        # Create all tables
+
         try:
-            # Drop existing enum types if they exist
-            db.session.execute(text('DROP TYPE IF EXISTS relationship_type CASCADE'))
-            db.session.execute(text('DROP TYPE IF EXISTS loop_type CASCADE'))
-            db.session.execute(text('DROP TYPE IF EXISTS archetype_type CASCADE'))
+            # Cria os tipos ENUM apenas se ainda não existirem
+            db.session.execute(text('DO $$ BEGIN '
+                                    'CREATE TYPE relationship_type AS ENUM (\'POSITIVE\', \'NEGATIVE\'); '
+                                    'EXCEPTION WHEN duplicate_object THEN null; END $$;'))
+            db.session.execute(text('DO $$ BEGIN '
+                                    'CREATE TYPE loop_type AS ENUM (\'BALANCING\', \'REINFORCING\'); '
+                                    'EXCEPTION WHEN duplicate_object THEN null; END $$;'))
+            db.session.execute(text('DO $$ BEGIN '
+                                    'CREATE TYPE archetype_type AS ENUM (\'SHIFTING_THE_BURDEN\'); '
+                                    'EXCEPTION WHEN duplicate_object THEN null; END $$;'))
             db.session.commit()
-            
-            # Create enum types
-            db.session.execute(text('CREATE TYPE relationship_type AS ENUM (\'POSITIVE\', \'NEGATIVE\')'))
-            db.session.execute(text('CREATE TYPE loop_type AS ENUM (\'BALANCING\', \'REINFORCING\')'))
-            db.session.execute(text('CREATE TYPE archetype_type AS ENUM (\'SHIFTING_THE_BURDEN\')'))
-            db.session.commit()
-            
-            # Drop all existing tables
-            db.drop_all()
-            
-            # Create all tables
+
+            # Cria as tabelas (só se não existirem)
             db.create_all()
-            print("Database tables created successfully!")
+            print("✅ Database tables checked/created (no drop).")
+
         except Exception as e:
             print(f"Database initialization error: {e}")
             db.session.rollback()
             raise e
-    
+
         # Register all routes
         from .views import register_routes
         register_routes(app)

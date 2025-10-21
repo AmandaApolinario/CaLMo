@@ -71,16 +71,17 @@ cd casualLoopDiagramApp
 
 2. Start the backend using Docker Compose:
 
-- ⚠️IMPORTANT: If you are on MacOS, you will need to uncomment the two settings lines `platform: linux/arm64/v8` on the `docker-compose.yml` file.
+- ⚠️IMPORTANT: If you are on MacOS, you will need to uncomment the two settings lines `#platform: linux/arm64/v8` on the `docker-compose.yml` file.
 
+1. Remove any existing containers
+2. Build and start the containers
 ```bash
-# Remove any existing containers and volumes (optional)
 docker-compose down
-docker volume rm $(docker volume ls -q)
-
-# Build and start the containers
 docker-compose up --build
 ```
+
+- ⚠️ATTENTION: The command above will not reset your PostgreSQL database data after each `down`/`up`. If you want to reset the database, simply remove the PostgreSQL volume using the command `docker compose down -v` instead of `docker compose down`.
+
 
 3. Start the frontend development server:
 ```bash

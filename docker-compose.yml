@@ -23,8 +23,12 @@ services:
     depends_on:
       - db
     environment:
-      - DATABASE_URL=postgresql://app:postgres@db:5432/app
+      - SQLALCHEMY_DATABASE_URI=postgresql://app:postgres@db:5432/app
+      - SQLALCHEMY_TRACK_MODIFICATIONS=False
       - JWT_SECRET_KEY=supersecretkey
+      # (Opcional) manter também DATABASE_URL se seu código usa:
+      - DATABASE_URL=postgresql://app:postgres@db:5432/app
 
 volumes:
   postgres_data:
+    name: myapp-postgres-data
