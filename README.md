@@ -64,31 +64,33 @@ This application follows the MVVM (Model-View-ViewModel) architecture:
 ### Running the Application
 
 1. Clone the repository:
-```bash
-git clone https://github.com/AmandaApolinario/casualLoopDiagramApp
-cd casualLoopDiagramApp
-```
+    ```bash
+    git clone https://github.com/AmandaApolinario/casualLoopDiagramApp
+    cd casualLoopDiagramApp
+    ```
 
 2. Start the backend using Docker Compose:
 
-- ⚠️IMPORTANT: If you are on MacOS, you will need to uncomment the two settings lines `#platform: linux/arm64/v8` on the `docker-compose.yml` file.
+    - ⚠️IMPORTANT: If you are on MacOS, you will need to uncomment the two settings lines `#platform: linux/arm64/v8` on the `docker-compose.yml` file.
 
-1. Remove any existing containers
-2. Build and start the containers
-```bash
-docker-compose down
-docker-compose up --build
-```
+    - Remove any existing containers
+    ```bash
+    docker-compose down
+    ```
+    - Build and start the containers
+    ```bash
+    docker-compose up --build
+    ```
 
-- ⚠️ATTENTION: The command above will not reset your PostgreSQL database data after each `down`/`up`. If you want to reset the database, simply remove the PostgreSQL volume using the command `docker compose down -v` instead of `docker compose down`.
+    - ⚠️ATTENTION: The command above will not reset your PostgreSQL database data after each `down`/`up`. If you want to reset the database, simply remove the PostgreSQL volume using the command `docker compose down -v` instead of `docker compose down`.
 
 
 3. Start the frontend development server:
-```bash
-cd frontend
-npm install
-npm run dev
-```
+    ```bash
+    cd frontend
+    npm install
+    npm run dev
+    ```
 
 The API will be available at `http://localhost:5001`
 The frontend application will be available at `http://localhost:3000`
