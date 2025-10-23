@@ -57,11 +57,87 @@ class CLDAnalyzer:
         
         return feedback_loop
 
+    # === Helpers para loops assinados ===
+    @staticmethod
+    def _edge_sign_map(cld):
+        """Mapeia (u,v) -> +1|-1."""
+        emap = {}
+        for r in cld.relationships:
+            emap[(r.source_id, r.target_id)] = +1 if r.type == RelationshipType.POSITIVE else -1
+        return emap
+
+    @staticmethod
+    def _path_sign_on_cycle(cycle, i, j, edge_sign):
+        """
+        Produto de sinais ao andar no ciclo de cycle[i] -> ... -> cycle[j] (seguindo a ordem da lista, circular).
+        cycle é uma lista de nós sem repetição; o último liga de volta ao primeiro.
+        """
+        n = len(cycle)
+        if n == 0 or i == j:
+            return +1  # empty path: +1
+        s = +1
+        k = i
+        while k != j:
+            u = cycle[k]
+            v = cycle[(k + 1) % n]
+            s *= edge_sign.get((u, v), +1)  # assume +1 if missing (shouldn't happen)
+            k = (k + 1) % n
+        return s
+
+    @staticmethod
+    def _cycle_net_sign(cycle, edge_sign):
+        """Produto de sinais do ciclo inteiro."""
+        n = len(cycle)
+        s = +1
+        for k in range(n):
+            u = cycle[k]
+            v = cycle[(k + 1) % n]
+            s *= edge_sign.get((u, v), +1)
+        return s  # +1 => REINFORCING ; -1 => BALANCING
+    
+    @staticmethod
+    def _archetype_key(type_, vars_):
+        """
+        Build a stable deduplication key based on archetype type and
+        the unordered set of variable IDs.
+        """
+        var_ids = sorted(v.id for v in vars_)
+        return (type_.value, tuple(var_ids))
+
+    @staticmethod
+    def _archetype_exists(cld, type_, var_ids_set):
+        """
+        Return True if an archetype of the same type with the exact same
+        set of variables is already attached to this CLD.
+        """
+        target = set(var_ids_set)
+        for a in cld.archetypes:
+            if a.type == type_:
+                current = {v.id for v in a.variables}
+                if current == target:
+                    return True
+        return False
+    
+    @staticmethod
+    def _find_ftf_by_ps_f(cld, ps_id, f_id):
+        """
+        Return an existing 'Fixes that Fail' archetype instance on this CLD
+        that already contains both PS and F (order-independent).
+        """
+        for a in cld.archetypes:
+            if a.type != ArchetypeType.FIXES_THAT_FAIL:
+                continue
+            ids = {v.id for v in a.variables}
+            if ps_id in ids and f_id in ids:
+                return a
+        return None
+
+
     @staticmethod
     def identify_archetypes(cld, session):
         """Identifies system archetypes within the CLD."""
         CLDAnalyzer._identify_shifting_the_burden(cld, session)
-        CLDAnalyzer._identify_fixes_that_fail(cld, session)
+        CLDAnalyzer._identify_fixes_that_fail(cld, session, replace=True)
         CLDAnalyzer._identify_limits_to_success(cld, session)
         CLDAnalyzer._identify_drifting_goals(cld, session)
         CLDAnalyzer._identify_growth_and_underinvestment(cld, session)
@@ -111,47 +187,159 @@ class CLDAnalyzer:
         return cld.archetypes
     
     @staticmethod
-    def _identify_fixes_that_fail(cld, session):
+    def _identify_fixes_that_fail(cld, session, replace=False, uc_must_be_internal: bool = True):
         """
         Identify the 'Fixes that Fail' archetype.
         Canonical pattern (no explicit delay modeled here):
             Problem Symptom (PS) -> Fix / Quick Solution (F) : (+)
-            Fix (F) -> Problem Symptom (PS) : (−)         [short balancing loop]
+            Fix (F) -> Problem Symptom (PS) : (-)         [short balancing loop]
             Fix (F) -> Unintended Consequence (UC) : (+)
             Unintended Consequence (UC) -> Problem Symptom (PS) : (+)  [reinforcing drift back]
         """
-        rel_map = {(rel.source_id, rel.target_id): rel.type for rel in cld.relationships}
-        created = set()  # avoid duplicates for the same trio
+        
+        # Optionally clear previous FTFs
+        if replace:
+            cld.archetypes[:] = [a for a in cld.archetypes
+                                if a.type != ArchetypeType.FIXES_THAT_FAIL]
 
-        for var_ps in cld.variables:
-            # Step 1: candidates for F (quick fix) forming the short balancing loop with PS
-            f_candidates = [
-                v for v in cld.variables
-                if v.id != var_ps.id
-                and rel_map.get((var_ps.id, v.id)) == RelationshipType.POSITIVE
-                and rel_map.get((v.id, var_ps.id)) == RelationshipType.NEGATIVE
-            ]
+        # Build signed edge map and plain DiGraph for cycle enumeration
+        edge_sign = CLDAnalyzer._edge_sign_map(cld)
+        G = nx.DiGraph()
+        for v in cld.variables:
+            G.add_node(v.id)
+        for (u, v), s in edge_sign.items():
+            G.add_edge(u, v)
 
-            for var_f in f_candidates:
-                # Step 2: candidates for UC (unintended consequence)
-                uc_candidates = [
-                    v for v in cld.variables
-                    if v.id not in {var_ps.id, var_f.id}
-                    and rel_map.get((var_f.id, v.id)) == RelationshipType.POSITIVE
-                    and rel_map.get((v.id, var_ps.id)) == RelationshipType.POSITIVE
-                ]
+        # Enumerate cycles (bounded)
+        MAX_CYCLES = 5000
+        MAX_CYCLE_LEN = 12
+        cycles = []
+        for cyc in nx.simple_cycles(G):
+            if 2 <= len(cyc) <= MAX_CYCLE_LEN:
+                cycles.append(cyc)
+                if len(cycles) >= MAX_CYCLES:
+                    break
 
-                for var_uc in uc_candidates:
-                    key = tuple(sorted([var_ps.id, var_f.id, var_uc.id]))
-                    if key in created:
+        # Index cycles by node for quick membership checks
+        idx_by_node = {}
+        for ci, cyc in enumerate(cycles):
+            for n in cyc:
+                idx_by_node.setdefault(n, []).append(ci)
+
+        id2var = {v.id: v for v in cld.variables}
+        grouped = {}  # (ps_id, f_id) -> set(uc_id)
+
+        # Iterate candidate PS,F pairs
+        for ps in cld.variables:
+            for f in cld.variables:
+                if f.id == ps.id:
+                    continue
+
+                # -------------------------
+                # 1) Collect B1 candidates
+                # -------------------------
+                b1_cycles = []
+                cand = set(idx_by_node.get(ps.id, [])) & set(idx_by_node.get(f.id, []))
+                for ci in cand:
+                    cyc = cycles[ci]
+                    if CLDAnalyzer._cycle_net_sign(cyc, edge_sign) != -1:
+                        continue
+                    i = cyc.index(ps.id); j = cyc.index(f.id)
+                    s_ps_f = CLDAnalyzer._path_sign_on_cycle(cyc, i, j, edge_sign)
+                    s_f_ps = CLDAnalyzer._path_sign_on_cycle(cyc, j, i, edge_sign)
+                    # B1 semantics: PS->F (+), F->PS (−)
+                    if s_ps_f == +1 and s_f_ps == -1:
+                        b1_cycles.append(cyc)
+
+                if not b1_cycles:
+                    continue
+
+                # -------------------------
+                # 2) Collect R2 candidates
+                # -------------------------
+                r2_cycles = []
+                for ci in cand:
+                    cyc = cycles[ci]
+                    if CLDAnalyzer._cycle_net_sign(cyc, edge_sign) != +1:
+                        continue
+                    j = cyc.index(f.id); i = cyc.index(ps.id)
+                    s_f_ps = CLDAnalyzer._path_sign_on_cycle(cyc, j, i, edge_sign)
+                    # R2 semantics: F ... PS path (+). (The reverse PS ... F can be any.)
+                    if s_f_ps == +1:
+                        r2_cycles.append(cyc)
+
+                if not r2_cycles:
+                    continue
+
+                # ---------------------------------------------------------
+                # 3) Enforce nodes(B1) ⊆ nodes(R2) for the chosen pair
+                #    and extract UC nodes lying on the F..PS arc of R2
+                # ---------------------------------------------------------
+                ucs_union = set()
+
+                for b1 in b1_cycles:
+                    b1_nodes = set(b1)
+
+                    # choose any R2 that contains all B1 nodes
+                    good_r2s = [r2 for r2 in r2_cycles if b1_nodes.issubset(set(r2))]
+                    if not good_r2s:
+                        # This B1 is not embedded in any reinforcing cycle → skip it
                         continue
 
-                    archetype = Archetype(type=ArchetypeType.FIXES_THAT_FAIL, cld=cld)
-                    session.add(archetype)
-                    cld.archetypes.append(archetype)
-                    archetype.variables.extend([var_ps, var_f, var_uc])
-                    created.add(key)
-        
+                    for r2 in good_r2s:
+                        n = len(r2)
+                        idx_f = r2.index(f.id)
+                        idx_ps = r2.index(ps.id)
+
+                        # walk the F..PS arc to collect potential UC nodes
+                        k = (idx_f + 1) % n
+                        while k != idx_ps:
+                            uc_id = r2[k]
+
+                            # s(F→UC) and s(UC→PS) along this cycle arc must both be +
+                            s_f_uc  = CLDAnalyzer._path_sign_on_cycle(r2, idx_f, k,      edge_sign)
+                            s_uc_ps = CLDAnalyzer._path_sign_on_cycle(r2, k,     idx_ps, edge_sign)
+                            if s_f_uc == +1 and s_uc_ps == +1:
+                                if uc_must_be_internal:
+                                    # UC must have no predecessors outside this *reinforcing* cycle
+                                    r2_nodes = set(r2)
+                                    external_parent = any(p not in r2_nodes for p in G.predecessors(uc_id))
+                                    if external_parent:
+                                        k = (k + 1) % n
+                                        continue
+                                ucs_union.add(uc_id)
+
+                            k = (k + 1) % n
+
+                if not ucs_union:
+                    continue
+
+                grouped.setdefault((ps.id, f.id), set()).update(ucs_union)
+
+        # -----------------------------------------
+        # 4) Merge: one FTF per (PS,F) with all UCs
+        # -----------------------------------------
+        for (ps_id, f_id), uc_ids in grouped.items():
+            ps = id2var[ps_id]; f = id2var[f_id]
+            ucs_sorted = sorted((id2var[u] for u in uc_ids), key=lambda x: x.name.lower())
+
+            existing = CLDAnalyzer._find_ftf_by_ps_f(cld, ps_id, f_id)
+            if existing:
+                keep = {v.id: v for v in existing.variables}
+                keep[ps_id] = ps; keep[f_id] = f
+                for u in ucs_sorted:
+                    keep[u.id] = u
+                existing.variables.clear()
+                existing.variables.extend([ps, f] + sorted(
+                    [v for vid, v in keep.items() if vid not in {ps_id, f_id}],
+                    key=lambda x: x.name.lower()
+                ))
+            else:
+                a = Archetype(type=ArchetypeType.FIXES_THAT_FAIL, cld=cld)
+                cld.archetypes.append(a)
+                session.add(a)
+                a.variables.extend([ps, f, *ucs_sorted])
+
         return cld.archetypes
 
     @staticmethod
