@@ -2,7 +2,7 @@
   <div class="landing-container">
     <div class="landing-panel">
       <div class="branding">
-        <h1>CaLMo</h1>
+        <h1>CaLMo 2.0</h1>
         <p class="subtitle">Causal Loop Diagram Modeler</p>
         <p class="tagline">Map variables, access your diagrams, and explore feedback loops.</p>
       </div>

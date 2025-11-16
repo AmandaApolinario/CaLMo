@@ -18,7 +18,9 @@ export function makePieEllipseDataUrl({
   width = 180,
   height = 80,
   borderColor = '#333333', // DARK GRAY
-  borderWidth = 2
+  borderWidth = 2,
+  fontSize = 18,
+  lineHeight = 1.25
 }) {
   const cols = (colors || []).filter(Boolean);
   if (cols.length === 0) return makeSolidEllipseDataUrl({ label, fill: '#BED7ED' }); // PALE BLUE
@@ -40,6 +42,14 @@ export function makePieEllipseDataUrl({
     return `<path d="M ${cx} ${cy} L ${x1} ${y1} A ${rx} ${ry} 0 ${large} 1 ${x2} ${y2} Z" fill="${c}"/>`;
   }).join('');
 
+  const lines = String(label || '').split('\n');
+  const linePx = fontSize * lineHeight;
+  let y0 = cy - ((lines.length - 1) * linePx) / 2 + fontSize * 0.35;
+
+  const tspans = lines.map((ln, i) =>
+    `<tspan x="${cx}" dy="${i === 0 ? 0 : linePx}">${escapeXml(ln)}</tspan>`
+  ).join('');
+
   const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <defs>
@@ -49,24 +59,41 @@ export function makePieEllipseDataUrl({
   </defs>
   <g clip-path="url(#clip)">${paths}</g>
   <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="none" stroke="${borderColor}" stroke-width="${borderWidth}"/>
-  <text x="${cx}" y="${cy + 6}" font-family="Arial, sans-serif" font-size="18"
-        fill="${fontColor}" text-anchor="middle">${escapeXml(label || '')}</text>
+  <text x="${cx}" y="${y0}" font-family="Arial, sans-serif" font-size="${fontSize}"
+        fill="${fontColor}" text-anchor="middle">${tspans}</text>
 </svg>`;
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
 
 export function makeSolidEllipseDataUrl({
-  label, fill = '#BED7ED', fontColor = '#000000', width = 180, height = 80, borderColor = '#333333', borderWidth = 2
+  label,
+  fill = '#BED7ED',
+  fontColor = '#000000',
+  width = 180,
+  height = 80,
+  borderColor = '#333333',
+  borderWidth = 2,
+  fontSize = 18,
+  lineHeight = 1.25
 }) {
   const rx = Math.max(10, Math.round((width  - borderWidth * 2) / 2));
   const ry = Math.max(10, Math.round((height - borderWidth * 2) / 2));
   const cx = Math.round(width / 2);
   const cy = Math.round(height / 2);
+
+  const lines = String(label || '').split('\n');
+  const linePx = fontSize * lineHeight;
+  let y0 = cy - ((lines.length - 1) * linePx) / 2 + fontSize * 0.35;
+
+  const tspans = lines.map((ln, i) =>
+    `<tspan x="${cx}" dy="${i === 0 ? 0 : linePx}">${escapeXml(ln)}</tspan>`
+  ).join('');
+
   const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${fill}" stroke="${borderColor}" stroke-width="${borderWidth}"/>
-  <text x="${cx}" y="${cy + 6}" font-family="Arial, sans-serif" font-size="18"
-        fill="${fontColor}" text-anchor="middle">${escapeXml(label || '')}</text>
+  <text x="${cx}" y="${y0}" font-family="Arial, sans-serif" font-size="${fontSize}"
+        fill="${fontColor}" text-anchor="middle">${tspans}</text>
 </svg>`;
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }

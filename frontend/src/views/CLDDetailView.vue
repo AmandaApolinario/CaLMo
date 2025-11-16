@@ -38,6 +38,18 @@
           <div ref="networkContainer" class="network"></div>
         </div>
 
+        <!-- LEGEND (archetype instances present in this diagram) -->
+        <div class="cld-legend" v-if="legendArchetypes.length">
+          <div class="legend-title">Legend — Archetypes in this CLD</div>
+          <div class="legend-grid">
+            <div v-for="item in legendArchetypes" :key="item.id" class="legend-item">
+              <span class="legend-swatch" :style="{ backgroundColor: item.color }"></span>
+              <span class="legend-label">{{ item.label }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
         <div class="cld-actions">
           <button @click="goBack" class="btn-back">Back</button>
           <button @click="editDiagram" class="btn-edit">Edit</button>
@@ -184,7 +196,8 @@ const {
   zoomIn, 
   zoomOut, 
   getArchetypeIcon, 
-  formatArchetypeName 
+  formatArchetypeName,
+  legendArchetypes
 } = useCLDDiagramViewModel()
 
 // Format date for display
@@ -707,5 +720,45 @@ button {
   background: #FFFFFF;
 }
 
+
+.cld-legend {
+  margin: 14px 0 8px;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f9fafb;
+}
+
+.legend-title {
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 8px;
+}
+
+.legend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px 16px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+
+.legend-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.18);
+  flex: 0 0 auto;
+}
+
+.legend-label {
+  font-size: 0.95rem;
+  color: #1f2937;
+}
 
 </style>

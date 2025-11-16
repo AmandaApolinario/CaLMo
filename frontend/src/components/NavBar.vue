@@ -2,7 +2,7 @@
   <nav class="navbar">
     <div class="navbar-content">
       <router-link to="/dashboard" class="nav-brand">
-        CaLMo
+        CaLMo 2.0
       </router-link>
       <div class="nav-links">
         <router-link to="/dashboard" class="nav-link">Home</router-link>

@@ -34,7 +34,7 @@
 
       <!-- User Instructions Section -->
       <div class="instructions-container">
-        <h2>Getting Started with CaLMo</h2>
+        <h2>Getting Started with CaLMo 2.0</h2>
         <div class="instructions-content">
           <div class="instruction-block">
             <h3>New to Causal Loop Diagrams?</h3>
