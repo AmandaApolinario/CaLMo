@@ -245,9 +245,15 @@ export function useCLDDiagramViewModel() {
         margin: 10,
         scaling: { label: { enabled: true } },
         fixed: { x: false, y: false },
-        font: { multi: true }
+        font: { multi: true },
+        shapeProperties: {
+          useImageSize: true,       // usa width/height do SVG
+          useBorderWithImage: false  // mantém a borda do nó com imagem
+        }
       },
-      edges: { smooth: { type: 'curvedCW', roundness: 0.2 }, width: 2 },
+      edges: { smooth: { type: 'curvedCW', roundness: 0.2 },
+        width: 2
+      },
       interaction: {
         hover: true, navigationButtons: true, keyboard: true,
         multiselect: false, dragNodes: true, zoomView: true
@@ -269,7 +275,13 @@ export function useCLDDiagramViewModel() {
 
     // Selection & UX
     network.value.on('selectNode', (params) => handleNodeSelection(params, diagram));
-    network.value.on('click', (params) => { if (params.nodes.length === 0) clearNodeSelection(); });
+    network.value.on('click', (params) => {
+      if (params.nodes.length === 0) {
+        clearNodeSelection();
+      } else {
+        handleNodeSelection({ nodes: params.nodes }, diagram);
+      }
+    });
     network.value.on('dragEnd', () => saveNodePositions(diagram.id));
 
     setTimeout(() => {
@@ -381,6 +393,14 @@ export function useCLDDiagramViewModel() {
   }
 
   function clearNodeSelection() {
+    if (network.value) {
+      try {
+        network.value.unselectAll();
+      } catch (e) {
+        console.error('Erro ao limpar seleção do network:', e);
+      }
+    }
+
     selectedNode.value = null;
     selectedNodeInfo.value = { nodeName: '', loops: [], archetypes: [] };
   }
