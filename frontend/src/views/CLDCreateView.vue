@@ -17,35 +17,20 @@
               <!-- CLD Name -->
               <div class="form-group">
                 <label for="name">CLD Name</label>
-                <input 
-                  type="text" 
-                  id="name" 
-                  v-model="diagram.title" 
-                  placeholder="Enter CLD name"
-                  required
-                >
+                <input type="text" id="name" v-model="diagram.title" placeholder="Enter CLD name" required>
               </div>
 
               <!-- Description -->
               <div class="form-group">
                 <label for="description">Description</label>
-                <textarea 
-                  id="description" 
-                  v-model="diagram.description" 
-                  placeholder="Enter CLD description"
-                  rows="6"
-                ></textarea>
+                <textarea id="description" v-model="diagram.description" placeholder="Enter CLD description"
+                  rows="6"></textarea>
               </div>
 
               <!-- Date -->
               <div class="form-group">
                 <label for="date">Date</label>
-                <input 
-                  type="date" 
-                  id="date" 
-                  v-model="diagram.createdAt" 
-                  required
-                >
+                <input type="date" id="date" v-model="diagram.createdAt" required>
               </div>
             </div>
 
@@ -63,51 +48,45 @@
                 <div v-else class="relationships-container">
                   <div v-for="(edge, index) in diagram.edges" :key="index" class="relationship">
                     <div class="relationship-row">
-                      <select v-model="edge.source" 
-                              @change="edge.target && checkForConflictingRelationship(index)" 
-                              required 
-                              class="relationship-select">
+                      <select v-model="edge.source" @change="edge.target && checkForConflictingRelationship(index)"
+                        required class="relationship-select">
                         <option value="">Select source variable</option>
                         <option v-for="variable in variables" :key="variable.id" :value="variable.id">
                           {{ variable.name }}
                         </option>
                       </select>
-                      
-                      <select v-model="edge.polarity" 
-                              @change="edge.source && edge.target && checkForConflictingRelationship(index)"
-                              required 
-                              class="relationship-type">
+
+                      <select v-model="edge.polarity"
+                        @change="edge.source && edge.target && checkForConflictingRelationship(index)" required
+                        class="relationship-type">
                         <option value="positive">+ (Positive)</option>
                         <option value="negative">- (Negative)</option>
                       </select>
-                      
-                      <select v-model="edge.target" 
-                              @change="checkForConflictingRelationship(index)"
-                              required 
-                              class="relationship-select">
+
+                      <select v-model="edge.target" @change="checkForConflictingRelationship(index)" required
+                        class="relationship-select">
                         <option value="">Select target variable</option>
-                        <option v-for="variable in filteredTargetVariables(edge.source)" 
-                                :key="variable.id" 
-                                :value="variable.id">
+                        <option v-for="variable in filteredTargetVariables(edge.source)" :key="variable.id"
+                          :value="variable.id">
                           {{ variable.name }}
                         </option>
                       </select>
-                      
+
                       <button type="button" @click="() => removeEdge(index)" class="btn-delete">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                          <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                          viewBox="0 0 16 16">
+                          <path
+                            d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" />
                         </svg>
                       </button>
                     </div>
                   </div>
                 </div>
-                <button 
-                  v-if="variables.length > 0" 
-                  type="button" 
-                  @click="addEdge" 
-                  class="btn-add"
-                >
+                <button v-if="variables.length > 0" type="button" @click="addEdge" class="btn-add">
                   <i class="fas fa-plus"></i> Add Relationship
+                </button>
+                <button v-if="variables.length > 0" type="button" @click="showImportModal = true" class="btn-add">
+                  <i class="fas fa-plus"></i> Import Relationship
                 </button>
               </div>
             </div>
@@ -116,11 +95,7 @@
           <!-- Submit and Cancel -->
           <div class="form-actions">
             <button type="button" @click="goToDashboard" class="btn-cancel">Cancel</button>
-            <button 
-              type="submit" 
-              :disabled="saving || variables.length === 0" 
-              class="btn-submit"
-            >
+            <button type="submit" :disabled="saving || variables.length === 0" class="btn-submit">
               {{ saving ? 'Creating...' : 'Create CLD' }}
             </button>
           </div>
@@ -138,18 +113,26 @@
       </div>
     </div>
   </div>
+  <ImportFileModal v-if="showImportModal" @close="showImportModal = false"
+    :import-object-name="'Relationship'" :accepted-extensions="['.csv', '.json']"
+    :objectVariables="{ source: ['source'], target: ['target'], polarity: ['polarity'] }"
+    :import-function="importEdges" />
+
+  <Alert :show="importMessages.show" :type="importMessages.type" :text="importMessages.text" />
 </template>
 
 <script setup>
 import { onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
+import ImportFileModal from '../components/ImportFileModal.vue'
+import Alert from '../components/Alert.vue'
 import NavBar from '../components/NavBar.vue'
 import { useCLDEditorViewModel } from '@/viewmodels/CLDEditorViewModel'
 
 const router = useRouter()
 
 // Initialize the CLD Editor ViewModel
-const { 
+const {
   diagram,
   variables,
   loading,
@@ -163,7 +146,10 @@ const {
   addEdge,
   removeEdge,
   filteredTargetVariables,
-  validateDiagram
+  validateDiagram,
+  importEdges,
+  showImportModal,
+  importMessages
 } = useCLDEditorViewModel()
 
 // Initialize with an empty diagram
@@ -172,10 +158,10 @@ onMounted(async () => {
   try {
     // Reset the diagram to start fresh
     resetDiagram();
-    
+
     // Fetch variables for relationships
     await fetchVariables();
-    
+
     // Add one empty relationship by default if we have variables
     if (variables.value && variables.value.length > 0) {
       addEdge();
@@ -197,7 +183,7 @@ const handleSubmit = async () => {
     error.value = validationError
     return
   }
-  
+
   // Create the diagram
   try {
     const newDiagram = await createDiagram(diagram.value)
@@ -222,38 +208,38 @@ const goToVariables = () => {
 
 const checkForConflictingRelationship = (index) => {
   const currentEdge = diagram.value.edges[index];
-  
+
   // Skip if the edge is not fully defined
   if (!currentEdge.source || !currentEdge.target || !currentEdge.polarity) {
     return;
   }
-  
+
   // Check if there's already a relationship between these variables with a different polarity
   for (let i = 0; i < diagram.value.edges.length; i++) {
     if (i === index) continue; // Skip the current edge
-    
+
     const otherEdge = diagram.value.edges[i];
-    
+
     // Skip incomplete edges
     if (!otherEdge.source || !otherEdge.target || !otherEdge.polarity) {
       continue;
     }
-    
+
     // Check if exactly the same variables are connected in the same direction
-    const sameDirectionalRelationship = 
+    const sameDirectionalRelationship =
       (currentEdge.source === otherEdge.source && currentEdge.target === otherEdge.target);
-    
+
     if (sameDirectionalRelationship && currentEdge.polarity !== otherEdge.polarity) {
       error.value = `Conflicting relationship: Cannot have both positive and negative relationships between the same variables in the same direction`;
-      
+
       // Reset the last selection 
       currentEdge.target = '';
-      
+
       // Clear the error after 5 seconds
       setTimeout(() => {
         error.value = null;
       }, 5000);
-      
+
       break;
     }
   }
@@ -319,7 +305,9 @@ label {
   font-weight: 500;
 }
 
-input, textarea, select {
+input,
+textarea,
+select {
   padding: 0.75rem 1rem;
   border: 2px solid #e2e8f0;
   border-radius: 8px;
@@ -328,7 +316,9 @@ input, textarea, select {
   width: 100%;
 }
 
-input:focus, textarea:focus, select:focus {
+input:focus,
+textarea:focus,
+select:focus {
   outline: none;
   border-color: #42b983;
   box-shadow: 0 0 0 3px rgba(66, 185, 131, 0.2);
@@ -511,8 +501,13 @@ button {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 /* Font Awesome icons */
