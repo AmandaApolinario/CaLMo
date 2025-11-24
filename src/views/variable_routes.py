@@ -88,3 +88,18 @@ def delete_variable_route(user_id, variable_id):
         return jsonify({'message': message}), 404
         
     return jsonify({'message': message}), 200 
+
+@variable_routes.route('/variable/import', methods=['POST'])
+@token_required
+def import_new_variables(user_id):
+    variables_data = request.get_json()
+    view_model = VariableViewModel(db.session)
+    imported_variables, message = view_model.import_variables(user_id, variables_data)
+    
+    if not imported_variables:
+        return jsonify({'message': message}), 400
+
+    return jsonify({
+        'message': message,
+        'imported_variables': imported_variables
+    }), 201

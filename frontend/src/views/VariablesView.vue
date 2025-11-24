@@ -15,24 +15,13 @@
           <form @submit.prevent="submitForm" class="variable-form">
             <div class="form-group">
               <label for="name">Name</label>
-              <input
-                type="text"
-                id="name"
-                v-model="newVariable.name"
-                required
-                placeholder="Enter variable name"
-                class="form-input"
-              />
+              <input type="text" id="name" v-model="newVariable.name" required placeholder="Enter variable name"
+                class="form-input" />
             </div>
             <div class="form-group">
               <label for="description">Description</label>
-              <textarea
-                id="description"
-                v-model="newVariable.description"
-                placeholder="Enter variable description"
-                class="form-textarea"
-                rows="6"
-              ></textarea>
+              <textarea id="description" v-model="newVariable.description" placeholder="Enter variable description"
+                class="form-textarea" rows="6"></textarea>
             </div>
             <div class="form-actions">
               <button type="button" v-if="isEditing" @click="cancelEditing" class="btn-cancel">
@@ -50,9 +39,12 @@
         <div class="list-panel">
           <div class="panel-header">
             <h3>Your Variables</h3>
-            <div class="total-count">{{ variables.length }} variables</div>
+            <div class="panel-action">
+              <div class="total-count">{{ variables.length }} variables</div>
+              <button type="button" class="btn-submit" @click="showImportModal = true">Import Variables</button>
+            </div>
           </div>
-          
+
           <div v-if="loading" class="loading">
             <i class="fas fa-spinner fa-spin"></i> Loading variables...
           </div>
@@ -83,11 +75,20 @@
       </div>
     </div>
   </div>
+
+  <ImportVariablesModal v-if="showImportModal" @close="showImportModal = false"
+    :import-object-name="'Variables'" :accepted-extensions="['.csv', '.json']"
+    :objectVariables="{ name: ['name'], description: ['description'] }"
+    :import-function="importVariables" />
+
+  <Alert :show="importMessages.show" :type="importMessages.type" :text="importMessages.text" />
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import NavBar from '../components/NavBar.vue'
+import ImportVariablesModal from '../components/ImportFileModal.vue'
+import Alert from '../components/Alert.vue'
 import { useVariablesViewModel } from '@/viewmodels/VariablesViewModel'
 
 // Initialize ViewModel
@@ -98,17 +99,24 @@ const {
   message,
   isEditing,
   newVariable,
+  showImportModal,
+  uploadedFiles,
   fetchVariables,
   submitForm,
   deleteVariable,
   startEditing,
-  cancelEditing
+  cancelEditing,
+  importVariables,
+  importMessages,
+  notificationTimeout,
 } = useVariablesViewModel()
+
+
 
 // Handler functions
 const editVariableHandler = (variable) => {
   startEditing(variable)
-  
+
   // Scroll to form
   window.scrollTo({
     top: 0,
@@ -171,6 +179,12 @@ onMounted(() => {
   border-bottom: 1px solid #e2e8f0;
 }
 
+.panel-action {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
 .panel-header h3 {
   margin: 0;
   font-size: 1.4rem;
@@ -199,7 +213,8 @@ onMounted(() => {
   gap: 0.5rem;
 }
 
-.form-input, .form-textarea {
+.form-input,
+.form-textarea {
   padding: 0.9rem 1rem;
   border: 2px solid #e2e8f0;
   border-radius: 8px;
@@ -208,7 +223,8 @@ onMounted(() => {
   width: 100%;
 }
 
-.form-input:focus, .form-textarea:focus {
+.form-input:focus,
+.form-textarea:focus {
   outline: none;
   border-color: #42b983;
   box-shadow: 0 0 0 3px rgba(66, 185, 131, 0.2);
@@ -406,4 +422,29 @@ onMounted(() => {
 .fas {
   font-size: 1rem;
 }
+
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(30, 41, 59, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  padding: 2rem 2.5rem;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  min-width: 350px;
+  max-width: 90vw;
+  text-align: center;
+}
+
 </style>

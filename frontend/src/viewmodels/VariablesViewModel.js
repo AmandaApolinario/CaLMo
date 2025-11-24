@@ -8,7 +8,14 @@ export function useVariablesViewModel() {
   const message = ref('');
   const isEditing = ref(false);
   const editingId = ref(null);
-  
+  const showImportModal = ref(false);
+  const importMessages = ref({
+    show: false,
+    type: 'success', // 'success' | 'error'
+    text: ''
+  });
+  let notificationTimeout = null;
+
   const newVariable = reactive({
     name: '',
     description: ''
@@ -17,11 +24,11 @@ export function useVariablesViewModel() {
   const fetchVariables = async () => {
     loading.value = true;
     error.value = null;
-    
+
     try {
       const response = await ApiService.get('variables');
       const data = response.data;
-      
+
       if (data.message) {
         message.value = data.message;
       } else {
@@ -38,13 +45,13 @@ export function useVariablesViewModel() {
   const createVariable = async () => {
     loading.value = true;
     error.value = null;
-    
+
     try {
       await ApiService.post('variable', {
         name: newVariable.name,
         description: newVariable.description
       });
-      
+
       resetForm();
       await fetchVariables();
       return true;
@@ -59,16 +66,16 @@ export function useVariablesViewModel() {
 
   const updateVariable = async () => {
     if (!editingId.value) return false;
-    
+
     loading.value = true;
     error.value = null;
-    
+
     try {
       await ApiService.put(`variable/${editingId.value}`, {
         name: newVariable.name,
         description: newVariable.description
       });
-      
+
       resetForm();
       await fetchVariables();
       return true;
@@ -84,7 +91,7 @@ export function useVariablesViewModel() {
   const deleteVariable = async (id) => {
     loading.value = true;
     error.value = null;
-    
+
     try {
       await ApiService.delete(`variable/${id}`);
       await fetchVariables();
@@ -124,6 +131,33 @@ export function useVariablesViewModel() {
     }
   };
 
+  const importVariables = async (importedVariables) => {
+    loading.value = true;
+    error.value = null;
+    try {
+      await ApiService.post('variable/import', { variables: importedVariables });
+      await fetchVariables();
+      showNotification('Variables Imported with Success', 'success');
+      return true;
+    } catch (err) {
+      const resp = err?.response?.data;
+      const payload = resp?.message || resp?.errors || err.message || 'Unknown error';
+      const text = Array.isArray(payload) ? payload.join('<br/>') : String(payload);
+      showNotification(`Error importing variables:<br/> ${text}`, 'error');
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  };
+
+  function showNotification(text, type = 'success') {
+    clearTimeout(notificationTimeout)
+    importMessages.value = { show: true, type, text, }
+    notificationTimeout = setTimeout(() => {
+      importMessages.value.show = false
+    }, 3000)
+  }
+
   return {
     variables,
     loading,
@@ -135,6 +169,10 @@ export function useVariablesViewModel() {
     submitForm,
     deleteVariable,
     startEditing,
-    cancelEditing
+    cancelEditing,
+    showImportModal,
+    importVariables,
+    importMessages,
+    notificationTimeout,
   };
-} 
+}

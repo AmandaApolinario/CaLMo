@@ -66,3 +66,34 @@ class VariableViewModel:
             return True, "Variable deleted successfully"
         except Exception as e:
             return False, f"Error deleting variable: {str(e)}" 
+
+    def import_variables(self, user_id, variables_data):
+        """Import multiple variables for a user"""
+        created_variables = []
+        errors = []
+        print("variables_data:", variables_data)
+        
+        if isinstance(variables_data, dict) and 'variables' in variables_data:
+            variables_list = variables_data.get('variables', [])
+        else:
+            variables_list = variables_data or []
+        
+        for var_data in variables_list:
+            name = var_data.get('name')
+            description = var_data.get('description', '')
+            
+            if not name:
+                errors.append("Variable name is required")
+                continue
+            
+            variable, message = self.create_variable(user_id, name, description)
+            if variable:
+                created_variables.append({
+                    'id': variable.id,
+                    'name': variable.name,
+                    'description': variable.description
+                })
+            else:
+                errors.append(message)
+        
+        return created_variables, errors
