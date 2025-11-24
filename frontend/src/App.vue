@@ -12,6 +12,7 @@
   color: #2c3e50;
   min-height: 100vh;
   background-color: white;
+  width: 100%;
 }
 
 * {

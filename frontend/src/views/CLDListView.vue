@@ -8,7 +8,7 @@
           <i class="fas fa-plus"></i> Create New CLD
         </button>
         <button @click="showImportModal = true" class="btn-create">
-          <i class="fas fa-plus"></i> Import New CLD
+          <i class="fas fa-plus"></i> Import CLD
         </button>
       </div>
 
@@ -130,6 +130,7 @@ const importToCreate = (importedData) => {
 .cld-list-container {
   min-height: 100vh;
   background-color: #f5f7fa;
+  width: 100%;
 }
 
 .cld-content {

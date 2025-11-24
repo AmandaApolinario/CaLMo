@@ -4,7 +4,7 @@
             @dragleave.prevent="isDragging = false" @drop.prevent="onDrop">
             <h2>Import {{ props.importObjectName }}</h2>
             <label class="dropzone-label" :class="{ dragging: isDragging }" @click="openFileDialog">
-                <input type="file" ref="fileInput" multiple style="display: none" @change="onFileChange" />
+                <input type="file" ref="fileInput" style="display: none" @change="onFileChange" />
                 <div class="dropzone-message">
                     <i class="fas fa-upload" style="font-size:2rem; margin-bottom: 1rem;"></i>
                     <p>
@@ -26,7 +26,7 @@
             <div class="modal-action">
                 <button type="button" class="btn-cancel" @click="$emit('close')" style="margin-top:2rem;">Close</button>
                 <button type="button" class="btn-cancel btn-import" @click="onImport"
-                    style="margin-top:2rem;">Importar</button>
+                    style="margin-top:2rem;">Import</button>
             </div>
         </div>
     </div>
@@ -69,9 +69,10 @@ function isValidExtension(file) {
 function onDrop(e) {
     isDragging.value = false
     if (e.dataTransfer && e.dataTransfer.files.length) {
-        const newFiles = Array.from(e.dataTransfer.files).filter(isValidExtension)
-        const allFiles = [...uploadedFiles.value, ...newFiles]
-        uploadedFiles.value = Array.from(new Map(allFiles.map(f => [f.name, f])).values())
+        const newFile = Array.from(e.dataTransfer.files).find(isValidExtension)
+        if (newFile) {
+            uploadedFiles.value = [newFile]
+        }
     }
 }
 
@@ -81,9 +82,10 @@ function removeFile(name) {
 
 function onFileChange(e) {
     if (e.target.files.length) {
-        const newFiles = Array.from(e.target.files).filter(isValidExtension)
-        const allFiles = [...uploadedFiles.value, ...newFiles]
-        uploadedFiles.value = Array.from(new Map(allFiles.map(f => [f.name, f])).values())
+        const newFile = Array.from(e.target.files).find(isValidExtension)
+        if (newFile) {
+            uploadedFiles.value = [newFile]
+        }
     }
 }
 
@@ -275,6 +277,7 @@ function formatImportVariables(files, map = {}) {
     flex-wrap: wrap;
     gap: 1.5rem;
     margin-top: 1rem;
+    justify-content: center;
 }
 
 .file-preview {
