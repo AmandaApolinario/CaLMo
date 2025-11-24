@@ -155,7 +155,7 @@ export function useVariablesViewModel() {
     importMessages.value = { show: true, type, text, }
     notificationTimeout = setTimeout(() => {
       importMessages.value.show = false
-    }, 3000)
+    }, 5000)
   }
 
   return {

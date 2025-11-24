@@ -54,5 +54,6 @@ const props = defineProps({
     flex: 1;
     font-size: 0.95rem;
     text-align: left;
+    color: #fff;
 }
 </style>
