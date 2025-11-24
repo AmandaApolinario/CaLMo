@@ -116,19 +116,47 @@ function formatImportVariables(files, map = {}) {
                             ? (Array.isArray(map[targetKey]) ? map[targetKey] : [map[targetKey]])
                             : [targetKey]
 
-                        let value = ''
-                        for (const s of sources) {
-                            if (orig[s] !== undefined) {
-                                value = orig[s]
-                                break
+                        // Handle nested array mapping (e.g., relationships)
+                        if (
+                            Array.isArray(map[targetKey]) &&
+                            typeof map[targetKey][0] === 'object' &&
+                            Array.isArray(orig[targetKey])
+                        ) {
+                            // map[targetKey] is an array of field maps for the nested array
+                            obj[targetKey] = orig[targetKey].map(rel => {
+                                const relObj = {}
+                                Object.entries(map[targetKey][0]).forEach(([relKey, relSources]) => {
+                                    let value = ''
+                                    for (const s of relSources) {
+                                        if (rel[s] !== undefined) {
+                                            value = rel[s]
+                                            break
+                                        }
+                                        const foundKey = Object.keys(rel).find(k => k.toLowerCase() === String(s).toLowerCase())
+                                        if (foundKey) {
+                                            value = rel[foundKey]
+                                            break
+                                        }
+                                    }
+                                    relObj[relKey] = value != null ? value : ''
+                                })
+                                return relObj
+                            })
+                        } else {
+                            let value = ''
+                            for (const s of sources) {
+                                if (orig[s] !== undefined) {
+                                    value = orig[s]
+                                    break
+                                }
+                                const foundKey = Object.keys(orig).find(k => k.toLowerCase() === String(s).toLowerCase())
+                                if (foundKey) {
+                                    value = orig[foundKey]
+                                    break
+                                }
                             }
-                            const foundKey = Object.keys(orig).find(k => k.toLowerCase() === String(s).toLowerCase())
-                            if (foundKey) {
-                                value = orig[foundKey]
-                                break
-                            }
+                            obj[targetKey] = value != null ? value : ''
                         }
-                        obj[targetKey] = value != null ? value : ''
                     })
                     return obj
                 })

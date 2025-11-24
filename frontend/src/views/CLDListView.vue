@@ -7,6 +7,9 @@
         <button @click="createNewCLD" class="btn-create">
           <i class="fas fa-plus"></i> Create New CLD
         </button>
+        <button @click="showImportModal = true" class="btn-create">
+          <i class="fas fa-plus"></i> Import New CLD
+        </button>
       </div>
 
       <div v-if="loading" class="loading">
@@ -49,6 +52,16 @@
       </div>
     </div>
   </div>
+  <ImportFileModal v-if="showImportModal" @close="showImportModal = false" :import-object-name="'CLD'"
+    :accepted-extensions="['.csv', '.json']" :objectVariables="{
+      title: ['title'], description: ['description'],
+      date: ['date',], relationships: [{
+        source: ['source'], target: ['target'],
+        polarity: ['polarity']
+      }]
+    }" :import-function="importToCreate" />
+  <Alert v-if="importMessages.show" :type="importMessages.type" :message="importMessages.text"
+    @close="importMessages.show = false" />
 </template>
 
 <script setup>
@@ -56,18 +69,22 @@
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
+import Alert from '../components/Alert.vue'
+import ImportFileModal from '../components/ImportFileModal.vue'
 import { useCLDListViewModel } from '@/viewmodels/CLDListViewModel'
 
 // Initialize router
 const router = useRouter()
 
 // Initialize the ViewModel
-const { 
-  diagrams, 
-  loading, 
-  error, 
-  fetchDiagrams, 
-  deleteDiagram 
+const {
+  diagrams,
+  loading,
+  error,
+  fetchDiagrams,
+  deleteDiagram,
+  showImportModal,
+  importMessages,
 } = useCLDListViewModel();
 
 // Navigation handlers for CLD operations
@@ -96,6 +113,17 @@ const formatDate = (dateString) => {
 onMounted(() => {
   fetchDiagrams()
 })
+
+const importToCreate = (importedData) => {
+  // Navigate to CLD creation view with imported data
+  try {
+    sessionStorage.setItem('importedCLDData', JSON.stringify(importedData || {}))
+    router.push('/cld/new')
+  } catch (error) {
+    console.error('Failed to import CLD data:', error)
+  }
+}
+
 </script>
 
 <style scoped>
@@ -314,7 +342,8 @@ h1 {
 }
 
 /* Font Awesome icons */
-.fas, .far {
+.fas,
+.far {
   font-size: 1rem;
 }
 </style>

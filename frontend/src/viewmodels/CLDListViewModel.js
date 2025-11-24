@@ -5,7 +5,14 @@ export function useCLDListViewModel() {
   const diagrams = ref([]);
   const loading = ref(false);
   const error = ref(null);
-  
+  const showImportModal = ref(false);
+  const importMessages = ref({
+    show: false,
+    type: 'success', // 'success' | 'error'
+    text: ''
+  });
+  let notificationTimeout = null;
+
   const state = reactive({
     filter: '',
     sorting: 'newest',
@@ -13,8 +20,8 @@ export function useCLDListViewModel() {
 
   const filteredDiagrams = computed(() => {
     if (!state.filter) return diagrams.value;
-    
-    return diagrams.value.filter(diagram => 
+
+    return diagrams.value.filter(diagram =>
       diagram.title.toLowerCase().includes(state.filter.toLowerCase()) ||
       diagram.description.toLowerCase().includes(state.filter.toLowerCase())
     );
@@ -22,7 +29,7 @@ export function useCLDListViewModel() {
 
   const sortedDiagrams = computed(() => {
     const diagramsToSort = [...filteredDiagrams.value];
-    
+
     switch (state.sorting) {
       case 'newest':
         return diagramsToSort.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -38,7 +45,7 @@ export function useCLDListViewModel() {
   async function fetchDiagrams() {
     loading.value = true;
     error.value = null;
-    
+
     try {
       diagrams.value = await CLDService.getAllCLDs();
     } catch (err) {
@@ -51,7 +58,7 @@ export function useCLDListViewModel() {
   async function deleteDiagram(id) {
     loading.value = true;
     error.value = null;
-    
+
     try {
       await CLDService.deleteCLD(id);
       diagrams.value = diagrams.value.filter(diagram => diagram.id !== id);
@@ -79,6 +86,8 @@ export function useCLDListViewModel() {
     fetchDiagrams,
     deleteDiagram,
     setFilter,
-    setSorting
+    setSorting,
+    showImportModal,
+    importMessages,
   };
 } 

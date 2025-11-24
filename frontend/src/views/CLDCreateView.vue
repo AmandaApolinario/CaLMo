@@ -113,8 +113,8 @@
       </div>
     </div>
   </div>
-  <ImportFileModal v-if="showImportModal" @close="showImportModal = false"
-    :import-object-name="'Relationship'" :accepted-extensions="['.csv', '.json']"
+  <ImportFileModal v-if="showImportModal" @close="showImportModal = false" :import-object-name="'Relationship'"
+    :accepted-extensions="['.csv', '.json']"
     :objectVariables="{ source: ['source'], target: ['target'], polarity: ['polarity'] }"
     :import-function="importEdges" />
 
@@ -162,9 +162,36 @@ onMounted(async () => {
     // Fetch variables for relationships
     await fetchVariables();
 
-    // Add one empty relationship by default if we have variables
-    if (variables.value && variables.value.length > 0) {
-      addEdge();
+    // If the user came from an import, prefill the form and import relationships
+    const raw = sessionStorage.getItem('importedCLDData');
+    console.log('Imported CLD data found:', raw);
+    if (raw) {
+      try {
+        const imported = JSON.parse(raw || '{}')[0];
+        if (imported.title) diagram.value.title = imported.title;
+        if (imported.description) diagram.value.description = imported.description;
+        diagram.value.createdAt = imported.date || imported.createdAt || new Date().toISOString().split('T')[0];
+
+        // relationships can be under relationships, edges, or be the array itself
+        const relationships = imported.relationships;
+        if (Array.isArray(relationships) && relationships.length > 0) {
+          // use ViewModel importEdges to resolve ids and add to diagram
+          await importEdges(relationships);
+        } else {
+          // if no relationships imported, still add one empty row if variables exist
+          if (variables.value && variables.value.length > 0) addEdge();
+        }
+      } catch (e) {
+        console.error('Failed to apply imported CLD:', e);
+        if (variables.value && variables.value.length > 0) addEdge();
+      } finally {
+        sessionStorage.removeItem('importedCLDData');
+      }
+    } else {
+      // Add one empty relationship by default if we have variables
+      if (variables.value && variables.value.length > 0) {
+        addEdge();
+      }
     }
   } catch (err) {
     console.error('Error initializing CLDCreateView:', err);
