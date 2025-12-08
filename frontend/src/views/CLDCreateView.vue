@@ -114,7 +114,7 @@
     </div>
   </div>
   <ImportFileModal v-if="showImportModal" @close="showImportModal = false" :import-object-name="'Relationship'"
-    :accepted-extensions="['.csv', '.json']"
+    :accepted-extensions="['.json']"
     :objectVariables="{ source: ['source'], target: ['target'], polarity: ['polarity'] }"
     :import-function="importEdges" />
 

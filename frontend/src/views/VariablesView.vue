@@ -46,6 +46,10 @@
                 <i class="fas" :class="exporting ? 'fa-check' : 'fa-file-export'"></i>
                 {{ exporting ? 'Confirm Export' : 'Export Variables' }}
               </button>
+              <button type="button" class="btn-cancel" v-if="exporting" @click="toggleExporting">
+                <i class="fas" :class="exporting ? 'fa-check' : 'fa-file-export'"></i>
+                Cancel Export
+              </button>
               <button v-if="exporting" type="button" class="btn-cancel" @click="selectAll">
                 {{ selectedVariables.length === variables.length ? 'Unselect All' : 'Select All' }}
               </button>
@@ -88,7 +92,7 @@
   </div>
 
   <ImportVariablesModal v-if="showImportModal" @close="showImportModal = false" :import-object-name="'Variables'"
-    :accepted-extensions="['.csv', '.json']" :objectVariables="{ name: ['name'], description: ['description'] }"
+    :accepted-extensions="['.json']" :objectVariables="{ name: ['name'], description: ['description'] }"
     :import-function="importVariables" />
 
   <Alert :show="importMessages.show" :type="importMessages.type" :text="importMessages.text" />

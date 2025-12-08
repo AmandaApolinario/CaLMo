@@ -18,6 +18,15 @@
           <i class="fas" :class="exporting ? 'fa-check' : 'fa-file-export'"></i>
           {{ exporting ? 'Confirm Export' : 'Export CLDs' }}
         </button>
+         <button
+          type="button"
+          class="btn-create"
+          v-if="exporting"
+          style="background:#e2e8f0;color:#1a252f;"
+        >
+          <i class="fas" :class="exporting ? 'fa-check' : 'fa-file-export'"></i>
+          Cancel Export
+        </button>
         <button
           v-if="exporting"
           type="button"
@@ -77,7 +86,7 @@
     </div>
   </div>
   <ImportFileModal v-if="showImportModal" @close="showImportModal = false" :import-object-name="'CLD'"
-    :accepted-extensions="['.csv', '.json']" :objectVariables="objectVariables" :import-function="importDiagrams" />
+    :accepted-extensions="['.json']" :objectVariables="objectVariables" :import-function="importDiagrams" />
   <Alert v-if="messages.show" :type="messages.type" :message="messages.text"
     @close="messages.show = false" />
 </template>
@@ -207,6 +216,28 @@ h1 {
 
 .btn-create:hover {
   background-color: #3aa876;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(66, 185, 131, 0.3);
+}
+
+.btn-danger {
+  background-color: #dc3545;
+  color: white;
+  padding: 0.9rem 1.8rem;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.05rem;
+  box-shadow: 0 2px 4px rgba(66, 185, 131, 0.3);
+}
+
+.btn-danger:hover {
+  background-color: #b02a37;
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(66, 185, 131, 0.3);
 }
