@@ -87,8 +87,7 @@
   </div>
   <ImportFileModal v-if="showImportModal" @close="showImportModal = false" :import-object-name="'CLD'"
     :accepted-extensions="['.json']" :objectVariables="objectVariables" :import-function="importDiagrams" />
-  <Alert v-if="messages.show" :type="messages.type" :message="messages.text"
-    @close="messages.show = false" />
+  <Alert :show="messages.show" :type="messages.type" :text="messages.text" />
 </template>
 
 <script setup>

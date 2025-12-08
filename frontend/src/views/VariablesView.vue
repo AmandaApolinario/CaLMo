@@ -122,7 +122,7 @@ const {
   cancelEditing,
   exportVariable,
   importVariables,
-  importMessages,
+  messages,
   notificationTimeout,
   exporting,
   selectedVariables,

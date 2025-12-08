@@ -9,7 +9,7 @@ export function useVariablesViewModel() {
   const isEditing = ref(false);
   const editingId = ref(null);
   const showImportModal = ref(false);
-  const importMessages = ref({
+  const messages = ref({
     show: false,
     type: 'success', // 'success' | 'error'
     text: ''
@@ -178,9 +178,9 @@ export function useVariablesViewModel() {
   }
   const showNotification = (text, type = 'success') => {
     clearTimeout(notificationTimeout)
-    importMessages.value = { show: true, type, text, }
+    messages.value = { show: true, type, text, }
     notificationTimeout = setTimeout(() => {
-      importMessages.value.show = false
+      messages.value.show = false
     }, 5000)
   }
 
@@ -217,7 +217,7 @@ export function useVariablesViewModel() {
     cancelEditing,
     showImportModal,
     importVariables,
-    importMessages,
+    messages,
     notificationTimeout,
     exporting,
     selectedVariables,
