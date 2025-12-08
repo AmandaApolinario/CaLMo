@@ -20,6 +20,8 @@ export function useVariablesViewModel() {
     name: '',
     description: ''
   });
+  const exporting = ref(false)
+  const selectedVariables = ref([])
 
   const fetchVariables = async () => {
     loading.value = true;
@@ -150,12 +152,51 @@ export function useVariablesViewModel() {
     }
   };
 
-  function showNotification(text, type = 'success') {
+  const exportVariable = async (variableIds) => {
+    // Filtra e remove o campo id
+    const selected = variables.value
+      .filter(v => variableIds.includes(v.id))
+      .map(({ name, description }) => ({ name, description }))
+    // Converte para JSON
+    const json = JSON.stringify(selected, null, 2)
+    // Cria um blob e faz o download
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'variables_export.json'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    showNotification('Exported variables as JSON!', 'success')
+  }
+
+  const showNotification = (text, type = 'success') => {
     clearTimeout(notificationTimeout)
     importMessages.value = { show: true, type, text, }
     notificationTimeout = setTimeout(() => {
       importMessages.value.show = false
     }, 5000)
+  }
+
+  const toggleExporting = () => {
+    exporting.value = !exporting.value
+    selectedVariables.value = []
+  }
+
+  const selectAll = () => {
+    if (selectedVariables.value.length === variables.value.length) {
+      selectedVariables.value = []
+    } else {
+      selectedVariables.value = variables.value.map(v => v.id)
+    }
+  }
+
+  const confirmExport = () => {
+    exportVariable(selectedVariables.value)
+    exporting.value = false
+    selectedVariables.value = []
   }
 
   return {
@@ -174,5 +215,10 @@ export function useVariablesViewModel() {
     importVariables,
     importMessages,
     notificationTimeout,
+    exporting,
+    selectedVariables,
+    toggleExporting,
+    selectAll,
+    confirmExport,
   };
 }

@@ -42,6 +42,13 @@
             <div class="panel-action">
               <div class="total-count">{{ variables.length }} variables</div>
               <button type="button" class="btn-submit" @click="showImportModal = true">Import Variables</button>
+              <button type="button" class="btn-submit" @click="exporting ? confirmExport() : toggleExporting()">
+                <i class="fas" :class="exporting ? 'fa-check' : 'fa-file-export'"></i>
+                {{ exporting ? 'Confirm Export' : 'Export Variables' }}
+              </button>
+              <button v-if="exporting" type="button" class="btn-cancel" @click="selectAll">
+                {{ selectedVariables.length === variables.length ? 'Unselect All' : 'Select All' }}
+              </button>
             </div>
           </div>
 
@@ -56,7 +63,11 @@
             <p>No variables created yet</p>
           </div>
           <div v-else class="variable-grid">
-            <div v-for="variable in variables" :key="variable.id" class="variable-card">
+            <div v-for="variable in variables" :key="variable.id" class="variable-card"
+              :style="exporting ? 'position:relative;' : ''">
+              <div v-if="exporting" style="position:absolute;top:10px;left:10px;z-index:2;">
+                <input type="checkbox" :value="variable.id" v-model="selectedVariables" />
+              </div>
               <div class="card-content">
                 <h4>{{ variable.name }}</h4>
                 <p class="description">{{ variable.description || 'No description provided' }}</p>
@@ -76,9 +87,8 @@
     </div>
   </div>
 
-  <ImportVariablesModal v-if="showImportModal" @close="showImportModal = false"
-    :import-object-name="'Variables'" :accepted-extensions="['.csv', '.json']"
-    :objectVariables="{ name: ['name'], description: ['description'] }"
+  <ImportVariablesModal v-if="showImportModal" @close="showImportModal = false" :import-object-name="'Variables'"
+    :accepted-extensions="['.csv', '.json']" :objectVariables="{ name: ['name'], description: ['description'] }"
     :import-function="importVariables" />
 
   <Alert :show="importMessages.show" :type="importMessages.type" :text="importMessages.text" />
@@ -106,9 +116,15 @@ const {
   deleteVariable,
   startEditing,
   cancelEditing,
+  exportVariable,
   importVariables,
   importMessages,
   notificationTimeout,
+  exporting,
+  selectedVariables,
+  toggleExporting,
+  selectAll,
+  confirmExport,
 } = useVariablesViewModel()
 
 
@@ -446,5 +462,4 @@ onMounted(() => {
   max-width: 90vw;
   text-align: center;
 }
-
 </style>
