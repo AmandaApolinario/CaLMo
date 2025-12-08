@@ -337,3 +337,34 @@ class CLDViewModel:
                 for arch in cld.archetypes
             ]
         } 
+        
+    def export_clds_by_ids(self, user_id, cld_ids):
+        """Export a list of CLDs with relationships using variable name and description, ordered as source, target, polarity"""
+        exported = []
+        for cld_id in cld_ids:
+            cld = self.cld_repo.get_cld_by_user(self.db_session, cld_id, user_id)
+            if not cld:
+                continue
+
+            variable_map = {var.id: {'name': var.name, 'description': var.description or ""} for var in cld.variables}
+
+            relationships = []
+            for rel in self.rel_repo.get_relationships_by_cld(self.db_session, cld.id):
+                source = variable_map.get(rel.source_id, {'name': rel.source_id, 'description': ""})
+                target = variable_map.get(rel.target_id, {'name': rel.target_id, 'description': ""})
+                relationships.append({
+                    'source': source,
+                    'target': target,
+                    'polarity': rel.type.value
+                })
+
+            exported.append({
+                'name': cld.name,
+                'date': cld.date.isoformat(),
+                'description': cld.description,
+                'relationships': relationships
+            })
+
+        if not exported:
+            return None, "No CLDs found for export"
+        return exported, "CLDs exported successfully"

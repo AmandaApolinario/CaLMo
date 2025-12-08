@@ -17,6 +17,8 @@ export function useCLDListViewModel() {
     filter: '',
     sorting: 'newest',
   });
+  const exporting = ref(false)
+  const selectedDiagrams = ref([])
 
   const filteredDiagrams = computed(() => {
     if (!state.filter) return diagrams.value;
@@ -77,6 +79,54 @@ export function useCLDListViewModel() {
     state.sorting = sorting;
   }
 
+  async function exportDiagrams(diagramIds) {
+    try {
+      // Uses optimized backend endpoint to export formatted CLDs
+      const response = await CLDService.exportCLDsByIds(diagramIds);
+      const clds = response.clds || [];
+      const json = JSON.stringify(clds, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'cld_diagrams_export.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showNotification('Exported diagrams as JSON!', 'success');
+    } catch (error) {
+      showNotification(error.message || 'Failed to export diagrams', 'error');
+    }
+  }
+
+  function toggleExporting() {
+    exporting.value = !exporting.value
+    selectedDiagrams.value = []
+  }
+
+  function selectAll() {
+    if (selectedDiagrams.value.length === diagrams.value.length) {
+      selectedDiagrams.value = []
+    } else {
+      selectedDiagrams.value = diagrams.value.map(d => d.id)
+    }
+  }
+
+  function confirmExport() {
+    exportDiagrams(selectedDiagrams.value)
+    exporting.value = false
+    selectedDiagrams.value = []
+  }
+
+  function showNotification(text, type = 'success') {
+    clearTimeout(notificationTimeout)
+    importMessages.value = { show: true, type, text }
+    notificationTimeout = setTimeout(() => {
+      importMessages.value.show = false
+    }, 5000)
+  }
+
   return {
     diagrams: sortedDiagrams,
     loading,
@@ -89,5 +139,10 @@ export function useCLDListViewModel() {
     setSorting,
     showImportModal,
     importMessages,
-  };
+    exporting,
+    selectedDiagrams,
+    toggleExporting,
+    selectAll,
+    confirmExport,
+  }
 } 

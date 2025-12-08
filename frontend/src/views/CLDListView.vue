@@ -10,6 +10,23 @@
         <button @click="showImportModal = true" class="btn-create">
           <i class="fas fa-plus"></i> Import CLD
         </button>
+        <button
+          type="button"
+          class="btn-create"
+          @click="exporting ? confirmExport() : toggleExporting()"
+        >
+          <i class="fas" :class="exporting ? 'fa-check' : 'fa-file-export'"></i>
+          {{ exporting ? 'Confirm Export' : 'Export CLDs' }}
+        </button>
+        <button
+          v-if="exporting"
+          type="button"
+          class="btn-create"
+          style="background:#e2e8f0;color:#1a252f;"
+          @click="selectAll"
+        >
+          {{ selectedDiagrams.length === diagrams.length ? 'Unselect All' : 'Select All' }}
+        </button>
       </div>
 
       <div v-if="loading" class="loading">
@@ -23,7 +40,14 @@
         <p>No CLDs found. Create your first CLD!</p>
       </div>
       <div v-else class="cld-grid">
-        <div v-for="diagram in diagrams" :key="diagram.id" class="cld-card">
+        <div v-for="diagram in diagrams" :key="diagram.id" class="cld-card" :style="exporting ? 'position:relative;' : ''">
+          <div v-if="exporting" style="position:absolute;top:10px;left:10px;z-index:2;">
+            <input
+              type="checkbox"
+              :value="diagram.id"
+              v-model="selectedDiagrams"
+            />
+          </div>
           <div class="cld-card-content">
             <div class="card-header">
               <h3>{{ diagram.title }}</h3>
@@ -85,6 +109,11 @@ const {
   deleteDiagram,
   showImportModal,
   importMessages,
+  exporting,
+  selectedDiagrams,
+  toggleExporting,
+  selectAll,
+  confirmExport,
 } = useCLDListViewModel();
 
 // Navigation handlers for CLD operations

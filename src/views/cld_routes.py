@@ -218,4 +218,34 @@ def identify_archetypes(user_id, cld_id):
         }), 200
     except Exception as e:
         print(f"Exception in archetypes endpoint: {str(e)}")
-        return jsonify({'message': f"Server error: {str(e)}"}), 500 
+        return jsonify({'message': f"Server error: {str(e)}"}), 500
+    
+@cld_routes.route('/cld/export-selected', methods=['POST'])
+@token_required
+def export_selected_clds(user_id):
+    data = request.get_json()
+    cld_ids = data.get('cld_ids', [])
+    if not isinstance(cld_ids, list):
+        return jsonify({'message': 'Provide a list of cld_ids'}), 400
+
+    view_model = CLDViewModel(db.session)
+    clds_data, message = view_model.export_clds_by_ids(user_id, cld_ids)
+
+    if clds_data is None or len(clds_data) == 0:
+        clds_data = [{
+            'date': '',
+            'description': '',
+            'name': '',
+            'relationships': [
+                {
+                    'source': {'name': '', 'description': ''},
+                    'target': {'name': '', 'description': ''},
+                    'polarity': ''
+                }
+            ]
+        }]
+
+    return jsonify({
+        'message': 'Selected CLDs exported successfully',
+        'clds': clds_data
+    }), 200
