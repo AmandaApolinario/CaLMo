@@ -153,25 +153,29 @@ export function useVariablesViewModel() {
   };
 
   const exportVariable = async (variableIds) => {
-    // Filtra e remove o campo id
-    const selected = variables.value
-      .filter(v => variableIds.includes(v.id))
-      .map(({ name, description }) => ({ name, description }))
-    // Converte para JSON
-    const json = JSON.stringify(selected, null, 2)
-    // Cria um blob e faz o download
-    const blob = new Blob([json], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'variables_export.json'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-    showNotification('Exported variables as JSON!', 'success')
+    let selected;
+    if (!variableIds || variableIds.length === 0) {
+      selected = [{
+        name: '',
+        description: ''
+      }];
+    } else {
+      selected = variables.value
+        .filter(v => variableIds.includes(v.id))
+        .map(({ name, description }) => ({ name, description }));
+    }
+    const json = JSON.stringify(selected, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'variables_export.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showNotification('Exported variables as JSON!', 'success');
   }
-
   const showNotification = (text, type = 'success') => {
     clearTimeout(notificationTimeout)
     importMessages.value = { show: true, type, text, }
