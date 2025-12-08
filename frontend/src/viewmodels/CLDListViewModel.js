@@ -6,7 +6,7 @@ export function useCLDListViewModel() {
   const loading = ref(false);
   const error = ref(null);
   const showImportModal = ref(false);
-  const importMessages = ref({
+  const messages = ref({
     show: false,
     type: 'success', // 'success' | 'error'
     text: ''
@@ -79,6 +79,19 @@ export function useCLDListViewModel() {
     state.sorting = sorting;
   }
 
+  async function importDiagrams(cldDataArray) {
+    try {
+      const response = await CLDService.importCLDs(cldDataArray);
+      showNotification('Imported diagrams successfully!', 'success');
+      return response.clds || [];
+    } catch (error) {
+      showNotification(error.message || 'Failed to import diagrams', 'error');
+      return [];
+    } finally {
+      await fetchDiagrams();
+    }
+  }
+
   async function exportDiagrams(diagramIds) {
     try {
       // Uses optimized backend endpoint to export formatted CLDs
@@ -121,9 +134,9 @@ export function useCLDListViewModel() {
 
   function showNotification(text, type = 'success') {
     clearTimeout(notificationTimeout)
-    importMessages.value = { show: true, type, text }
+    messages.value = { show: true, type, text }
     notificationTimeout = setTimeout(() => {
-      importMessages.value.show = false
+      messages.value.show = false
     }, 5000)
   }
 
@@ -138,7 +151,8 @@ export function useCLDListViewModel() {
     setFilter,
     setSorting,
     showImportModal,
-    importMessages,
+    importDiagrams,
+    messages,
     exporting,
     selectedDiagrams,
     toggleExporting,

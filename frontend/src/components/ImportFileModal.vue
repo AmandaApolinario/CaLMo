@@ -100,6 +100,9 @@ async function onImport() {
 }
 
 function formatImportVariables(files, map = {}) {
+    if (Array.isArray(map)) {
+        map = map[0] || {};
+    }
     return new Promise(async (resolve, reject) => {
         const file = files[0]
         if (!file) return resolve([])
@@ -124,20 +127,49 @@ function formatImportVariables(files, map = {}) {
                             typeof map[targetKey][0] === 'object' &&
                             Array.isArray(orig[targetKey])
                         ) {
-                            // map[targetKey] is an array of field maps for the nested array
                             obj[targetKey] = orig[targetKey].map(rel => {
                                 const relObj = {}
                                 Object.entries(map[targetKey][0]).forEach(([relKey, relSources]) => {
                                     let value = ''
-                                    for (const s of relSources) {
-                                        if (rel[s] !== undefined) {
-                                            value = rel[s]
-                                            break
+                                    if (typeof relSources === 'object' && !Array.isArray(relSources) && relSources !== null) {
+                                        value = {}
+                                        Object.entries(relSources).forEach(([subKey, subSources]) => {
+                                            let subValue = ''
+                                            const subSourcesArr = Array.isArray(subSources) ? subSources : [subSources]
+                                            for (const subS of subSourcesArr) {
+                                                if (rel[relKey] && rel[relKey][subS] !== undefined) {
+                                                    subValue = rel[relKey][subS]
+                                                    break
+                                                }
+                                                if (rel[relKey]) {
+                                                    const foundSubKey = Object.keys(rel[relKey]).find(k => k.toLowerCase() === String(subS).toLowerCase())
+                                                    if (foundSubKey) {
+                                                        subValue = rel[relKey][foundSubKey]
+                                                        break
+                                                    }
+                                                }
+                                            }
+                                            value[subKey] = subValue != null ? subValue : ''
+                                        })
+                                    } else {
+                                        let sourcesArr
+                                        if (Array.isArray(relSources)) {
+                                            sourcesArr = relSources
+                                        } else if (typeof relSources === 'object' && relSources !== null) {
+                                            sourcesArr = Object.values(relSources).flat()
+                                        } else {
+                                            sourcesArr = [relSources]
                                         }
-                                        const foundKey = Object.keys(rel).find(k => k.toLowerCase() === String(s).toLowerCase())
-                                        if (foundKey) {
-                                            value = rel[foundKey]
-                                            break
+                                        for (const s of sourcesArr) {
+                                            if (rel[s] !== undefined) {
+                                                value = rel[s]
+                                                break
+                                            }
+                                            const foundKey = Object.keys(rel).find(k => k.toLowerCase() === String(s).toLowerCase())
+                                            if (foundKey) {
+                                                value = rel[foundKey]
+                                                break
+                                            }
                                         }
                                     }
                                     relObj[relKey] = value != null ? value : ''

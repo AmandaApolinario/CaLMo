@@ -77,15 +77,9 @@
     </div>
   </div>
   <ImportFileModal v-if="showImportModal" @close="showImportModal = false" :import-object-name="'CLD'"
-    :accepted-extensions="['.csv', '.json']" :objectVariables="{
-      title: ['title'], description: ['description'],
-      date: ['date',], relationships: [{
-        source: ['source'], target: ['target'],
-        polarity: ['polarity']
-      }]
-    }" :import-function="importToCreate" />
-  <Alert v-if="importMessages.show" :type="importMessages.type" :message="importMessages.text"
-    @close="importMessages.show = false" />
+    :accepted-extensions="['.csv', '.json']" :objectVariables="objectVariables" :import-function="importDiagrams" />
+  <Alert v-if="messages.show" :type="messages.type" :message="messages.text"
+    @close="messages.show = false" />
 </template>
 
 <script setup>
@@ -99,6 +93,26 @@ import { useCLDListViewModel } from '@/viewmodels/CLDListViewModel'
 
 // Initialize router
 const router = useRouter()
+const objectVariables = [
+  {
+    name: ["name"],
+    description: ["description"],
+    date: ["date"],
+    relationships: [
+      {
+        source: {
+          name: ["name"],
+          description: ["description"]
+        },
+        target: {
+          name: ["name"],
+          description: ["description"]
+        },
+        polarity: ["polarity"]
+      }
+    ]
+  }
+]
 
 // Initialize the ViewModel
 const {
@@ -108,7 +122,8 @@ const {
   fetchDiagrams,
   deleteDiagram,
   showImportModal,
-  importMessages,
+  messages,
+  importDiagrams,
   exporting,
   selectedDiagrams,
   toggleExporting,
@@ -142,16 +157,6 @@ const formatDate = (dateString) => {
 onMounted(() => {
   fetchDiagrams()
 })
-
-const importToCreate = (importedData) => {
-  // Navigate to CLD creation view with imported data
-  try {
-    sessionStorage.setItem('importedCLDData', JSON.stringify(importedData || {}))
-    router.push('/cld/new')
-  } catch (error) {
-    console.error('Failed to import CLD data:', error)
-  }
-}
 
 </script>
 

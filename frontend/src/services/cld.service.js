@@ -149,6 +149,16 @@ class CLDService {
       throw new Error(error.response?.data?.message || error.message || 'Failed to export diagrams');
     }
   }
+
+  async importCLDs(cldDataArray) {
+    try {
+      const response = await ApiService.post('cld/import', { clds: cldDataArray || [] });
+      return response.data;
+    } catch (error) {
+      console.error('Error importing CLDs:', error);
+      throw new Error(error.response?.data?.message || error.message || 'Failed to import diagrams');
+    }
+  }
 }
 
 export default new CLDService(); 

@@ -220,6 +220,22 @@ def identify_archetypes(user_id, cld_id):
         print(f"Exception in archetypes endpoint: {str(e)}")
         return jsonify({'message': f"Server error: {str(e)}"}), 500
     
+@cld_routes.route('/cld/import', methods=['POST'])
+@token_required
+def import_clds(user_id):
+    data = request.get_json()
+    clds = data.get('clds', [])
+    if not isinstance(clds, list) or clds is None:
+        return jsonify({'message': 'Provide a list of clds'}), 400
+
+    view_model = CLDViewModel(db.session)
+    clds_data, message = view_model.import_clds(user_id, clds)
+
+    return jsonify({
+        'message': 'Selected CLDs imported successfully',
+        'clds': clds_data
+    }), 200
+    
 @cld_routes.route('/cld/export-selected', methods=['POST'])
 @token_required
 def export_selected_clds(user_id):

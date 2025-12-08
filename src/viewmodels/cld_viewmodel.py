@@ -368,3 +368,89 @@ class CLDViewModel:
         if not exported:
             return None, "No CLDs found for export"
         return exported, "CLDs exported successfully"
+    
+    def import_clds(self, user_id, clds_data):
+        """Import CLDs from JSON, creating variables if necessary"""
+        imported_clds = []
+        try:
+            for cld_json in clds_data:
+                name = cld_json.get('name', '')
+                date_str = cld_json.get('date', '')
+                description = cld_json.get('description', '')
+                relationships_json = cld_json.get('relationships', [])
+
+                # Try to parse date, fallback to today
+                try:
+                    cld_date = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else datetime.today().date()
+                except Exception:
+                    cld_date = datetime.today().date()
+
+                # Map unique variables by (name, description)
+                variables_map = {}
+                for rel in relationships_json:
+                    for var_role in ['source', 'target']:
+                        var_data = rel.get(var_role, {})
+                        var_name = var_data.get('name', '')
+                        var_desc = var_data.get('description', '')
+                        key = (var_name, var_desc)
+                        if key not in variables_map:
+                            # Check if variable exists
+                            variable = self.db_session.query(Variable).filter_by(
+                                name=var_name,
+                                description=var_desc,
+                                user_id=user_id
+                            ).first()
+                            if not variable:
+                                # Create variable if not exists
+                                variable = Variable(name=var_name, description=var_desc, user_id=user_id)
+                                self.db_session.add(variable)
+                                self.db_session.flush()  # Ensure ID is generated
+                            variables_map[key] = variable
+
+                variable_ids = [var.id for var in variables_map.values()]
+
+                # Prepare relationships data for create_cld
+                relationships_data = []
+                for rel in relationships_json:
+                    source_data = rel.get('source', {})
+                    target_data = rel.get('target', {})
+                    polarity = rel.get('polarity', '').upper() or 'POSITIVE'
+                    source_key = (source_data.get('name', ''), source_data.get('description', ''))
+                    target_key = (target_data.get('name', ''), target_data.get('description', ''))
+                    source_var = variables_map.get(source_key)
+                    target_var = variables_map.get(target_key)
+                    # Validate variables exist
+                    if not source_var or not target_var:
+                        continue
+                    # Do not allow relationship with same source and target
+                    if source_var.id == target_var.id:
+                        continue
+                    # Validate relationship type
+                    rel_type = polarity if polarity in RelationshipType.__members__ else 'POSITIVE'
+                    relationships_data.append({
+                        'source_id': source_var.id,
+                        'target_id': target_var.id,
+                        'type': rel_type
+                    })
+
+                # Use create_cld logic for validation and creation
+                cld_data, msg = self.create_cld(
+                    user_id=user_id,
+                    name=name,
+                    date_str=cld_date.isoformat(),
+                    description=description,
+                    variable_ids=variable_ids,
+                    relationships_data=relationships_data
+                )
+                if cld_data:
+                    imported_clds.append(cld_data)
+                else:
+                    self.db_session.rollback()
+                    return None, f"Error importing CLD: {msg}"
+
+            self.db_session.commit()
+            return imported_clds, "CLDs imported successfully"
+        except Exception as e:
+            self.db_session.rollback()
+            return None, f"Error importing CLDs: {str(e)}"
+        
