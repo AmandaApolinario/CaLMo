@@ -13,13 +13,12 @@
                     <p>(Supported formats: {{ acceptedExtensions.join(', ') }})</p>
                 </div>
             </label>
-            <div v-if="uploadedFiles.length" class="uploaded-files">
+            <div v-if="uploadedFile" class="uploaded-files">
                 <div class="file-previews">
-                    <div class="file-preview" v-for="file in uploadedFiles" :key="file.name"
-                        @click="removeFile(file.name)" title="Clique para remover" style="cursor:pointer">
-                        <img v-if="file.name.endsWith('.json')" src="../assets/json.png" alt="JSON file"
+                    <div class="file-preview" @click="removeFile(uploadedFile.name)" title="Clique para remover" style="cursor:pointer">
+                        <img v-if="uploadedFile.name.endsWith('.json')" src="../assets/json.png" alt="JSON file"
                             class="file-icon" />
-                        <div class="file-name">{{ file.name }}</div>
+                        <div class="file-name">{{ uploadedFile.name }}</div>
                     </div>
                 </div>
             </div>
@@ -34,6 +33,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import JSONParserService from '@/services/jsonParser.service.js'
 
 const props = defineProps({
     show: Boolean,
@@ -55,7 +55,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'files-selected'])
 
 const isDragging = ref(false)
-const uploadedFiles = ref([])
+let uploadedFile = ref(null)
 const fileInput = ref(null)
 
 function openFileDialog() {
@@ -71,138 +71,39 @@ function onDrop(e) {
     if (e.dataTransfer && e.dataTransfer.files.length) {
         const newFile = Array.from(e.dataTransfer.files).find(isValidExtension)
         if (newFile) {
-            uploadedFiles.value = [newFile]
+            uploadedFile = newFile
         }
     }
 }
 
 function removeFile(name) {
-    uploadedFiles.value = uploadedFiles.value.filter(f => f.name !== name)
+    if (uploadedFile && uploadedFile.name === name) {
+        uploadedFile = null
+    }
 }
 
 function onFileChange(e) {
     if (e.target.files.length) {
         const newFile = Array.from(e.target.files).find(isValidExtension)
         if (newFile) {
-            uploadedFiles.value = [newFile]
+            uploadedFile = newFile
         }
     }
 }
 
 async function onImport() {
-    if (uploadedFiles.value.length) {
-        const resultado = await formatImportVariables(uploadedFiles.value, props.objectVariables)
-        if (props.importFunction) {
-            await props.importFunction(resultado)
-        }
-        emit('close')
-    }
-}
-
-function formatImportVariables(files, map = {}) {
-    if (Array.isArray(map)) {
-        map = map[0] || {};
-    }
-    return new Promise(async (resolve, reject) => {
-        const file = files[0]
-        if (!file) return resolve([])
-
-        if (file.name.endsWith('.json')) {
-            try {
-                const text = await file.text()
-                const parsed = JSON.parse(text)
-                const items = Array.isArray(parsed) ? parsed : [parsed]
-                const targetKeys = Object.keys(map).length ? Object.keys(map) : Object.keys(newVariable)
-
-                const mapped = items.map(orig => {
-                    const obj = {}
-                    targetKeys.forEach(targetKey => {
-                        const sources = map && map[targetKey]
-                            ? (Array.isArray(map[targetKey]) ? map[targetKey] : [map[targetKey]])
-                            : [targetKey]
-
-                        // Handle nested array mapping (e.g., relationships)
-                        if (
-                            Array.isArray(map[targetKey]) &&
-                            typeof map[targetKey][0] === 'object' &&
-                            Array.isArray(orig[targetKey])
-                        ) {
-                            obj[targetKey] = orig[targetKey].map(rel => {
-                                const relObj = {}
-                                Object.entries(map[targetKey][0]).forEach(([relKey, relSources]) => {
-                                    let value = ''
-                                    if (typeof relSources === 'object' && !Array.isArray(relSources) && relSources !== null) {
-                                        value = {}
-                                        Object.entries(relSources).forEach(([subKey, subSources]) => {
-                                            let subValue = ''
-                                            const subSourcesArr = Array.isArray(subSources) ? subSources : [subSources]
-                                            for (const subS of subSourcesArr) {
-                                                if (rel[relKey] && rel[relKey][subS] !== undefined) {
-                                                    subValue = rel[relKey][subS]
-                                                    break
-                                                }
-                                                if (rel[relKey]) {
-                                                    const foundSubKey = Object.keys(rel[relKey]).find(k => k.toLowerCase() === String(subS).toLowerCase())
-                                                    if (foundSubKey) {
-                                                        subValue = rel[relKey][foundSubKey]
-                                                        break
-                                                    }
-                                                }
-                                            }
-                                            value[subKey] = subValue != null ? subValue : ''
-                                        })
-                                    } else {
-                                        let sourcesArr
-                                        if (Array.isArray(relSources)) {
-                                            sourcesArr = relSources
-                                        } else if (typeof relSources === 'object' && relSources !== null) {
-                                            sourcesArr = Object.values(relSources).flat()
-                                        } else {
-                                            sourcesArr = [relSources]
-                                        }
-                                        for (const s of sourcesArr) {
-                                            if (rel[s] !== undefined) {
-                                                value = rel[s]
-                                                break
-                                            }
-                                            const foundKey = Object.keys(rel).find(k => k.toLowerCase() === String(s).toLowerCase())
-                                            if (foundKey) {
-                                                value = rel[foundKey]
-                                                break
-                                            }
-                                        }
-                                    }
-                                    relObj[relKey] = value != null ? value : ''
-                                })
-                                return relObj
-                            })
-                        } else {
-                            let value = ''
-                            for (const s of sources) {
-                                if (orig[s] !== undefined) {
-                                    value = orig[s]
-                                    break
-                                }
-                                const foundKey = Object.keys(orig).find(k => k.toLowerCase() === String(s).toLowerCase())
-                                if (foundKey) {
-                                    value = orig[foundKey]
-                                    break
-                                }
-                            }
-                            obj[targetKey] = value != null ? value : ''
-                        }
-                    })
-                    return obj
-                })
-
-                resolve(mapped)
-            } catch (e) {
-                reject(e)
+    if (uploadedFile != null) {
+        if (uploadedFile.name.endsWith('.csv')) {
+            alert("CSV import is not yet supported. Please use JSON files.")
+            return
+        } else if (uploadedFile.name.endsWith('.json')) {
+            const resultado = await JSONParserService.formatImportVariables(uploadedFile, props.objectVariables)
+            if (props.importFunction) {
+                await props.importFunction(resultado)
             }
-        } else {
-            resolve([])
+            emit('close')
         }
-    })
+    }
 }
 </script>
 
