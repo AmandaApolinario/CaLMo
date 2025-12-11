@@ -95,7 +95,7 @@
     :accepted-extensions="['.json']" :objectVariables="{ name: ['name'], description: ['description'] }"
     :import-function="importVariables" />
 
-  <Alert :show="importMessages.show" :type="importMessages.type" :text="importMessages.text" />
+  <Alert :show="messages.show" :type="messages.type" :text="messages.text" />
 </template>
 
 <script setup>
