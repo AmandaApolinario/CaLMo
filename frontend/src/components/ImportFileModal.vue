@@ -45,7 +45,7 @@ const props = defineProps({
         type: Array,
         default: () => ['.csv', '.json']
     },
-    objectVariables: {},
+    object: {},
     importFunction: {
         type: Function,
         default: null
@@ -97,7 +97,7 @@ async function onImport() {
             alert("CSV import is not yet supported. Please use JSON files.")
             return
         } else if (uploadedFile.name.endsWith('.json')) {
-            const resultado = await JSONParserService.formatImportVariables(uploadedFile, props.objectVariables)
+            const resultado = await JSONParserService.formatImportVariables(uploadedFile, props.object)
             if (props.importFunction) {
                 await props.importFunction(resultado)
             }

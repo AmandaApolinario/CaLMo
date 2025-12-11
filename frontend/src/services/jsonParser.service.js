@@ -48,7 +48,7 @@ class JSONParserService {
                 ? (Array.isArray(map[targetKey]) ? map[targetKey] : [map[targetKey]])
                 : [targetKey];
 
-            // Handle relationships (arrays of objects)
+            // Handle arrays of objects
             if (
                 Array.isArray(map[targetKey]) &&
                 typeof map[targetKey][0] === 'object' &&
