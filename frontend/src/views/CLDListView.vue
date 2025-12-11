@@ -86,7 +86,7 @@
     </div>
   </div>
   <ImportFileModal v-if="showImportModal" @close="showImportModal = false" :import-object-name="'CLD'"
-    :accepted-extensions="['.json']" :objectVariables="objectVariables" :import-function="importDiagrams" />
+    :accepted-extensions="['.json']" :object="objectCLDs" :import-function="importDiagrams" />
   <Alert :show="messages.show" :type="messages.type" :text="messages.text" />
 </template>
 
@@ -101,7 +101,7 @@ import { useCLDListViewModel } from '@/viewmodels/CLDListViewModel'
 
 // Initialize router
 const router = useRouter()
-const objectVariables = [
+const objectCLDs = [
   {
     name: ["name"],
     description: ["description"],

@@ -91,8 +91,8 @@
     </div>
   </div>
 
-  <ImportVariablesModal v-if="showImportModal" @close="showImportModal = false" :import-object-name="'Variables'"
-    :accepted-extensions="['.json']" :objectVariables="{ name: ['name'], description: ['description'] }"
+  <ImportFileModal v-if="showImportModal" @close="showImportModal = false" :import-object-name="'Variables'"
+    :accepted-extensions="['.json']" :object="objectVariables"
     :import-function="importVariables" />
 
   <Alert :show="messages.show" :type="messages.type" :text="messages.text" />
@@ -101,7 +101,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import NavBar from '../components/NavBar.vue'
-import ImportVariablesModal from '../components/ImportFileModal.vue'
+import ImportFileModal from '../components/ImportFileModal.vue'
 import Alert from '../components/Alert.vue'
 import { useVariablesViewModel } from '@/viewmodels/VariablesViewModel'
 
@@ -114,7 +114,6 @@ const {
   isEditing,
   newVariable,
   showImportModal,
-  uploadedFiles,
   fetchVariables,
   submitForm,
   deleteVariable,
@@ -131,7 +130,12 @@ const {
   confirmExport,
 } = useVariablesViewModel()
 
-
+const objectVariables = [
+  {
+    name: '',
+    description: '',
+  }
+]
 
 // Handler functions
 const editVariableHandler = (variable) => {
