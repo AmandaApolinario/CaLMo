@@ -35,16 +35,55 @@ def create_app():
         )
 
         try:
-            # Cria os tipos ENUM apenas se ainda não existirem
-            db.session.execute(text('DO $$ BEGIN '
-                                    'CREATE TYPE relationship_type AS ENUM (\'POSITIVE\', \'NEGATIVE\'); '
-                                    'EXCEPTION WHEN duplicate_object THEN null; END $$;'))
-            db.session.execute(text('DO $$ BEGIN '
-                                    'CREATE TYPE loop_type AS ENUM (\'BALANCING\', \'REINFORCING\'); '
-                                    'EXCEPTION WHEN duplicate_object THEN null; END $$;'))
-            db.session.execute(text('DO $$ BEGIN '
-                                    'CREATE TYPE archetype_type AS ENUM (\'SHIFTING_THE_BURDEN\'); '
-                                    'EXCEPTION WHEN duplicate_object THEN null; END $$;'))
+            # Cria os tipos ENUM apenas se ainda não existirem (no schema public)
+            db.session.execute(text("""
+            DO $$ BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_type t
+                JOIN pg_namespace n ON n.oid = t.typnamespace
+                WHERE t.typname = 'relationship_type' AND n.nspname = 'public'
+            ) THEN
+                CREATE TYPE public.relationship_type AS ENUM ('POSITIVE', 'NEGATIVE');
+            END IF;
+            END $$;
+            """))
+
+            db.session.execute(text("""
+            DO $$ BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_type t
+                JOIN pg_namespace n ON n.oid = t.typnamespace
+                WHERE t.typname = 'loop_type' AND n.nspname = 'public'
+            ) THEN
+                CREATE TYPE public.loop_type AS ENUM ('BALANCING', 'REINFORCING');
+            END IF;
+            END $$;
+            """))
+
+            db.session.execute(text("""
+            DO $$ BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_type t
+                JOIN pg_namespace n ON n.oid = t.typnamespace
+                WHERE t.typname = 'archetype_type' AND n.nspname = 'public'
+            ) THEN
+                CREATE TYPE public.archetype_type AS ENUM (
+                'SHIFTING_THE_BURDEN',
+                'FIXES_THAT_FAIL',
+                'LIMITS_TO_SUCCESS',
+                'DRIFTING_GOALS',
+                'GROWTH_AND_UNDERINVESTMENT',
+                'SUCCESS_TO_THE_SUCCESSFUL',
+                'ESCALATION',
+                'TRAGEDY_OF_THE_COMMONS'
+                );
+            END IF;
+            END $$;
+            """))
+            
             db.session.commit()
 
             # Cria as tabelas (só se não existirem)

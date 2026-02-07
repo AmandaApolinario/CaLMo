@@ -117,7 +117,7 @@ class CLDViewModel:
                 'id': rel.id,
                 'source_id': rel.source_id,
                 'target_id': rel.target_id,
-                'type': rel.type.value
+                'type': rel.type.name
             } 
             for rel in relationships
         ]
@@ -247,7 +247,7 @@ class CLDViewModel:
             loops_data = [
                 {
                     'id': loop.id,
-                    'type': loop.type.value,
+                    'type': loop.type.name,
                     'variables': [var.id for var in loop.variables]
                 }
                 for loop in feedback_loops
@@ -282,7 +282,7 @@ class CLDViewModel:
             archetypes_data = [
                 {
                     'id': arch.id,
-                    'type': arch.type.value,
+                    'type': arch.type.name,
                     'variables': [var.id for var in arch.variables]
                 }
                 for arch in archetypes
@@ -316,14 +316,14 @@ class CLDViewModel:
                     'id': rel.id,
                     'source_id': rel.source_id,
                     'target_id': rel.target_id,
-                    'type': rel.type.value
+                    'type': rel.type.name
                 } 
                 for rel in relationships
             ],
             'feedback_loops': [
                 {
                     'id': loop.id,
-                    'type': loop.type.value,
+                    'type': loop.type.name,
                     'variables': [var.id for var in loop.variables]
                 } 
                 for loop in cld.feedback_loops
@@ -331,7 +331,7 @@ class CLDViewModel:
             'archetypes': [
                 {
                     'id': arch.id,
-                    'type': arch.type.value,
+                    'type': arch.type.name,
                     'variables': [var.id for var in arch.variables]
                 } 
                 for arch in cld.archetypes
