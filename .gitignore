@@ -9,3 +9,4 @@ __pycache__/
 .coverage
 htmlcov/
 examples/
+instrucoes_servidor.md
