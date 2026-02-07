@@ -2,7 +2,7 @@
   <div class="register-layout">
     <div class="register-branding">
       <div class="branding">
-        <h1>CaLMo 2.0</h1>
+        <h1>CaLMo</h1>
         <p class="subtitle">Causal Loop Diagram Modeler</p>
         <p class="tagline">Create your account to start modeling.</p>
       </div>

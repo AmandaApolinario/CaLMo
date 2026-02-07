@@ -2,7 +2,7 @@
   <div class="getting-started-container">
     <NavBar />
     <div class="getting-started-content">
-      <h1>Getting Started with CaLMo 2.0</h1>
+      <h1>Getting Started with CaLMo</h1>
       
       <!-- Introduction Section -->
       <section class="gs-section">
@@ -150,7 +150,7 @@
       
       <!-- How To Use Section -->
       <section class="gs-section">
-        <h2>How To Use CaLMo 2.0</h2>
+        <h2>How To Use CaLMo</h2>
         
         <div class="steps-container">
           <div class="step">

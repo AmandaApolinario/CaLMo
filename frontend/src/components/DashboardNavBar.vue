@@ -2,7 +2,7 @@
   <nav class="navbar">
     <div class="navbar-content">
       <router-link to="/dashboard" class="nav-brand">
-        CaLMo 2.0
+        CaLMo
       </router-link>
       <button @click="logout" class="btn-logout">Log Out</button>
     </div>
