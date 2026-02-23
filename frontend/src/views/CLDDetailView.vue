@@ -278,16 +278,45 @@ const tint = (hex, alpha = 0.16) => {
 }
 
 .cld-content {
-  max-width: 100%;
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
   padding: 2rem;
 }
 
 .cld-details {
   background-color: white;
   padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 0;
+  box-shadow: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+.cld-details > h1 {
+  grid-column: 1 / -1;
+}
+.cld-details > .description {
+  grid-column: 1 / -1;
+}
+.cld-details > .cld-meta {
+  grid-column: 1 / -1;
+}
+.cld-details > .info-panels {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+.cld-details > .diagram-container {
+  grid-column: 1 / -1;
+}
+.cld-details > .cld-legend {
+  grid-column: 1 / -1;
+}
+.cld-details > .cld-actions {
+  grid-column: 1 / -1;
 }
 
 h1 {
@@ -312,17 +341,13 @@ h1 {
   align-items: flex-start;
   background-color: #e8f4fd;
   border-radius: 8px;
-  padding: 1rem 1.5rem;
-  margin-bottom: 1.5rem;
+  padding: 0.8rem 1rem;
   border-left: 4px solid #3498db;
-  flex: 1; /* make same width as archetypes panel */
+  flex: 1;
+  min-height: 280px;
 }
 
 .info-panels {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
   align-items: stretch;
 }
 
@@ -331,9 +356,10 @@ h1 {
   align-items: flex-start;
   background-color: #e8fbf0;
   border-radius: 14px;
-  padding: 0.75rem 2rem; /* larger lateral padding */
+  padding: 0.75rem 2rem 0.75rem 1rem;
   border-left: 6px solid #27ae60;
   flex: 1; /* match info-panel width */
+  min-height: 280px;
 }
   /* add more space between the panel title and the cards */
   .static-archetypes-panel .panel-title {
@@ -402,9 +428,12 @@ h1 {
   gap: 0.6rem;
 }
 
-@media (max-width: 900px) {
-  .info-panels {
-    flex-direction: column;
+@media (max-width: 1200px) {
+  .cld-details {
+    grid-template-columns: 1fr;
+  }
+  .cld-details > .info-panels {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -417,6 +446,11 @@ h1 {
 
 .info-content {
   flex: 1;
+}
+
+.info-content .panel-title {
+  font-weight: 700;
+  font-size: 1.1rem;
 }
 
 .info-content p {
@@ -437,14 +471,14 @@ h1 {
 
 .info-content ul.interaction-tips {
   margin: 0;
-  padding-left: 0;
-  list-style-type: none;
+  padding-left: 1.25rem;
+  list-style-type: disc;
+  margin-top: 1rem;
 }
 
 .info-content ul.interaction-tips li {
   margin-bottom: 0.5rem;
-  display: flex;
-  align-items: center;
+  text-align: left;
 }
 
 .info-content ul.interaction-tips li i {
@@ -471,10 +505,9 @@ h1 {
 }
 
 .diagram-container {
-  height: 70vh; /* Make the diagram taller to utilize screen space better */
+  height: 70vh; /* diagram below panels */
   border: 1px solid #ddd;
   border-radius: 8px;
-  margin-bottom: 2rem;
   overflow: hidden;
   position: relative;
 }
@@ -852,11 +885,13 @@ button {
 
 
 .cld-legend {
-  margin: 14px 0 8px;
+  margin: 0;
   padding: 12px 14px;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   background: #f9fafb;
+  max-height: 180px;
+  overflow-y: auto;
 }
 
 .legend-title {
