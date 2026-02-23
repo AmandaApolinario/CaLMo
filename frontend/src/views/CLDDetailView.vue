@@ -12,21 +12,44 @@
           <span class="variables-count">{{ diagram?.nodes?.length || 0 }} variables</span>
         </div>
         
-        <!-- Info Panel with Interaction Tips -->
-        <div class="info-panel" v-if="showInfoPanel">
-          <div class="info-icon"><i class="fas fa-info-circle"></i></div>
-          <div class="info-content">
-            <p><strong>How to interact with this diagram:</strong></p>
-            <ul class="interaction-tips">
-              <li><i class="fas fa-mouse-pointer"></i> Click on variables to see feedback loops and archetypes they participate in</li>
-              <li><i class="fas fa-hand-paper"></i> Drag variables to reposition them for better visibility</li>
-              <li><i class="fas fa-search-plus"></i> Use the zoom controls to adjust your view</li>
-              <li><i class="fas fa-project-diagram"></i> Hover over relationships to highlight connections</li>
-            </ul>
+        <!-- Info Panels: static archetypes reference above interaction tips (stacked) -->
+        <div class="info-panels">
+          <!-- Static Archetypes Reference (always visible) -->
+          <div class="static-archetypes-panel panel-card">
+            <div class="info-content">
+              <div class="panel-title">Archetypes detected by CaLMo</div>
+              <div class="static-archetypes-grid">
+                <ul class="static-archetypes-list">
+                  <li class="static-arch-card"><span class="static-arch-label">Fixes that Fail</span></li>
+                  <li class="static-arch-card"><span class="static-arch-label">Shifting the Burden</span></li>
+                  <li class="static-arch-card"><span class="static-arch-label">Limits to Success</span></li>
+                  <li class="static-arch-card"><span class="static-arch-label">Drifting Goals</span></li>
+                </ul>
+                <ul class="static-archetypes-list">
+                  <li class="static-arch-card"><span class="static-arch-label">Growth and Underinvestment</span></li>
+                  <li class="static-arch-card"><span class="static-arch-label">Success to the Successful</span></li>
+                  <li class="static-arch-card"><span class="static-arch-label">Escalation</span></li>
+                  <li class="static-arch-card"><span class="static-arch-label">Tragedy of the Commons</span></li>
+                </ul>
+              </div>
+            </div>
           </div>
-          <button class="dismiss-info" @click="hideInfoPanel">
-            <i class="fas fa-times"></i>
-          </button>
+
+          <div class="info-panel panel-card" v-if="showInfoPanel">
+            <div class="info-icon"><i class="fas fa-info-circle"></i></div>
+            <div class="info-content">
+              <div class="panel-title">How to interact with this diagram</div>
+              <ul class="interaction-tips">
+                <li><i class="fas fa-mouse-pointer"></i> Click on variables to see feedback loops and archetypes they participate in</li>
+                <li><i class="fas fa-hand-paper"></i> Drag variables to reposition them for better visibility</li>
+                <li><i class="fas fa-search-plus"></i> Use the zoom controls to adjust your view</li>
+                <li><i class="fas fa-project-diagram"></i> Hover over relationships to highlight connections</li>
+              </ul>
+            </div>
+            <button class="dismiss-info" @click="hideInfoPanel">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
         </div>
         
         <!-- Diagram Container -->
@@ -39,13 +62,20 @@
         </div>
 
         <!-- LEGEND (archetype instances present in this diagram) -->
-        <div class="cld-legend" v-if="legendArchetypes.length">
+        <div v-if="legendArchetypes.length" class="cld-legend">
           <div class="legend-title">Legend — Archetypes in this CLD</div>
           <div class="legend-grid">
             <div v-for="item in legendArchetypes" :key="item.id" class="legend-item">
               <span class="legend-swatch" :style="{ backgroundColor: item.color }"></span>
               <span class="legend-label">{{ item.label }}</span>
             </div>
+          </div>
+        </div>
+
+        <!-- Empty state: no archetypes detected (notification-style message only) -->
+        <div v-else class="cld-legend">
+          <div class="empty-archetype-card">
+            <div class="empty-desc">CaLMo did not detect any archetypes in this CLD.</div>
           </div>
         </div>
 
@@ -285,6 +315,97 @@ h1 {
   padding: 1rem 1.5rem;
   margin-bottom: 1.5rem;
   border-left: 4px solid #3498db;
+  flex: 1; /* make same width as archetypes panel */
+}
+
+.info-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  align-items: stretch;
+}
+
+.static-archetypes-panel {
+  display: flex;
+  align-items: flex-start;
+  background-color: #e8fbf0;
+  border-radius: 14px;
+  padding: 0.75rem 2rem; /* larger lateral padding */
+  border-left: 6px solid #27ae60;
+  flex: 1; /* match info-panel width */
+}
+  /* add more space between the panel title and the cards */
+  .static-archetypes-panel .panel-title {
+    margin-bottom: 1rem;
+  }
+
+.static-icon {
+  color: #27ae60;
+}
+
+.static-archetypes-list {
+  margin: 0;
+  padding-left: 0;
+  color: #0f172a;
+  list-style: none;
+  display: block;
+}
+
+.static-archetypes-list li {
+  margin-bottom: 0.4rem;
+}
+
+.static-arch-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.28rem 1.6rem; /* smaller vertical, larger lateral padding */
+  background: #f0fcf5; /* light green background */
+  border: 3px solid #18843a; /* thicker darker green border */
+  border-radius: 18px; /* more rounded corners */
+  min-height: 20px;
+  box-shadow: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.static-arch-label {
+  font-weight: 400; /* normal weight */
+  color: #0f172a;
+}
+
+/* center label text inside static archetype cards */
+.static-arch-card {
+  justify-content: center;
+}
+.static-arch-label {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+  /* prevent label from breaking into multiple lines */
+  .static-arch-label {
+    white-space: nowrap;
+    overflow: visible;
+  }
+
+.static-archetypes-grid {
+  display: flex;
+  gap: 1rem;
+}
+
+.static-archetypes-grid .static-archetypes-list {
+  flex: 1 1 50%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+@media (max-width: 900px) {
+  .info-panels {
+    flex-direction: column;
+  }
 }
 
 .info-icon {
@@ -670,10 +791,13 @@ button {
   column-gap: 12px;
   align-items: start;
 
-  border-left: 4px solid #D0D7DE; /* overridden inline with arch.color */
+  /* subtle full border plus a stronger colored left accent */
+  border: 2px solid rgba(208, 215, 222, 0.6);
+  border-left: 6px solid #D0D7DE; /* overridden inline with arch.color */
   background: #F7FBFF;
-  border-radius: 12px;
-  padding: 12px 14px;
+  border-radius: 18px; /* increased rounding */
+  padding: 8px 20px; /* smaller vertical, larger lateral padding */
+  min-height: 38px; /* slightly reduced overall height */
 }
 
 /* fixed column: dot never shrinks */
@@ -694,16 +818,22 @@ button {
 }
 
 /* flexible content column */
-.arch-content { grid-column: 2; }
+.arch-content { 
+  grid-column: 2; 
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* center header and name */
+}
 
 .archetype-header {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-bottom: 6px;
+  justify-content: center; /* center icon + name */
 }
 
-.archetype-name { font-weight: 700; line-height: 1.25; }
+.archetype-name { font-weight: 700; line-height: 1.25; text-align: center; width: 100%; }
 
 /* variable chips (no commas) */
 .archetype-variables {
@@ -759,6 +889,29 @@ button {
 .legend-label {
   font-size: 0.95rem;
   color: #1f2937;
+}
+
+/* Empty-state card shown when no archetypes are detected */
+.empty-archetype-card {
+  background: #fff9db; /* pale yellow */
+  border: 2px solid #f6d365;
+  border-left: 6px solid #f1c40f;
+  padding: 1rem 1.25rem;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.empty-archetype-card .empty-title {
+  font-weight: 700;
+  color: #7a5800;
+  margin-bottom: 0.25rem;
+  text-align: center;
+}
+.empty-archetype-card .empty-desc {
+  color: #7a5800;
+  text-align: center;
+  font-size: 0.95rem;
 }
 
 </style>
