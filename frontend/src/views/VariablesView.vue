@@ -15,14 +15,15 @@
           <form @submit.prevent="submitForm" class="variable-form">
             <div class="form-group">
               <label for="name">Name</label>
-              <input
-                type="text"
+              <textarea
                 id="name"
                 v-model="newVariable.name"
                 required
+                maxlength="512"
                 placeholder="Enter variable name"
-                class="form-input"
-              />
+                class="form-textarea"
+                rows="2"
+              ></textarea>
             </div>
             <div class="form-group">
               <label for="description">Description</label>

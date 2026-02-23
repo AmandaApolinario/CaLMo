@@ -84,7 +84,7 @@ class Variable(db.Model):
     __tablename__ = 'variables'
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = Column(String, nullable=False)
+    name = Column(String(512), nullable=False)
     description = Column(String)
     user_id = Column(String, ForeignKey('users.id'))
 

@@ -163,7 +163,7 @@ export function useCLDDiagramViewModel() {
     // ---- Nodes (wrapped labels; color by instance membership) ----
     const nodes = new DataSet(
       (diagram.nodes || []).map(node => {
-        const wrapped = wrapLabel(node.name, 20, 3);
+        const wrapped = wrapLabel(node.name, 30, 3);
 
         const nodeObj = {
           id: node.id,

@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS variables (
     id VARCHAR PRIMARY KEY,
-    name VARCHAR NOT NULL,
+    name VARCHAR(512) NOT NULL,
     description VARCHAR,
     user_id VARCHAR REFERENCES users(id)
 );
