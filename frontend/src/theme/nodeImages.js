@@ -25,6 +25,20 @@ export function makePieEllipseDataUrl({
   const cols = (colors || []).filter(Boolean);
   if (cols.length === 0) return makeSolidEllipseDataUrl({ label, fill: '#BED7ED' }); // PALE BLUE
 
+  // adapt SVG size to label length to avoid clipping of long labels
+  const labelLines = String(label || '').split('\n');
+  const maxLineChars = labelLines.reduce((m, l) => Math.max(m, String(l).length), 0);
+  const approxCharWidth = Math.max(6, Math.round(fontSize * 0.55));
+  const neededTextWidth = maxLineChars * approxCharWidth;
+  const paddingH = 40; // horizontal padding inside ellipse
+  const desiredWidth = Math.max(width, neededTextWidth + paddingH + borderWidth * 2);
+  const neededTextHeight = Math.max(fontSize * lineHeight * labelLines.length, fontSize + 4);
+  const paddingV = 28; // vertical padding inside ellipse
+  const desiredHeight = Math.max(height, Math.round(neededTextHeight + paddingV + borderWidth * 2));
+
+  width = Math.round(desiredWidth);
+  height = Math.round(desiredHeight);
+
   const rx = Math.max(10, Math.round((width  - borderWidth * 2) / 2));
   const ry = Math.max(10, Math.round((height - borderWidth * 2) / 2));
   const cx = Math.round(width / 2);
