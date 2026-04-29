@@ -234,7 +234,7 @@ export function useCLDCanvasViewModel() {
         selectedNodeInfo.value = { nodeName: '', loops: [], archetypes: [] };
     };
 
-    const addNodeToDiagram = (variable) => {
+    const addNodeToCLD = (variable) => {
         if (!diagram.value) return false;
 
         if (nodes.value.some(n => n.id === variable.id)) {
@@ -280,6 +280,48 @@ export function useCLDCanvasViewModel() {
         return newRelationship;
     };
 
+    const persistDiagram = async (currentNodes, currentEdges) => {
+        if (!diagram.value || !diagram.value.id) {
+            error.value = "Nenhum diagrama selecionado para salvar.";
+            return false;
+        }
+
+        isLoadingDiagram.value = true;
+        error.value = null;
+
+        try {
+            const variableIds = currentNodes.map(node => node.id);
+
+            const relationships = currentEdges.map(edge => {
+                return {
+                    source_id: edge.source,
+                    target_id: edge.target,
+                    type: edge.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE'
+                };
+            });
+
+            const apiData = {
+                name: diagram.value.name || diagram.value.title || '',
+                description: diagram.value.description || '',
+                date: diagram.value.date || new Date().toISOString().split('T')[0],
+                variables: variableIds,
+                relationships: relationships
+            };
+
+            await CLDService.updateCLD(diagram.value.id, apiData);
+
+            await fetchDiagram(diagram.value.id);
+            return true;
+
+        } catch (err) {
+            console.error('Erro ao salvar diagrama:', err);
+            error.value = 'Falha ao salvar o diagrama no servidor.';
+            return false;
+        } finally {
+            isLoadingDiagram.value = false;
+        }
+    };
+
     return {
         variables: computed(() => variables.value),
         shapes: computed(() => shapes.value),
@@ -306,6 +348,7 @@ export function useCLDCanvasViewModel() {
         selectNodeInfo,
         clearNodeSelection,
         addConnection,
-        addNodeToDiagram
+        addNodeToCLD,
+        persistDiagram
     };
 }

@@ -358,8 +358,9 @@ const {
     createVariable,
     openCreateModal,
     closeCreateModal,
-    addNodeToDiagram,
-    addConnection
+    addNodeToCLD,
+    addConnection,
+    persistDiagram
 } = useCLDCanvasViewModel();
 
 const {
@@ -545,7 +546,7 @@ const onDrop = (event) => {
             [variable.id]: { x: canvasPosition.x, y: canvasPosition.y }
         });
 
-        addNodeToDiagram(variable);
+        addNodeToCLD(variable);
 
         const layer = layers.value.find(l => l.id === selectedLayerId.value);
         if (layer) {
@@ -565,21 +566,17 @@ const onDrop = (event) => {
 };
 
 const saveDiagram = async () => {
-    const container = networkContainer.value;
-    if (!container || !container.network) return;
+    if (!network.value || !diagram.value) return;
 
-    const networkInstance = container.network;
-    const positions = networkInstance.getPositions();
-    const updatedNodes = Object.keys(positions).map(nodeId => {
-        const node = nodes.value.find(n => n.id === nodeId);
-        return {
-            ...node,
-            x: positions[nodeId].x,
-            y: positions[nodeId].y
-        };
-    });
+    const positions = network.value.getPositions();
 
-    console.log('Saving diagram positions:', updatedNodes);
+    saveNodePositions(diagram.value.id, positions);
+
+    const success = await persistDiagram(nodes.value, edges.value);
+
+    if (success) {
+        console.log('Diagrama salvo com sucesso!');
+    }
 };
 
 const goBack = () => {
