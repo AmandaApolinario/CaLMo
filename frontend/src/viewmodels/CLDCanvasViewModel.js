@@ -1,6 +1,8 @@
 import { ref, computed, onMounted, reactive } from 'vue';
 import ApiService from '@/services/api.service';
 import CLDService from '@/services/cld.service';
+import { webSocketService } from '@/services/websocket.service';
+import {publishDiagramEvent} from "@/services/kafkaEvent.service.js";
 
 export function useCLDCanvasViewModel() {
     const variables = ref([]);
@@ -17,6 +19,9 @@ export function useCLDCanvasViewModel() {
     const selectedNodeInfo = ref({ nodeName: '', loops: [], archetypes: [] });
     const selectedEdge = ref(null);
     const isLoadingDiagram = ref(false);
+    const clientId = ref(crypto.randomUUID());
+    const undoStack = ref([]);
+    const redoStack = ref([]);
 
 
     const newVariable = reactive({
@@ -253,8 +258,19 @@ export function useCLDCanvasViewModel() {
             ...diagram.value,
             nodes: nodes.value,
             edges: edges.value,
-            relationships: edges.value
         };
+
+        undoStack.value.push({
+          action: 'NODE_ADDED',
+          data: { node: newNode }
+        });
+
+        redoStack.value = [];
+
+        publishDiagramEvent(diagram.value.id, 'NODE_ADDED', {
+          node: newNode,
+          clientId: getClientId()
+        }).catch(err => console.error('Erro ao enviar evento NODE_ADDED', err));
 
         return true;
     };
@@ -324,15 +340,141 @@ export function useCLDCanvasViewModel() {
 
     const removeNodeFromDiagram = (nodeId) => {
         if (!diagram.value) return;
+        const nodeToRemove = nodes.value.find(n => n.id === nodeId);
+        if (!nodeToRemove) return;
 
         nodes.value = nodes.value.filter(n => n.id !== nodeId);
         edges.value = edges.value.filter(e => e.source !== nodeId && e.target !== nodeId);
+
+        undoStack.value.push({
+            action: 'NODE_REMOVED',
+            node: { ...nodeToRemove },
+          });
+        redoStack.value = [];
+
+        publishDiagramEvent(diagram.value.id, 'NODE_REMOVED', {
+            nodeId,
+            clientId: clientId.value
+        }).catch(console.error);
     };
 
     const removeEdgeFromDiagram = (edgeId) => {
         if (!diagram.value) return;
 
         edges.value = edges.value.filter(e => e.id !== edgeId);
+    };
+
+    const handleKafkaEvent = (event) => {
+        const { action, data, clientId: eventClientId } = event;
+        console.log(`Received Kafka event: ${action} from client ${eventClientId}`, data);
+        if (eventClientId && eventClientId === clientId.value) return;
+
+        switch (action) {
+            case 'ELEMENTS_DELETED':
+                if (data.nodes) {
+                    nodes.value = nodes.value.filter(n => !data.nodes.includes(n.id));
+                }
+                if (data.edges) {
+                    edges.value = edges.value.filter(e => !data.edges.includes(e.id));
+                }
+                break;
+
+            case 'NODE_ADDED':
+                if (!nodes.value.some(n => n.id === data.node.id)) {
+                    nodes.value.push(data.node);
+                }
+
+                break;
+            case 'NODE_REMOVED':
+              nodes.value = nodes.value.filter(n => n.id !== data.nodeId);
+              edges.value = edges.value.filter(e => e.source !== data.nodeId && e.target !== data.nodeId);
+              break;
+
+            case 'EDGE_ADDED':
+              if (!edges.value.some(e => e.id === data.edge.id)) {
+                edges.value.push(data.edge);
+              }
+              break;
+
+            case 'EDGE_REMOVED':
+              edges.value = edges.value.filter(e => e.id !== data.edgeId);
+              break;
+
+            case 'UNDO_PERFORMED':
+                fetchDiagram(diagram.value.id);
+                break;
+        }
+    };
+
+    const initCollabMode = (diagramId, userId) => {
+        webSocketService.connect(userId);
+        webSocketService.joinDiagram(diagramId);
+        webSocketService.onDiagramEvent(handleKafkaEvent);
+    };
+
+    const stopCollabMode = () => {
+        webSocketService.disconnect();
+    };
+
+    const getClientId = () => {
+      return clientId;
+    };
+
+    const performUndo = () => {
+      if (undoStack.value.length === 0) return;
+
+      const lastAction = undoStack.value.pop(); // remove da pilha de undo
+      const { action, data } = lastAction;
+      let inverseAction;
+      let inverseData;
+
+      switch (action) {
+        case 'NODE_ADDED':
+          inverseAction = 'NODE_REMOVED';
+          inverseData = { nodeId: data.node.id, clientId: clientId.value };
+          nodes.value = nodes.value.filter(n => n.id !== data.node.id);
+          edges.value = edges.value.filter(
+            e => e.source !== data.node.id && e.target !== data.node.id
+          );
+          break;
+
+        case 'NODE_REMOVED':
+          inverseAction = 'NODE_ADDED';
+          inverseData = { node: data.node, clientId: clientId.value };
+          nodes.value.push(data.node);
+          if (data.deletedEdges) {
+            edges.value.push(...data.deletedEdges);
+          }
+          break;
+
+        case 'EDGE_ADDED':
+          inverseAction = 'EDGE_REMOVED';
+          inverseData = { edgeId: data.edge.id, clientId: clientId.value };
+          edges.value = edges.value.filter(e => e.id !== data.edge.id);
+          break;
+
+        case 'EDGE_REMOVED':
+          inverseAction = 'EDGE_ADDED';
+          inverseData = { edge: data.edge, clientId: clientId.value };
+          if (!edges.value.some(e => e.id === data.edge.id)) {
+            edges.value.push(data.edge);
+          }
+          break;
+
+        default:
+          console.warn('Undo não suportado para esta ação:', action);
+          return;
+      }
+
+      redoStack.value.push(lastAction);
+      diagram.value = {
+          ...diagram.value,
+          nodes: [...nodes.value],
+          edges: [...edges.value],
+      };
+
+      publishDiagramEvent(diagram.value.id, inverseAction, inverseData)
+        .catch(err => console.error('Erro ao publicar undo:', err));
     };
 
     return {
@@ -364,6 +506,10 @@ export function useCLDCanvasViewModel() {
         addNodeToCLD,
         persistDiagram,
         removeNodeFromDiagram,
-        removeEdgeFromDiagram
+        removeEdgeFromDiagram,
+        initCollabMode,
+        stopCollabMode,
+        performUndo,
+        undoStack,
     };
 }

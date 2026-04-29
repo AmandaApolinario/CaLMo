@@ -1,4 +1,6 @@
 from flask import Blueprint, request, jsonify
+
+from ..services.kafka_producer import kafka_producer
 from ..viewmodels import CLDViewModel
 from ..auth import verify_token
 from functools import wraps
@@ -91,6 +93,7 @@ def get_relationships(user_id, cld_id):
 @token_required
 def update_cld_route(user_id, cld_id):
     data = request.get_json()
+
     if not data:
         return jsonify({'message': 'Bad Request'}), 400
         
@@ -218,4 +221,18 @@ def identify_archetypes(user_id, cld_id):
         }), 200
     except Exception as e:
         print(f"Exception in archetypes endpoint: {str(e)}")
-        return jsonify({'message': f"Server error: {str(e)}"}), 500 
+        return jsonify({'message': f"Server error: {str(e)}"}), 500
+
+@cld_routes.route('/cld/<string:cld_id>/emit-event', methods=['POST'])
+@token_required
+def emit_update_diagram_event(user_id, cld_id):
+    data = request.get_json()
+
+    kafka_producer.publish_event(
+        diagram_id=cld_id,
+        user_id=user_id,
+        action_type=data['action'],
+        payload=data['data']
+    )
+
+    return jsonify({"status": "broadcast_sent"}), 200

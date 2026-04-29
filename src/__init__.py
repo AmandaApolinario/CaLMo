@@ -3,11 +3,13 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from dotenv import load_dotenv
 from sqlalchemy import text
-import os
+from flask_socketio import SocketIO
 
 load_dotenv()
 
 db = SQLAlchemy()
+
+socketio = SocketIO(cors_allowed_origins="*")
 
 def create_app():
     app = Flask(__name__)
@@ -26,13 +28,12 @@ def create_app():
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
     db.init_app(app)
+    socketio.init_app(app)
+
+    from . import events
     
     with app.app_context():
         # Import models to ensure they are registered with SQLAlchemy
-        from .models.entities import (
-            User, Variable, CLD, Relationship, FeedbackLoop, Archetype,
-            RelationshipType, LoopType, ArchetypeType
-        )
 
         try:
             # Cria os tipos ENUM apenas se ainda não existirem (no schema public)

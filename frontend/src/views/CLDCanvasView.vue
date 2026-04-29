@@ -55,6 +55,10 @@
                   <i class="fas fa-trash"></i>
               </button>
 
+              <button class="tool-btn" @click="performUndo" :disabled="undoStack.length === 0" title="Undo">
+                <i class="fas fa-undo"></i>
+              </button>
+
               <div class="toolbar-divider"></div>
               <button class="tool-btn" @click="zoomIn" title="Zoom In">
                   <i class="fas fa-search-plus"></i>
@@ -372,7 +376,11 @@ const {
     addConnection,
     persistDiagram,
     removeNodeFromDiagram,
-    removeEdgeFromDiagram
+    removeEdgeFromDiagram,
+    initCollabMode,
+    stopCollabMode,
+    performUndo,
+    undoStack
 } = useCLDCanvasViewModel();
 
 const {
@@ -640,6 +648,7 @@ onMounted(async () => {
 
     if (diagramId) {
         await fetchDiagram(diagramId);
+        initCollabMode(diagram.value.id)
     }
 
     await nextTick();
@@ -648,8 +657,10 @@ onMounted(async () => {
     }
 });
 
+
 onUnmounted(() => {
     window.removeEventListener('keydown', handleKeyDown);
+    stopCollabMode();
 });
 
 watch(() => diagram.value, (newDiagram) => {
