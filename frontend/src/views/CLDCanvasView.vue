@@ -45,6 +45,16 @@
                   <i class="fas fa-minus"></i>
               </button>
 
+              <button
+                  class="tool-btn"
+                  :disabled="!hasSelection"
+                  :style="{ opacity: hasSelection ? '1' : '0.4', color: hasSelection ? '#f48771' : '' }"
+                  @click="handleDelete"
+                  title="Excluir Selecionado (Del)"
+              >
+                  <i class="fas fa-trash"></i>
+              </button>
+
               <div class="toolbar-divider"></div>
               <button class="tool-btn" @click="zoomIn" title="Zoom In">
                   <i class="fas fa-search-plus"></i>
@@ -333,7 +343,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref, nextTick, watch } from 'vue';
+import {onMounted, ref, nextTick, watch, onUnmounted} from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useCLDCanvasViewModel } from '@/viewmodels/CLDCanvasViewModel';
 import { useCLDDiagramViewModel } from '@/viewmodels/CLDDiagramViewModel';
@@ -360,7 +370,9 @@ const {
     closeCreateModal,
     addNodeToCLD,
     addConnection,
-    persistDiagram
+    persistDiagram,
+    removeNodeFromDiagram,
+    removeEdgeFromDiagram
 } = useCLDCanvasViewModel();
 
 const {
@@ -380,7 +392,9 @@ const {
     setInteractionMode,
     fitView,
     edgeAddedCallback,
-    addEdgeToCanvas
+    addEdgeToCanvas,
+    hasSelection,
+    deleteSelectedElements
 } = useCLDDiagramViewModel();
 
 // UI State
@@ -598,8 +612,22 @@ const tint = (hex, alpha = 0.16) => {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
-onMounted(async () => {
+const handleDelete = () => {
+    deleteSelectedElements(removeNodeFromDiagram, removeEdgeFromDiagram);
+};
 
+const handleKeyDown = (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (hasSelection.value) {
+            handleDelete();
+        }
+    }
+};
+
+onMounted(async () => {
+    window.addEventListener('keydown', handleKeyDown);
     edgeAddedCallback.value = (source, target, polarity) => {
         const newEdge = addConnection(source, target, polarity);
         if (newEdge) {
@@ -618,6 +646,10 @@ onMounted(async () => {
     if (diagram.value && networkContainer.value) {
         createDiagram(diagram.value, networkContainer.value);
     }
+});
+
+onUnmounted(() => {
+    window.removeEventListener('keydown', handleKeyDown);
 });
 
 watch(() => diagram.value, (newDiagram) => {

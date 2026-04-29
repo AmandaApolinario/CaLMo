@@ -19,6 +19,7 @@ export function useCLDDiagramViewModel() {
   const selectedNodeInfo = ref({ nodeName: '', loops: [], archetypes: [] });
   const interactionMode = ref('select');
   const edgeAddedCallback = ref(null);
+  const hasSelection = ref(false);
 
   // Persisted node positions by diagram id
   const diagramPositions = ref({});
@@ -331,6 +332,11 @@ export function useCLDDiagramViewModel() {
       }
     });
     network.value.on('dragEnd', () => saveNodePositions(diagram.id));
+    network.value.on('select', () => { hasSelection.value = true; });
+    network.value.on('deselect', () => {
+      const sel = network.value.getSelection();
+      hasSelection.value = sel.nodes.length > 0 || sel.edges.length > 0;
+    });
 
     setTimeout(() => {
       network.value.fit({ animation: false });
@@ -632,7 +638,6 @@ export function useCLDDiagramViewModel() {
     const isPositive = edgeData.polarity === 'positive';
     const c = isPositive ? EDGE_COLORS.positive : EDGE_COLORS.negative;
 
-    // Injeta diretamente no DataSet visual do vis-network
     network.value.body.data.edges.add({
       id: edgeData.id,
       from: edgeData.source,
@@ -643,6 +648,32 @@ export function useCLDDiagramViewModel() {
       width: 2,
       color: { color: c.base, highlight: c.highlight }
     });
+  }
+
+  function deleteSelectedElements(removeNodeCb, removeEdgeCb) {
+    if (!network.value) return;
+
+
+    const selection = network.value.getSelection();
+
+    if (selection.nodes.length > 0) {
+      selection.nodes.forEach(nodeId => {
+        if (removeNodeCb) removeNodeCb(nodeId);
+        network.value.body.data.nodes.remove(nodeId);
+      });
+    }
+
+    if (selection.edges.length > 0) {
+      selection.edges.forEach(edgeId => {
+        if (network.value.body.data.edges.get(edgeId)) {
+          if (removeEdgeCb) removeEdgeCb(edgeId);
+          network.value.body.data.edges.remove(edgeId);
+        }
+      });
+    }
+
+    clearNodeSelection();
+    hasSelection.value = false;
   }
 
   return {
@@ -663,6 +694,8 @@ export function useCLDDiagramViewModel() {
     setInteractionMode,
     fitView,
     edgeAddedCallback,
-    addEdgeToCanvas
+    addEdgeToCanvas,
+    hasSelection,
+    deleteSelectedElements
   };
 }

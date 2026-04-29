@@ -322,6 +322,19 @@ export function useCLDCanvasViewModel() {
         }
     };
 
+    const removeNodeFromDiagram = (nodeId) => {
+        if (!diagram.value) return;
+
+        nodes.value = nodes.value.filter(n => n.id !== nodeId);
+        edges.value = edges.value.filter(e => e.source !== nodeId && e.target !== nodeId);
+    };
+
+    const removeEdgeFromDiagram = (edgeId) => {
+        if (!diagram.value) return;
+
+        edges.value = edges.value.filter(e => e.id !== edgeId);
+    };
+
     return {
         variables: computed(() => variables.value),
         shapes: computed(() => shapes.value),
@@ -349,6 +362,8 @@ export function useCLDCanvasViewModel() {
         clearNodeSelection,
         addConnection,
         addNodeToCLD,
-        persistDiagram
+        persistDiagram,
+        removeNodeFromDiagram,
+        removeEdgeFromDiagram
     };
 }
