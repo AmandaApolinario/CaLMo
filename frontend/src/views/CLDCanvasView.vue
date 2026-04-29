@@ -10,23 +10,52 @@
             </div>
 
             <div class="toolbar-center">
-                <button class="tool-btn" title="Pan">
-                    <i class="fas fa-hand-paper"></i>
-                </button>
-                <button class="tool-btn" title="Select">
-                    <i class="fas fa-mouse-pointer"></i>
-                </button>
-                <div class="toolbar-divider"></div>
-                <button class="tool-btn" @click="zoomIn" title="Zoom In">
-                    <i class="fas fa-search-plus"></i>
-                </button>
-                <button class="tool-btn" @click="zoomOut" title="Zoom Out">
-                    <i class="fas fa-search-minus"></i>
-                </button>
-                <button class="tool-btn" @click="fitView" title="Fit">
-                    <i class="fas fa-compress"></i>
-                </button>
-            </div>
+              <button
+                  class="tool-btn"
+                  :class="{ 'active': interactionMode === 'pan' }"
+                  @click="setInteractionMode('pan')"
+                  title="Pan"
+              >
+                  <i class="fas fa-hand-paper"></i>
+              </button>
+              <button
+                  class="tool-btn"
+                  :class="{ 'active': interactionMode === 'select' }"
+                  @click="setInteractionMode('select')"
+                  title="Select"
+              >
+                  <i class="fas fa-mouse-pointer"></i>
+              </button>
+              <div class="toolbar-divider"></div>
+              <button
+                  class="tool-btn"
+                  :class="{ 'active': interactionMode === 'addPositiveEdge' }"
+                  @click="setInteractionMode('addPositiveEdge')"
+                  title="Add Positive Connection"
+              >
+                  <i class="fas fa-plus"></i>
+              </button>
+
+              <button
+                  class="tool-btn"
+                  :class="{ 'active': interactionMode === 'addNegativeEdge' }"
+                  @click="setInteractionMode('addNegativeEdge')"
+                  title="Add Negative Connection"
+              >
+                  <i class="fas fa-minus"></i>
+              </button>
+
+              <div class="toolbar-divider"></div>
+              <button class="tool-btn" @click="zoomIn" title="Zoom In">
+                  <i class="fas fa-search-plus"></i>
+              </button>
+              <button class="tool-btn" @click="zoomOut" title="Zoom Out">
+                  <i class="fas fa-search-minus"></i>
+              </button>
+              <button class="tool-btn" @click="fitView" title="Fit View">
+                  <i class="fas fa-compress"></i>
+              </button>
+          </div>
 
             <div class="toolbar-right">
                 <button class="tool-btn" @click="redistributeNodes" title="Redistribute Nodes">
@@ -330,6 +359,7 @@ const {
     openCreateModal,
     closeCreateModal,
     addNodeToDiagram,
+    addConnection
 } = useCLDCanvasViewModel();
 
 const {
@@ -344,7 +374,12 @@ const {
     redistributeNodes,
     getArchetypeIcon,
     formatArchetypeName,
-    saveNodePositions
+    saveNodePositions,
+    interactionMode,
+    setInteractionMode,
+    fitView,
+    edgeAddedCallback,
+    addEdgeToCanvas
 } = useCLDDiagramViewModel();
 
 // UI State
@@ -529,13 +564,6 @@ const onDrop = (event) => {
     }
 };
 
-const fitView = () => {
-    const container = networkContainer.value;
-    if (container && container.network) {
-        container.network.fit({ animation: { duration: 1000, easingFunction: 'easeInOutQuad' } });
-    }
-};
-
 const saveDiagram = async () => {
     const container = networkContainer.value;
     if (!container || !container.network) return;
@@ -574,6 +602,14 @@ const tint = (hex, alpha = 0.16) => {
 };
 
 onMounted(async () => {
+
+    edgeAddedCallback.value = (source, target, polarity) => {
+        const newEdge = addConnection(source, target, polarity);
+        if (newEdge) {
+            addEdgeToCanvas(newEdge);
+        }
+    };
+
     await fetchVariables();
     const diagramId = route.params.id;
 
@@ -591,7 +627,7 @@ watch(() => diagram.value, (newDiagram) => {
     if (newDiagram && networkContainer.value) {
         createDiagram(newDiagram, networkContainer.value);
     }
-}, { deep: true });
+});
 </script>
 
 <style scoped>
@@ -1252,5 +1288,11 @@ watch(() => diagram.value, (newDiagram) => {
 
 ::-webkit-scrollbar-thumb:hover {
     background: #4d4d4d;
+}
+
+.tool-btn.active {
+    background-color: #0e639c;
+    color: #ffffff;
+    border-color: #1177bb;
 }
 </style>

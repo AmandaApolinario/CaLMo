@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { ref, markRaw, shallowRef} from 'vue';
 import { Network } from 'vis-network';
 import { DataSet } from 'vis-data';
 import {
@@ -13,10 +13,12 @@ import { makePieEllipseDataUrl } from '@/theme/nodeImages';
 
 export function useCLDDiagramViewModel() {
   const networkContainer = ref(null);
-  const network = ref(null);
+  const network = shallowRef(null);
   const zoomLevel = ref(1);
   const selectedNode = ref(null);
   const selectedNodeInfo = ref({ nodeName: '', loops: [], archetypes: [] });
+  const interactionMode = ref('select');
+  const edgeAddedCallback = ref(null);
 
   // Persisted node positions by diagram id
   const diagramPositions = ref({});
@@ -255,8 +257,13 @@ export function useCLDDiagramViewModel() {
         width: 2
       },
       interaction: {
-        hover: true, navigationButtons: true, keyboard: true,
-        multiselect: false, dragNodes: true, zoomView: true
+        hover: true,
+        navigationButtons: true,
+        keyboard: true,
+        multiselect: false,
+        zoomView: true,
+        dragNodes: interactionMode.value === 'select',
+        selectable: interactionMode.value === 'select'
       },
       physics: {
         enabled: false,
@@ -267,11 +274,52 @@ export function useCLDDiagramViewModel() {
           damping: 0.5, avoidOverlap: 1.0
         }
       },
-      layout: { improvedLayout: true, randomSeed: 42 }
+      layout: { improvedLayout: true, randomSeed: 42 },
+      manipulation: {
+        enabled: false,
+        controlNodeStyle: {
+          shape: 'dot',
+          size: 6,
+          color: {
+            background: EDGE_COLORS.positive.base,
+            border: EDGE_COLORS.positive.base,
+            highlight: {
+                background: EDGE_COLORS.positive.base,
+                border: EDGE_COLORS.positive.base
+            }
+          }
+        },
+        addEdge: (edgeData, callback) => {
+          if (edgeData.from === edgeData.to) {
+            callback(null);
+            setTimeout(() => {
+              if (network.value && (interactionMode.value === 'addPositiveEdge' || interactionMode.value === 'addNegativeEdge')) {
+                network.value.addEdgeMode();
+              }
+            }, 10);
+            return;
+          }
+
+          const fromNode = network.value.body.data.nodes.get(edgeData.from);
+          const toNode = network.value.body.data.nodes.get(edgeData.to);
+
+          if (edgeAddedCallback.value && fromNode && toNode) {
+            const polarity = interactionMode.value === 'addNegativeEdge' ? 'negative' : 'positive';
+            edgeAddedCallback.value(fromNode.id, toNode.id, polarity);
+          }
+
+          callback(null);
+          setTimeout(() => {
+            if (network.value && (interactionMode.value === 'addPositiveEdge' || interactionMode.value === 'addNegativeEdge')) {
+              network.value.addEdgeMode();
+            }
+          }, 10);
+        }
+      },
     };
 
     // ---- Create network ----
-    network.value = new Network(networkContainer.value, { nodes, edges }, options);
+    network.value = markRaw(new Network(networkContainer.value, { nodes, edges }, options));
 
     // Selection & UX
     network.value.on('selectNode', (params) => handleNodeSelection(params, diagram));
@@ -285,7 +333,7 @@ export function useCLDDiagramViewModel() {
     network.value.on('dragEnd', () => saveNodePositions(diagram.id));
 
     setTimeout(() => {
-      network.value.fit({ animation: { duration: 1000, easingFunction: 'easeInOutQuad' } });
+      network.value.fit({ animation: false });
     }, 500);
 
     if (!savedPositions) {
@@ -295,7 +343,7 @@ export function useCLDDiagramViewModel() {
           ensureNoOverlap();
           network.value.setOptions({ physics: { enabled: false } });
           network.value.stopSimulation();
-          network.value.fit({ animation: { duration: 1000, easingFunction: 'easeInOutQuad' } });
+          network.value.fit({ animation: false });
           saveNodePositions(diagram.id);
         }, 500);
       });
@@ -304,8 +352,12 @@ export function useCLDDiagramViewModel() {
         ensureNoOverlap();
         network.value.setOptions({ physics: { enabled: false } });
         network.value.stopSimulation();
-        network.value.fit();
+        network.value.fit({ animation: false });
       }, 100);
+    }
+
+    if (interactionMode.value === 'addEdge') {
+      network.value.addEdgeMode();
     }
   }
 
@@ -524,6 +576,75 @@ export function useCLDDiagramViewModel() {
       .replace(/\w\S*/g, txt => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
   }
 
+  function fitView() {
+    if (!network.value) return;
+    network.value.fit({ animation: { duration: 1000, easingFunction: 'easeInOutQuad' } });
+  }
+
+  function setInteractionMode(mode) {
+    interactionMode.value = mode;
+    if (!network.value) return;
+
+    network.value.disableEditMode();
+
+    if (mode === 'pan') {
+      network.value.setOptions({
+        interaction: { dragNodes: false, selectable: false }
+      });
+      clearNodeSelection();
+    } else if (mode === 'addPositiveEdge' || mode === 'addNegativeEdge') {
+      const isPositive = mode === 'addPositiveEdge';
+      const c = isPositive ? EDGE_COLORS.positive : EDGE_COLORS.negative;
+      network.value.setOptions({
+        interaction: { dragNodes: false, selectable: false },
+        edges: {
+          arrows: 'to',
+          color: {
+            inherit: false,
+            color: c.base,
+            highlight: c.base,
+            hover: c.base
+          }
+        },
+        manipulation: {
+          controlNodeStyle: {
+            shape: 'dot',
+            size: 6,
+            color: {
+              background: c.base,
+              border: c.base,
+              highlight: { background: c.base, border: c.base }
+            }
+          }
+        }
+      });
+      clearNodeSelection();
+      network.value.addEdgeMode();
+    } else {
+      network.value.setOptions({
+        interaction: { dragNodes: true, selectable: true }
+      });
+    }
+  }
+
+  function addEdgeToCanvas(edgeData) {
+    if (!network.value) return;
+    const isPositive = edgeData.polarity === 'positive';
+    const c = isPositive ? EDGE_COLORS.positive : EDGE_COLORS.negative;
+
+    // Injeta diretamente no DataSet visual do vis-network
+    network.value.body.data.edges.add({
+      id: edgeData.id,
+      from: edgeData.source,
+      to: edgeData.target,
+      label: isPositive ? '+' : '-',
+      arrows: 'to',
+      font: { size: 22, color: c.base },
+      width: 2,
+      color: { color: c.base, highlight: c.highlight }
+    });
+  }
+
   return {
     networkContainer,
     network,
@@ -537,6 +658,11 @@ export function useCLDDiagramViewModel() {
     redistributeNodes,
     getArchetypeIcon,
     formatArchetypeName,
-    saveNodePositions
+    saveNodePositions,
+    interactionMode,
+    setInteractionMode,
+    fitView,
+    edgeAddedCallback,
+    addEdgeToCanvas
   };
 }

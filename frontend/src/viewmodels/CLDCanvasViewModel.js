@@ -259,40 +259,25 @@ export function useCLDCanvasViewModel() {
         return true;
     };
 
-    const addConnection = async (sourceId, targetId, polarity) => {
-        if (!diagram.value || !diagram.value.id) {
-            error.value = "Nenhum diagrama selecionado para salvar a conexão.";
-            return false;
-        }
+    const addConnection = (sourceId, targetId, polarity = 'positive') => {
+        if (!diagram.value) return null;
 
-        isLoadingDiagram.value = true;
+        const newRelationship = {
+            id: generateId(),
+            source: sourceId,
+            target: targetId,
+            polarity: polarity
+        };
 
-        try {
-            const newRelationship = {
-                id: generateId(),
-                source: sourceId,
-                target: targetId,
-                polarity: polarity
-            };
+        edges.value.push(newRelationship);
 
-            const updatedRelationships = [...(edges.value || []), newRelationship];
+        if (!diagram.value.edges) diagram.value.edges = [];
+        if (!diagram.value.relationships) diagram.value.relationships = [];
 
-            await CLDService.updateCLD(diagram.value.id, {
-                name: diagram.value.name,
-                description: diagram.value.description,
-                variables: nodes.value,
-                relationships: updatedRelationships
-            });
+        diagram.value.edges.push(newRelationship);
+        diagram.value.relationships.push(newRelationship);
 
-            await fetchDiagram(diagram.value.id);
-            return true;
-        } catch (err) {
-            console.error('Erro ao adicionar conexão:', err);
-            error.value = 'Falha ao salvar a nova conexão.';
-            return false;
-        } finally {
-            isLoadingDiagram.value = false;
-        }
+        return newRelationship;
     };
 
     return {
