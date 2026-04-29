@@ -6,6 +6,8 @@ import CLDListView from '../views/CLDListView.vue'
 import CLDDetailView from '../views/CLDDetailView.vue'
 import CLDEditView from '../views/CLDEditView.vue'
 import GettingStartedView from '../views/GettingStartedView.vue'
+import CldCanvasView from "@/views/CLDCanvasView.vue";
+import CLDCanvasView from "@/views/CLDCanvasView.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -60,6 +62,12 @@ const router = createRouter({
       name: 'getting-started',
       component: GettingStartedView,
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/cld/:id/canvas',
+      name: 'cld-canva',
+      component: CLDCanvasView,
+      meta : {requiresAuth: true}
     }
   ]
 })

@@ -310,15 +310,29 @@ export function useCLDDiagramViewModel() {
   }
 
   // Save node positions
-  function saveNodePositions(diagramId) {
-    if (!network.value || !diagramId) return;
+  function saveNodePositions(diagramId, manualPositions = null) {
+    if (!diagramId) return;
     try {
-      const positions = {};
-      const nodePositions = network.value.getPositions();
-      Object.keys(nodePositions).forEach(nodeId => { positions[nodeId] = nodePositions[nodeId]; });
+      let positions = {};
+
+      // Pega as posições de todos os nós que já estão no canvas
+      if (network.value) {
+        const nodePositions = network.value.getPositions();
+        Object.keys(nodePositions).forEach(nodeId => {
+          positions[nodeId] = nodePositions[nodeId];
+        });
+      }
+
+      // Mescla com a posição manual injetada (variável sendo solta no drop)
+      if (manualPositions) {
+        positions = { ...positions, ...manualPositions };
+      }
+
       diagramPositions.value[diagramId] = positions;
       localStorage.setItem(`cld-positions-${diagramId}`, JSON.stringify(positions));
-    } catch (error) { console.error('Error saving node positions:', error); }
+    } catch (error) {
+      console.error('Error saving node positions:', error);
+    }
   }
 
   // Load node positions
@@ -514,6 +528,7 @@ export function useCLDDiagramViewModel() {
 
   return {
     networkContainer,
+    network,
     selectedNodeInfo,
     selectedNode,
     legendArchetypes,
@@ -523,6 +538,7 @@ export function useCLDDiagramViewModel() {
     zoomOut,
     redistributeNodes,
     getArchetypeIcon,
-    formatArchetypeName
+    formatArchetypeName,
+    saveNodePositions
   };
 }
