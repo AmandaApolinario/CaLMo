@@ -10,12 +10,12 @@ export function useCLDCanvasViewModel() {
     const showCreateModal = ref(false);
     const creatingVariable = ref(false);
 
-    const diagram = ref(null);          // objeto completo do diagrama
-    const nodes = ref([]);             // lista de nós (variáveis posicionadas)
-    const edges = ref([]);            // lista de arestas
-    const selectedNode = ref(null);   // nó atualmente selecionado
+    const diagram = ref(null);
+    const nodes = ref([]);
+    const edges = ref([]);
+    const selectedNode = ref(null);
     const selectedNodeInfo = ref({ nodeName: '', loops: [], archetypes: [] });
-    const selectedEdge = ref(null);   // aresta selecionada (opcional)
+    const selectedEdge = ref(null);
     const isLoadingDiagram = ref(false);
 
 
@@ -268,7 +268,6 @@ export function useCLDCanvasViewModel() {
         isLoadingDiagram.value = true;
 
         try {
-            // Cria a nova conexão
             const newRelationship = {
                 id: generateId(),
                 source: sourceId,
@@ -276,19 +275,15 @@ export function useCLDCanvasViewModel() {
                 polarity: polarity
             };
 
-            // Adiciona localmente para enviar ao backend
             const updatedRelationships = [...(edges.value || []), newRelationship];
 
-            // Envia a atualização completa do diagrama.
-            // O updateCLD no service já chama generateLoopsAndArchetypes automaticamente!
             await CLDService.updateCLD(diagram.value.id, {
                 name: diagram.value.name,
                 description: diagram.value.description,
-                variables: nodes.value, // Envia os nós atuais
-                relationships: updatedRelationships // Envia as conexões (incluindo a nova)
+                variables: nodes.value,
+                relationships: updatedRelationships
             });
 
-            // Recarrega o diagrama para trazer os novos loops e arquétipos calculados
             await fetchDiagram(diagram.value.id);
             return true;
         } catch (err) {

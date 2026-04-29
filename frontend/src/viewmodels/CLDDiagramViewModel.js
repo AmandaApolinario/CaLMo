@@ -247,8 +247,8 @@ export function useCLDDiagramViewModel() {
         fixed: { x: false, y: false },
         font: { multi: true },
         shapeProperties: {
-          useImageSize: true,       // usa width/height do SVG
-          useBorderWithImage: false  // mantém a borda do nó com imagem
+          useImageSize: true,
+          useBorderWithImage: false
         }
       },
       edges: { smooth: { type: 'curvedCW', roundness: 0.2 },
@@ -315,7 +315,6 @@ export function useCLDDiagramViewModel() {
     try {
       let positions = {};
 
-      // Pega as posições de todos os nós que já estão no canvas
       if (network.value) {
         const nodePositions = network.value.getPositions();
         Object.keys(nodePositions).forEach(nodeId => {
@@ -323,7 +322,6 @@ export function useCLDDiagramViewModel() {
         });
       }
 
-      // Mescla com a posição manual injetada (variável sendo solta no drop)
       if (manualPositions) {
         positions = { ...positions, ...manualPositions };
       }

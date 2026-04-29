@@ -491,8 +491,6 @@ const dragEnd = () => {};
 const onDrop = (event) => {
     event.preventDefault();
     const variableJson = event.dataTransfer.getData('application/json');
-
-    // Agora checamos se o network.value existe diretamente
     if (!variableJson || !network.value) return;
 
     try {
@@ -505,19 +503,15 @@ const onDrop = (event) => {
             y: event.clientY - rect.top
         };
 
-        // Usa a instância nativa do Vis.js que importamos
         const canvasPosition = network.value.DOMtoCanvas(domPosition);
 
-        // 1. Salva a posição
         const currentDiagramId = diagram.value?.id || `new-temp`;
         saveNodePositions(currentDiagramId, {
             [variable.id]: { x: canvasPosition.x, y: canvasPosition.y }
         });
 
-        // 2. Adiciona a variável
         addNodeToDiagram(variable);
 
-        // 3. Adiciona nas layers
         const layer = layers.value.find(l => l.id === selectedLayerId.value);
         if (layer) {
             layer.shapeIds.push(variable.id);
