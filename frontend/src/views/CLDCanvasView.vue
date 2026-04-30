@@ -72,6 +72,9 @@
           </div>
 
             <div class="toolbar-right">
+                <button class="tool-btn primary" style="background-color: #2b7042; border-color: #3b8c56;" @click="openShareModal" title="Share Diagram">
+                  <i class="fas fa-share-alt"></i> Share
+                </button>
                 <button class="tool-btn" @click="redistributeNodes" title="Redistribute Nodes">
                     <i class="fas fa-sync"></i>
                 </button>
@@ -343,6 +346,45 @@
                 </form>
             </div>
         </div>
+
+        <div v-if="showShareModal" class="modal-overlay" @click="closeShareModal">
+            <div class="modal-content" @click.stop>
+                <h3><i class="fas fa-share-alt"></i> Share Diagram</h3>
+
+                <div v-if="isGeneratingLink" class="loading-spinner">
+                    <i class="fas fa-spinner fa-spin"></i> Processing...
+                </div>
+
+                <div v-else-if="currentShareToken" class="share-container">
+                    <p style="color: #ccc; font-size: 13px; margin-bottom: 12px;">
+                        Anyone with this link and an active account can access this diagram in real-time.
+                    </p>
+                    <div class="share-link-box">
+                        <input type="text" readonly :value="getShareableUrl" />
+                        <button @click="copyShareLink" class="btn-copy">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+
+                    <div class="form-actions" style="margin-top: 24px; justify-content: space-between;">
+                        <button type="button" @click="revokeShareLink" class="btn-cancel" style="color: #f48771;">
+                            Revoke Link
+                        </button>
+                        <button type="button" @click="closeShareModal" class="btn-create">Done</button>
+                    </div>
+                </div>
+
+                <div v-else class="share-container">
+                    <p style="color: #ccc; font-size: 13px; margin-bottom: 12px;">
+                        The share link for this diagram has been revoked. Generate a new one to enable collaboration again.
+                    </p>
+                    <div class="form-actions">
+                        <button type="button" @click="closeShareModal" class="btn-cancel">Close</button>
+                        <button type="button" @click="openShareModal" class="btn-create">Generate New Link</button>
+                    </div>
+                </div>
+            </div>
+      </div>
     </div>
 </template>
 
@@ -380,7 +422,15 @@ const {
     initCollabMode,
     stopCollabMode,
     performUndo,
-    undoStack
+    undoStack,
+    showShareModal,
+    currentShareToken,
+    isGeneratingLink,
+    getShareableUrl,
+    openShareModal,
+    closeShareModal,
+    revokeShareLink,
+    copyShareLink
 } = useCLDCanvasViewModel();
 
 const {

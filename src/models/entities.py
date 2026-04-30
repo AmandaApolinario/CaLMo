@@ -87,7 +87,6 @@ class Variable(db.Model):
     name = Column(String(512), nullable=False)
     description = Column(String)
     user_id = Column(String, ForeignKey('users.id'))
-
     user = relationship("User", back_populates="variables")
 
 class CLD(db.Model):
@@ -98,7 +97,7 @@ class CLD(db.Model):
     description = Column(Text)
     date = Column(Date, default=date.today)
     user_id = Column(String, ForeignKey('users.id'))
-
+    share_token = Column(String(100), unique=True, nullable=True)
     user = relationship("User", back_populates="clds")
     variables = relationship('Variable', secondary=cld_variables)
     relationships = relationship('Relationship', back_populates='cld', cascade='all, delete-orphan', passive_deletes=True,)

@@ -22,6 +22,9 @@ export function useCLDCanvasViewModel() {
     const clientId = ref(crypto.randomUUID());
     const undoStack = ref([]);
     const redoStack = ref([]);
+    const showShareModal = ref(false);
+    const currentShareToken = ref(null);
+    const isGeneratingLink = ref(false);
 
 
     const newVariable = reactive({
@@ -477,6 +480,57 @@ export function useCLDCanvasViewModel() {
         .catch(err => console.error('Erro ao publicar undo:', err));
     };
 
+    const openShareModal = async () => {
+        if (!diagram.value || !diagram.value.id) return;
+        showShareModal.value = true;
+        isGeneratingLink.value = true;
+
+        try {
+            const token = await CLDService.generateShareToken(diagram.value.id);
+            currentShareToken.value = token;
+        } catch (err) {
+            error.value = 'Erro ao gerar link de compartilhamento';
+        } finally {
+            isGeneratingLink.value = false;
+        }
+    };
+
+    const closeShareModal = () => {
+        showShareModal.value = false;
+    };
+
+    const revokeShareLink = async () => {
+        if (!diagram.value || !diagram.value.id) return;
+        isGeneratingLink.value = true;
+        try {
+            await CLDService.revokeShareToken(diagram.value.id);
+            currentShareToken.value = null;
+            // Opcional: Gerar um novo imediatamente se o usuário quiser resetar
+            // const token = await CLDService.generateShareToken(diagram.value.id);
+            // currentShareToken.value = token;
+        } catch (err) {
+            error.value = 'Erro ao revogar link';
+        } finally {
+            isGeneratingLink.value = false;
+        }
+    };
+
+    const getShareableUrl = computed(() => {
+        if (!currentShareToken.value) return '';
+        // Ajuste o baseUrl conforme o domínio da sua aplicação no front
+        const baseUrl = window.location.origin;
+        return `${baseUrl}/calmo/cld/shared/${currentShareToken.value}`;
+    });
+
+    const copyShareLink = async () => {
+        try {
+            await navigator.clipboard.writeText(getShareableUrl.value);
+            // Poderia adicionar um toast/notification de sucesso aqui
+        } catch (err) {
+            console.error('Failed to copy text: ', err);
+        }
+    };
+
     return {
         variables: computed(() => variables.value),
         shapes: computed(() => shapes.value),
@@ -511,5 +565,13 @@ export function useCLDCanvasViewModel() {
         stopCollabMode,
         performUndo,
         undoStack,
+        showShareModal: computed(() => showShareModal.value),
+        currentShareToken: computed(() => currentShareToken.value),
+        isGeneratingLink: computed(() => isGeneratingLink.value),
+        getShareableUrl,
+        openShareModal,
+        closeShareModal,
+        revokeShareLink,
+        copyShareLink
     };
 }

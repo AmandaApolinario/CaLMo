@@ -126,6 +126,36 @@ class CLDService {
       return await this.getCLDById(cldId);
     }
   }
+
+  async generateShareToken(id) {
+    try {
+      const response = await ApiService.post(`cld/${id}/share`);
+      return response.data.token;
+    } catch (error) {
+      console.error(`Error generating share token for CLD ${id}:`, error);
+      throw new Error(error.response?.data?.message || 'Failed to generate share link');
+    }
+  }
+
+  async revokeShareToken(id) {
+    try {
+      await ApiService.delete(`cld/${id}/share`);
+      return true;
+    } catch (error) {
+      console.error(`Error revoking share token for CLD ${id}:`, error);
+      throw new Error(error.response?.data?.message || 'Failed to revoke share link');
+    }
+  }
+
+  async getSharedCLD(token) {
+    try {
+      const response = await ApiService.get(`cld/shared/${token}`);
+      return CLDModel.fromJSON(response.data);
+    } catch (error) {
+      console.error(`Error fetching shared CLD with token ${token}:`, error);
+      throw new Error(error.response?.data?.message || 'Invalid or revoked link');
+    }
+  }
 }
 
 export default new CLDService(); 

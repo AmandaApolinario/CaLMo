@@ -2,6 +2,7 @@ from datetime import datetime
 from ..models.repositories import CLDRepository, RelationshipRepository, VariableRepository
 from ..models.domain_logic import CLDAnalyzer
 from ..models.entities import RelationshipType, Variable, CLD, Relationship
+import secrets
 
 class CLDViewModel:
     def __init__(self, db_session):
@@ -336,4 +337,36 @@ class CLDViewModel:
                 } 
                 for arch in cld.archetypes
             ]
-        } 
+        }
+
+    def generate_share_token(self, cld_id, user_id):
+        """Gera ou recupera o token de compartilhamento permanente de um CLD"""
+        cld = self.cld_repo.get_cld_by_user(self.db_session, cld_id, user_id)
+        if not cld:
+            return None, "CLD not found or not owned by user"
+
+        # Se não tiver token, gera um novo seguro
+        if not cld.share_token:
+            cld.share_token = secrets.token_urlsafe(32)
+            self.db_session.commit()
+
+        return cld.share_token, "Share token retrieved successfully"
+
+    def revoke_share_token(self, cld_id, user_id):
+        """Revoga (deleta) o token atual, exigindo a geração de um novo futuramente"""
+        cld = self.cld_repo.get_cld_by_user(self.db_session, cld_id, user_id)
+        if not cld:
+            return False, "CLD not found or not owned by user"
+
+        cld.share_token = None
+        self.db_session.commit()
+        return True, "Share token revoked successfully"
+
+    def get_cld_by_token(self, token):
+        """Busca um CLD usando o token de compartilhamento (para usuários convidados)"""
+        cld = self.db_session.query(CLD).filter_by(share_token=token).first()
+        if not cld:
+            return None, "Invalid or revoked share token"
+
+        cld_data = self._format_cld(cld)
+        return cld_data, "CLD retrieved successfully"

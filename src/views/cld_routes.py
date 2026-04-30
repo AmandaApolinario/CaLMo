@@ -236,3 +236,42 @@ def emit_update_diagram_event(user_id, cld_id):
     )
 
     return jsonify({"status": "broadcast_sent"}), 200
+
+
+@cld_routes.route('/cld/<string:cld_id>/share', methods=['POST'])
+@token_required
+def generate_share_link(user_id, cld_id):
+    view_model = CLDViewModel(db.session)
+    token, message = view_model.generate_share_token(cld_id, user_id)
+
+    if not token:
+        return jsonify({'message': message}), 404
+
+    return jsonify({
+        'message': message,
+        'token': token
+    }), 200
+
+
+@cld_routes.route('/cld/<string:cld_id>/share', methods=['DELETE'])
+@token_required
+def revoke_share_link(user_id, cld_id):
+    view_model = CLDViewModel(db.session)
+    success, message = view_model.revoke_share_token(cld_id, user_id)
+
+    if not success:
+        return jsonify({'message': message}), 404
+
+    return jsonify({'message': message}), 200
+
+
+@cld_routes.route('/cld/shared/<string:token>', methods=['GET'])
+@token_required
+def get_shared_cld(user_id, token):  # user_id vem do token JWT (qualquer usuário logado)
+    view_model = CLDViewModel(db.session)
+    cld, message = view_model.get_cld_by_token(token)
+
+    if cld is None:
+        return jsonify({'message': message}), 404
+
+    return jsonify(cld), 200

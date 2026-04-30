@@ -11,9 +11,10 @@ db = SQLAlchemy()
 
 socketio = SocketIO(cors_allowed_origins="*")
 
+
 def create_app():
     app = Flask(__name__)
-    
+
     # Configure CORS with specific settings
     CORS(app, resources={
         r"/*": {
@@ -22,16 +23,16 @@ def create_app():
             "allow_headers": ["Content-Type", "Authorization"]
         }
     })
-    
+
     # Database configuration
     app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://app:postgres@db:5432/app"
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    
+
     db.init_app(app)
     socketio.init_app(app)
 
     from . import events
-    
+
     with app.app_context():
         # Import models to ensure they are registered with SQLAlchemy
 
@@ -84,7 +85,23 @@ def create_app():
             END IF;
             END $$;
             """))
-            
+
+            db.session.execute(text("""
+                DO $$ BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 
+                        FROM information_schema.columns 
+                        WHERE table_name='clds' AND column_name='share_token'
+                    ) THEN
+                        -- Creates the column if it doesn't exist
+                        ALTER TABLE clds ADD COLUMN share_token VARCHAR(100) UNIQUE;
+                    ELSE
+                        -- Updates the length if the column already exists
+                        ALTER TABLE clds ALTER COLUMN share_token TYPE VARCHAR(100);
+                    END IF;
+                END $$;
+            """))
+
             db.session.commit()
 
             # Cria as tabelas (só se não existirem)
@@ -99,14 +116,14 @@ def create_app():
         # Register all routes
         from .views import register_routes
         register_routes(app)
-    
+
     # Error handlers
     @app.errorhandler(500)
     def handle_500(e):
         return {"error": "Internal Server Error"}, 500
-    
+
     @app.errorhandler(404)
     def handle_404(e):
         return {"error": "Not Found"}, 404
-    
+
     return app
