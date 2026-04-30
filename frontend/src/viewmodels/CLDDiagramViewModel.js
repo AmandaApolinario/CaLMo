@@ -20,6 +20,7 @@ export function useCLDDiagramViewModel() {
   const interactionMode = ref('select');
   const edgeAddedCallback = ref(null);
   const hasSelection = ref(false);
+  const nodeDraggedCallback = ref(null);
 
   // Persisted node positions by diagram id
   const diagramPositions = ref({});
@@ -116,6 +117,10 @@ export function useCLDDiagramViewModel() {
 
   function createDiagram(diagram, container) {
     if (!container || !diagram) return;
+    if (network.value !== null) {
+      network.value.destroy();
+      network.value = null;
+    }
     networkContainer.value = container;
 
     // Saved positions for this diagram
@@ -239,6 +244,8 @@ export function useCLDDiagramViewModel() {
       })
     );
 
+    const hasSavedPositions = !!savedPositions;
+
     // ---- Network options ----
     const options = {
       nodes: {
@@ -267,8 +274,8 @@ export function useCLDDiagramViewModel() {
         selectable: interactionMode.value === 'select'
       },
       physics: {
-        enabled: false,
-        stabilization: { enabled: true, iterations: 100, fit: true },
+        enabled: !hasSavedPositions,
+        stabilization: { enabled: !hasSavedPositions, iterations: 100, fit: true },
         barnesHut: {
           gravitationalConstant: -2000, centralGravity: 0.05,
           springLength: 150, springConstant: 0.04,
@@ -332,6 +339,13 @@ export function useCLDDiagramViewModel() {
       }
     });
     network.value.on('dragEnd', () => saveNodePositions(diagram.id));
+    network.value.on('dragging', (params) => {
+        if (params.nodes.length > 0 && nodeDraggedCallback.value) {
+            const nodeId = params.nodes[0];
+            const pos = network.value.getPositions([nodeId])[nodeId];
+            nodeDraggedCallback.value(nodeId, pos);
+        }
+    });
     network.value.on('select', () => { hasSelection.value = true; });
     network.value.on('deselect', () => {
       const sel = network.value.getSelection();
@@ -346,16 +360,11 @@ export function useCLDDiagramViewModel() {
       network.value.setOptions({ physics: { enabled: true } });
       network.value.once('stabilizationIterationsDone', () => {
         setTimeout(() => {
-          ensureNoOverlap();
-          network.value.setOptions({ physics: { enabled: false } });
-          network.value.stopSimulation();
           network.value.fit({ animation: false });
-          saveNodePositions(diagram.id);
-        }, 500);
+        }, 100);
       });
     } else {
       setTimeout(() => {
-        ensureNoOverlap();
         network.value.setOptions({ physics: { enabled: false } });
         network.value.stopSimulation();
         network.value.fit({ animation: false });
@@ -676,6 +685,20 @@ export function useCLDDiagramViewModel() {
     hasSelection.value = false;
   }
 
+  function getCurrentPositions() {
+    if (!network.value) return {};
+    return network.value.getPositions();
+  }
+
+  function updateNodePosition(nodeId, x, y) {
+    if (!network.value) return;
+    try {
+        network.value.moveNode(nodeId, x, y);
+    } catch (e) {
+        // Ignora se o nó ainda não estiver renderizado no cliente alvo
+    }
+  }
+
   return {
     networkContainer,
     network,
@@ -696,6 +719,9 @@ export function useCLDDiagramViewModel() {
     edgeAddedCallback,
     addEdgeToCanvas,
     hasSelection,
-    deleteSelectedElements
+    deleteSelectedElements,
+    getCurrentPositions,
+    updateNodePosition,
+    nodeDraggedCallback
   };
 }

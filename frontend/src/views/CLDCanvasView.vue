@@ -430,7 +430,13 @@ const {
     openShareModal,
     closeShareModal,
     revokeShareLink,
-    copyShareLink
+    copyShareLink,
+    provideStateCallback,
+    applyStateCallback,
+    remoteNodeMovedCallback,
+    emitNodeMovement,
+    fetchSharedDiagram,
+    clientId
 } = useCLDCanvasViewModel();
 
 const {
@@ -452,13 +458,40 @@ const {
     edgeAddedCallback,
     addEdgeToCanvas,
     hasSelection,
-    deleteSelectedElements
+    deleteSelectedElements,
+    getCurrentPositions,
+    updateNodePosition,
+    nodeDraggedCallback,
 } = useCLDDiagramViewModel();
 
 // UI State
 const leftPanelExpanded = ref(true);
 const layersPanelExpanded = ref(true);
 const variablesPanelExpanded = ref(true);
+
+provideStateCallback.value = getCurrentPositions;
+
+applyStateCallback.value = (positions) => {
+    if(diagram.value) {
+        saveNodePositions(diagram.value.id, positions);
+    }
+    if (network.value) {
+        network.value.setOptions({ physics: { enabled: false } });
+        network.value.stopSimulation();
+        Object.entries(positions).forEach(([id, pos]) => {
+            updateNodePosition(id, pos.x, pos.y);
+        });
+        setTimeout(() => {
+            network.value.fit({ animation: false });
+        }, 100);
+    }
+};
+
+remoteNodeMovedCallback.value = updateNodePosition;
+
+nodeDraggedCallback.value = (nodeId, position) => {
+    emitNodeMovement(nodeId, position);
+};
 
 // Layers System
 const layers = ref([
@@ -695,10 +728,18 @@ onMounted(async () => {
 
     await fetchVariables();
     const diagramId = route.params.id;
+    const token = route.params.token;
 
-    if (diagramId) {
+    if (token) {
+        await fetchSharedDiagram(token);
+        if (diagram.value) {
+            initCollabMode(diagram.value.id, clientId);
+        }
+    } else if (diagramId) {
         await fetchDiagram(diagramId);
-        initCollabMode(diagram.value.id)
+        if (diagram.value) {
+            initCollabMode(diagram.value.id, clientId);
+        }
     }
 
     await nextTick();

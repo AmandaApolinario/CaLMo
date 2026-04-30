@@ -68,6 +68,12 @@ const router = createRouter({
       name: 'cld-canva',
       component: CLDCanvasView,
       meta : {requiresAuth: true}
+    },
+    {
+      path: '/cld/shared/:token',
+      name: 'cld-canva-shared',
+      component: CLDCanvasView,
+      meta : {requiresAuth: true}
     }
   ]
 })

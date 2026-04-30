@@ -25,6 +25,9 @@ export function useCLDCanvasViewModel() {
     const showShareModal = ref(false);
     const currentShareToken = ref(null);
     const isGeneratingLink = ref(false);
+    const provideStateCallback = ref(null);
+    const applyStateCallback = ref(null);
+    const remoteNodeMovedCallback = ref(null);
 
 
     const newVariable = reactive({
@@ -413,6 +416,42 @@ export function useCLDCanvasViewModel() {
         webSocketService.connect(userId);
         webSocketService.joinDiagram(diagramId);
         webSocketService.onDiagramEvent(handleKafkaEvent);
+
+        webSocketService.onStateRequest(({ diagram_id, requester_sid }) => {
+            if (diagram_id === diagram.value?.id) {
+                const positions = provideStateCallback.value ? provideStateCallback.value() : {};
+
+                const currentState = {
+                    // Remove a reatividade do Vue para o Socket conseguir transmitir o JSON corretamente
+                    nodes: JSON.parse(JSON.stringify(nodes.value)),
+                    edges: JSON.parse(JSON.stringify(edges.value)),
+                    positions: JSON.parse(JSON.stringify(positions))
+                };
+
+                webSocketService.pushStateTo(diagram_id, currentState, requester_sid);
+            }
+        });
+
+        webSocketService.onStateSync(({ state }) => {
+            if (state) {
+                nodes.value = state.nodes || [];
+                edges.value = state.edges || [];
+
+                // Salva as posições recebidas localmente antes de recriar o diagrama
+                if (applyStateCallback.value && state.positions) {
+                    applyStateCallback.value(state.positions);
+                }
+
+                // Força a re-renderização com os dados recebidos da memória dos outros
+                diagram.value = { ...diagram.value, nodes: nodes.value, edges: edges.value };
+            }
+        });
+
+        webSocketService.onNodeMoved(({ node_id, position, client_id }) => {
+            if (client_id !== clientId.value && remoteNodeMovedCallback.value) {
+                remoteNodeMovedCallback.value(node_id, position.x, position.y);
+            }
+        });
     };
 
     const stopCollabMode = () => {
@@ -531,6 +570,38 @@ export function useCLDCanvasViewModel() {
         }
     };
 
+    const emitNodeMovement = (nodeId, position) => {
+        if (diagram.value?.id) {
+            webSocketService.emitNodeMoved(diagram.value.id, nodeId, position, clientId.value);
+        }
+    };
+
+    const fetchSharedDiagram = async (token) => {
+        isLoadingDiagram.value = true;
+        error.value = null;
+
+        try {
+            const diagramData = await CLDService.getSharedCLD(token);
+            try {
+                const updatedDiagram = await CLDService.generateLoopsAndArchetypes(diagramData.id);
+                if (updatedDiagram) {
+                    diagram.value = updatedDiagram;
+                }
+            } catch (genErr) {
+                console.error('Error generating feedback loops or archetypes:', genErr);
+                diagram.value = diagramData;
+            }
+
+            nodes.value = diagram.value?.nodes || [];
+            edges.value = diagram.value?.edges || [];
+        } catch (err) {
+            error.value = 'Failed to load shared diagram';
+            console.error('Error fetching shared diagram:', err);
+        } finally {
+            isLoadingDiagram.value = false;
+        }
+    };
+
     return {
         variables: computed(() => variables.value),
         shapes: computed(() => shapes.value),
@@ -572,6 +643,11 @@ export function useCLDCanvasViewModel() {
         openShareModal,
         closeShareModal,
         revokeShareLink,
-        copyShareLink
+        copyShareLink,
+        provideStateCallback,
+        applyStateCallback,
+        remoteNodeMovedCallback,
+        emitNodeMovement,
+        fetchSharedDiagram
     };
 }

@@ -227,7 +227,7 @@ class CLDViewModel:
     
     def identify_feedback_loops(self, cld_id, user_id):
         """Identify feedback loops in a CLD"""
-        cld = self.cld_repo.get_cld_by_user(self.db_session, cld_id, user_id)
+        cld = self.cld_repo.get_cld_by_id(self.db_session, cld_id)
         if not cld:
             return None, "CLD not found or not owned by user"
             
@@ -370,3 +370,11 @@ class CLDViewModel:
 
         cld_data = self._format_cld(cld)
         return cld_data, "CLD retrieved successfully"
+
+    def get_cld_by_id(self, cld_id):
+        """Busca um CLD por ID, garantindo que pertence ao usuário"""
+        cld = self.cld_repo.get_cld_by_id(self.db_session, cld_id)
+        if not cld:
+            return None, "CLD not found or not owned by user"
+
+        return cld, "CLD retrieved successfully"

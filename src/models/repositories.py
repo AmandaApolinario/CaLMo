@@ -98,6 +98,10 @@ class CLDRepository:
         return cld
 
     @staticmethod
+    def get_cld_by_id(db: Session, cld_id:str ):
+        return db.query(CLD).filter(CLD.id == cld_id).first()
+
+    @staticmethod
     def delete_cld(db: Session, cld_id: str, user_id: str):
         cld = db.query(CLD).filter(CLD.id == cld_id, CLD.user_id == user_id).first()
         if cld:
@@ -122,4 +126,4 @@ class RelationshipRepository:
 
     @staticmethod
     def get_relationships_by_cld(db: Session, cld_id):
-        return db.query(Relationship).filter_by(cld_id=cld_id).all() 
+        return db.query(Relationship).filter_by(cld_id=cld_id).all()
