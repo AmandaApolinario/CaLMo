@@ -1,0 +1,119 @@
+import { io } from "socket.io-client";
+import { ref } from "vue";
+
+class WebSocketService {
+    constructor() {
+        this.socket = null;
+        this.connected = ref(false);
+    }
+
+    /** Connects to the Flask-SocketIO server */
+    connect(userId) {
+        if (this.socket) return;
+
+        this.socket = io("http://localhost:5001", {
+            transports: ["websocket"],
+            query: { userId }
+        });
+
+        this.socket.on("connect", () => {
+            this.connected.value = true;
+            console.log("✅ Conectado ao WebSocket");
+        });
+
+        this.socket.on("disconnect", () => {
+            this.connected.value = false;
+            console.log("❌ Desconectado do WebSocket");
+        });
+    }
+
+    /** Join a diagram collaboration room */
+    joinDiagram(diagramId) {
+        if (!this.socket) return;
+        this.socket.emit("join_diagram", { diagram_id: diagramId });
+        console.log(`📡 Entrou na sala do diagrama: ${diagramId}`);
+    }
+
+    /**
+     * Push initial canvas state to the server cache (called by owner on load).
+     * state = { nodes, edges, positions, variables }
+     */
+    initDiagramState(diagramId, state) {
+        if (!this.socket) return;
+        this.socket.emit("init_state", { diagram_id: diagramId, state });
+    }
+
+    /**
+     * Respond to a STATE_REQUEST from the server by pushing the current
+     * canvas state so the new joiner can reconstruct it.
+     */
+    pushStateTo(diagramId, state, requesterSid) {
+        if (!this.socket) return;
+        this.socket.emit("state_push", {
+            diagram_id: diagramId,
+            state,
+            requester_sid: requesterSid
+        });
+    }
+
+    /**
+     * Emit a node move — goes directly through WebSocket (not Kafka) to
+     * keep drag interactions snappy.
+     * position = { x: number, y: number }
+     */
+    emitNodeMoved(diagramId, nodeId, position, clientId) {
+        if (!this.socket) return;
+        this.socket.emit("node_moved", {
+            diagram_id: diagramId,
+            node_id: nodeId,
+            position,
+            client_id: clientId
+        });
+    }
+
+    // ─── Listeners ───────────────────────────────────────────────────────────
+
+    /** Kafka-driven diagram events (NODE_ADDED, EDGE_ADDED, …) */
+    onDiagramEvent(callback) {
+        if (!this.socket) return;
+        this.socket.on("diagram_event", callback);
+    }
+
+    /** Server sends full canvas state snapshot to a new joiner */
+    onStateSync(callback) {
+        if (!this.socket) return;
+        this.socket.on("STATE_SYNC", callback);
+    }
+
+    /**
+     * Server asks existing participants to push state so a new joiner
+     * can be synchronised.  data = { diagram_id, requester_sid }
+     */
+    onStateRequest(callback) {
+        if (!this.socket) return;
+        this.socket.on("STATE_REQUEST", callback);
+    }
+
+    /** Real-time node drag position updates from other clients */
+    onNodeMoved(callback) {
+        if (!this.socket) return;
+        this.socket.on("node_moved", callback);
+    }
+
+    /** Remove all collaboration listeners (call before disconnect) */
+    offAll() {
+        if (!this.socket) return;
+        ["diagram_event", "STATE_SYNC", "STATE_REQUEST", "node_moved"]
+            .forEach(ev => this.socket.off(ev));
+    }
+
+    disconnect() {
+        if (this.socket) {
+            this.offAll();
+            this.socket.disconnect();
+            this.socket = null;
+        }
+    }
+}
+
+export const webSocketService = new WebSocketService();
