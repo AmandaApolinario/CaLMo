@@ -320,3 +320,17 @@ def get_cld_history_route(cld_id):
     except Exception as e:
         print(f"Erro ao buscar histórico: {e}")
         return jsonify({'message': 'Server Error'}), 500
+
+
+@cld_routes.route('/cld/analyze', methods=['POST'])
+def analyze_live_diagram():
+    data = request.json
+    nodes = data.get('nodes', [])
+    edges = data.get('edges', [])
+    view_model = CLDViewModel(db.session)
+    result, message = view_model.analyze_live_state(nodes, edges)
+
+    if result:
+        return jsonify(result), 200
+    else:
+        return jsonify({"error": message}), 500

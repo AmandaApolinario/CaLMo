@@ -449,3 +449,61 @@ class CLDViewModel:
                 'timestamp': h.timestamp.isoformat()
             })
         return result
+
+    def analyze_live_state(self, nodes_data, edges_data):
+        try:
+            class MockSession:
+                def add(self, instance):
+                    pass
+
+            mock_session = MockSession()
+
+            temp_cld = CLD(id="live-preview-id", name="Live Preview")
+
+            for n in nodes_data:
+                var = Variable(id=n.get('id'), name=n.get('name', 'Unnamed'))
+                temp_cld.variables.append(var)
+
+            for e in edges_data:
+                polarity_str = str(e.get('polarity')).upper()
+                rel_type = RelationshipType.POSITIVE if polarity_str in ['POSITIVE', '+'] else RelationshipType.NEGATIVE
+
+                rel = Relationship(
+                    id=str(uuid.uuid4()),
+                    source_id=e.get('source'),
+                    target_id=e.get('target'),
+                    type=rel_type
+                )
+                temp_cld.relationships.append(rel)
+
+
+            self.analyzer.identify_feedback_loops(temp_cld, mock_session)
+            self.analyzer.identify_archetypes(temp_cld, mock_session)
+
+            loops_data = [
+                {
+                    'id': loop.id,
+                    'type': loop.type.name if hasattr(loop.type, 'name') else str(loop.type),
+                    'variables': [var.id for var in loop.variables]
+                }
+                for loop in temp_cld.feedback_loops
+            ]
+
+            archetypes_data = [
+                {
+                    'id': arch.id,
+                    'type': arch.type.name if hasattr(arch.type, 'name') else str(arch.type),
+                    'variables': [var.id for var in arch.variables]
+                }
+                for arch in temp_cld.archetypes
+            ]
+
+            return {
+                "loops": loops_data,
+                "archetypes": archetypes_data
+            }, "Live analysis completed successfully"
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return None, f"Error analyzing live state: {str(e)}"

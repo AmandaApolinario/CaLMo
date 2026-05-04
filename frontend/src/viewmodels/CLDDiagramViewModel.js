@@ -137,9 +137,20 @@ export function useCLDDiagramViewModel() {
     archetypeMetaById = new Map();
     const typeIndices = new Map();          // type -> next index (0-based)
     const archetypeIdsByNode = new Map();   // nodeId -> [archetypeId, ...]
+    const processedSignatures = new Set();
 
     (diagram.archetypes || []).forEach((arch) => {
       const t = arch.type;
+
+      const varIds = (arch.variables || [])
+      .map(v => typeof v === 'object' ? v.id : v)
+      .sort()
+      .join('|');
+      const signature = `${t}-${varIds}`;
+      const archKey = arch.id || signature;
+      if (processedSignatures.has(signature)) return;
+      processedSignatures.add(signature)
+
       const idx = typeIndices.get(t) || 0;
       typeIndices.set(t, idx + 1);
 
@@ -151,13 +162,19 @@ export function useCLDDiagramViewModel() {
       const label =
         total === 1 ? formatArchetypeName(t) : `${formatArchetypeName(t)} ${toRoman(idx + 1)}`;
 
-      archetypeMetaById.set(arch.id, { type: t, index: idx, color, label });
+      archetypeMetaById.set(archKey, {
+        type: t,
+        color,
+        label: formatArchetypeName(t)
+    });
 
       (arch.variables || []).forEach((v) => {
         const id = typeof v === 'object' ? v.id : v;
         if (id == null) return;
-        if (!archetypeIdsByNode.has(id)) archetypeIdsByNode.set(id, []);
-        archetypeIdsByNode.get(id).push(arch.id);
+        if (!archetypeIdsByNode.has(id)) {
+            archetypeIdsByNode.set(id, []);
+        }
+        archetypeIdsByNode.get(id).push(archKey);
       });
     });
 
@@ -189,20 +206,24 @@ export function useCLDDiagramViewModel() {
           nodeObj.y = savedPositions[node.id].y;
         }
 
-        const archIds = archetypeIdsByNode.get(node.id) || [];
+        const archKeys = archetypeIdsByNode.get(nodeObj.id) || [];
 
-        if (archIds.length >= 2) {
+        if (archKeys.length >= 2) {
           const colors = [...new Set(
-            archIds.map(id => archetypeMetaById.get(id)?.color).filter(Boolean)
+            archKeys.map(id => archetypeMetaById.get(id)?.color).filter(Boolean)
           )];
           nodeObj.shape = 'image';
           nodeObj.image = makePieEllipseDataUrl({ label: wrapped, colors });
           nodeObj.label = '';
           nodeObj.shadow = true;
 
-        } else if (archIds.length === 1) {
-          const meta = archetypeMetaById.get(archIds[0]);
-          const c = meta?.color || getArchetypeColor(meta?.type);
+        } else if (archKeys.length === 1) {
+          const meta = archetypeMetaById.get(archKeys[0]);
+          let typeFromKey = null;
+          if (typeof key === 'string' && key.includes('-')) {
+              typeFromKey = key.split('-')[0];
+          }
+          const c = meta?.color || getArchetypeColor(meta?.type || typeFromKey);
           nodeObj.shape = 'ellipse';
           nodeObj.color = {
             background: c,
@@ -440,15 +461,31 @@ export function useCLDDiagramViewModel() {
     const node = (diagram.nodes || []).find(n => n.id === nodeId);
     if (!node) return;
 
-    const loops = (diagram.feedback_loops || []).filter(loop =>
+    const rawLoops = (diagram.feedback_loops || []).filter(loop =>
       Array.isArray(loop.variables) &&
       loop.variables.some(v => (typeof v === 'object' ? v.id === nodeId : v === nodeId))
     );
 
-    const archetypes = (diagram.archetypes || []).filter(arch =>
+    const uniqueLoopsMap = new Map();
+    rawLoops.forEach(loop => {
+        const varSignature = (loop.variables || []).map(v => typeof v === 'object' ? v.id : String(v)).sort().join('|');
+        const key = loop.id ? loop.id : `${loop.type}-${varSignature}`;
+        uniqueLoopsMap.set(key, loop);
+    });
+    const filteredLoops = Array.from(uniqueLoopsMap.values());
+
+    const rawArchetypes = (diagram.archetypes || []).filter(arch =>
       Array.isArray(arch.variables) &&
       arch.variables.some(v => (typeof v === 'object' ? v.id === nodeId : v === nodeId))
     );
+
+    const uniqueArchMap = new Map();
+    rawArchetypes.forEach(arch => {
+        const varSignature = (arch.variables || []).map(v => typeof v === 'object' ? v.id : String(v)).sort().join('|');
+        const key = arch.id ? arch.id : `${arch.type}-${varSignature}`;
+        uniqueArchMap.set(key, arch);
+    });
+    const filteredArchetypes = Array.from(uniqueArchMap.values());
 
     const getVariableName = (varId) => {
       const foundVar = (diagram.nodes || []).find(n => n.id === varId);
@@ -457,7 +494,7 @@ export function useCLDDiagramViewModel() {
 
     selectedNodeInfo.value = {
       nodeName: node.name,
-      loops: (loops || []).map(loop => ({
+      loops: filteredLoops.map(loop => ({
         id: loop.id,
         type: loop.type,
         color: getLoopColor(loop.type),
@@ -469,7 +506,7 @@ export function useCLDDiagramViewModel() {
             })
           : []
       })),
-      archetypes: (archetypes || []).map(arch => {
+      archetypes: filteredArchetypes.map(arch => {
         const meta = archetypeMetaById.get(arch.id);
         return {
           id: arch.id,

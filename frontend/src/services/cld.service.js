@@ -163,6 +163,19 @@ class CLDService {
       throw new Error(error.response?.data?.message || 'Invalid or revoked link');
     }
   }
+
+  async generateLiveLoopsAndArchetypes(nodes, edges) {
+    try {
+      const payload = { nodes, edges };
+
+      const response = await ApiService.post(`cld/analyze`, payload);
+
+      return response.data;
+    } catch (error) {
+      console.error('Error generating live loops and archetypes:', error);
+      return null;
+    }
+  }
 }
 
 export default new CLDService(); 

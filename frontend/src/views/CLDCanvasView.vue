@@ -830,7 +830,7 @@ onBeforeUnmount(() => {
 onBeforeRouteLeave((to, from, next) => {
     if (hasUnsavedChanges.value) {
 
-        const userConfirmed = window.confirm('Você tem alterações não salvas. Tem certeza que deseja sair?');
+        const userConfirmed = window.confirm('There are unsaved changes! Want to proceed?');
         if (userConfirmed) {
             next();
         } else {
@@ -844,9 +844,16 @@ onBeforeRouteLeave((to, from, next) => {
 
 watch(() => diagram.value, (newDiagram) => {
     if (newDiagram && networkContainer.value) {
-        createDiagram(newDiagram, networkContainer.value);
+      if (network.value) {
+            saveNodePositions(newDiagram.id);
+      }
+      clearNodeSelection();
+      createDiagram(newDiagram, networkContainer.value);
+      if (network.value) {
+            network.value.redraw();
+        }
     }
-});
+}, { deep: true });
 </script>
 
 <style scoped>

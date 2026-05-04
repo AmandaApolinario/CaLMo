@@ -322,11 +322,7 @@ export function useCLDCanvasViewModel() {
 
         if (hasConflict) {
             error.value = "Conflito: Não é possível ter relacionamentos positivos e negativos entre as mesmas variáveis na mesma direção.";
-
-            setTimeout(() => {
-                error.value = null;
-            }, 5000);
-
+            setTimeout(() => { error.value = null; }, 5000);
             return null;
         }
 
@@ -337,13 +333,19 @@ export function useCLDCanvasViewModel() {
             polarity: polarity
         };
 
-        edges.value.push(newRelationship);
+        // 1. Atualizamos a lista local quebrando a referência com a antiga
+        edges.value = [...edges.value, newRelationship];
 
-        if (!diagram.value.edges) diagram.value.edges = [];
-        if (!diagram.value.relationships) diagram.value.relationships = [];
-
-        diagram.value.edges.push(newRelationship);
-        diagram.value.relationships.push(newRelationship);
+        // 2. Atualizamos o objeto do diagrama limpamente! (Sem ".push" duplo)
+        diagram.value = {
+            ...diagram.value,
+            edges: edges.value,
+            relationships: edges.value.map(e => ({
+                source_id: e.source,
+                target_id: e.target,
+                type: e.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE'
+            }))
+        };
 
         undoStack.value.push({
             action: 'EDGE_ADDED',
@@ -441,6 +443,12 @@ export function useCLDCanvasViewModel() {
         nodes.value = nodes.value.filter(n => n.id !== nodeId);
         edges.value = edges.value.filter(e => e.source !== nodeId && e.target !== nodeId);
 
+        diagram.value = {
+            ...diagram.value,
+            nodes: nodes.value,
+            edges: edges.value
+        };
+
         if (remoteNodeRemovedCallback.value) {
             remoteNodeRemovedCallback.value(nodeId);
         }
@@ -485,6 +493,11 @@ export function useCLDCanvasViewModel() {
         }
 
         edges.value = edges.value.filter(e => String(e.id) !== String(edgeId));
+
+        diagram.value = {
+            ...diagram.value,
+            edges: edges.value
+        };
 
         if (remoteEdgeRemovedCallback.value) {
             remoteEdgeRemovedCallback.value(edgeId);
@@ -535,6 +548,7 @@ export function useCLDCanvasViewModel() {
                         if (remoteNodeRemovedCallback.value) remoteNodeRemovedCallback.value(data.nodeId);
                     }
                 });
+                await updateLoopsAndArchetypes();
                 break;
 
             case 'EDGE_ADDED':
@@ -542,6 +556,7 @@ export function useCLDCanvasViewModel() {
                 edges.value.push(data.edge);
                 if (remoteEdgeAddedCallback.value) remoteEdgeAddedCallback.value(data.edge);
               }
+              await updateLoopsAndArchetypes();
               break;
 
             case 'EDGE_REMOVED':
@@ -557,6 +572,7 @@ export function useCLDCanvasViewModel() {
                 if (remoteEdgeRemovedCallback.value) {
                     remoteEdgeRemovedCallback.value(data.edgeId, data.source, data.target);
                 }
+                await updateLoopsAndArchetypes();
                 break;
 
             case 'VARIABLE_ADDED':
@@ -813,14 +829,18 @@ export function useCLDCanvasViewModel() {
                 return `${prefix}: ${nodeName}`;
             }
             else if (item.action === 'EDGE_ADDED' || item.action === 'EDGE_REMOVED') {
-                const edge = item.data.edge;
-                const sourceName = getNodeName(edge.source);
-                const targetName = getNodeName(edge.target);
-
-                const polarity = edge.polarity ? String(edge.polarity).toUpperCase() : 'UNKNOWN';
-
-                return `${prefix}: ${sourceName} -> ${targetName}, ${polarity}`;
+            const edgeData = item.data.edge || item.data;
+            if (!edgeData || (!edgeData.source && !edgeData.target)) {
+                return `${prefix}: Unkown Relationship`;
             }
+
+            const sourceName = getNodeName(edgeData.source);
+            const targetName = getNodeName(edgeData.target);
+
+            const polarity = edgeData.polarity ? String(edgeData.polarity).toUpperCase() : 'UNKNOWN';
+
+            return `${prefix}: ${sourceName} -> ${targetName}, ${polarity}`;
+        }
 
             return `${prefix}`;
         });
@@ -902,6 +922,38 @@ export function useCLDCanvasViewModel() {
 
             return `<div class="history-line">${htmlLine}</div>`;
         }).join('');
+    };
+
+    const updateLoopsAndArchetypes = async () => {
+        if (!diagram.value?.id) return;
+
+        try {
+            const liveAnalysis = await CLDService.generateLiveLoopsAndArchetypes(nodes.value, edges.value);
+
+            if (liveAnalysis) {
+                const getUniqueItems = (items) => {
+                    const seen = new Set();
+                    return items.filter(item => {
+                        const vars = (item.variables || []).map(v => typeof v === 'object' ? v.id : v).sort().join('|');
+                        const sig = `${item.type}-${vars}`;
+                        if (seen.has(sig)) return false;
+                        seen.add(sig);
+                        return true;
+                    });
+                };
+                if (diagram.value) {
+                    diagram.value = {
+                        ...diagram.value,
+                        nodes: nodes.value,
+                        edges: edges.value,
+                        feedback_loops: getUniqueItems(liveAnalysis.loops),
+                        archetypes: getUniqueItems(liveAnalysis.archetypes)
+                    };
+                }
+            }
+        } catch (error) {
+            console.error('Erro ao reprocessar loops e arquétipos', error);
+        }
     };
 
 
