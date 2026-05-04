@@ -66,6 +66,10 @@ class VariableRepository:
             return True
         return False
 
+    @staticmethod
+    def get_variable_by_id(db: Session, variable_id: str):
+        return db.query(Variable).filter(Variable.id == variable_id).first()
+
 class CLDRepository:
     @staticmethod
     def create_cld(db: Session, user_id: str, name: str, date, description: str):

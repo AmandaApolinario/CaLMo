@@ -66,7 +66,7 @@ def get_user_clds(user_id):
 @token_required
 def get_cld(user_id, cld_id):
     view_model = CLDViewModel(db.session)
-    cld, message = view_model.get_cld(cld_id, user_id)
+    cld, message = view_model.get_cld(cld_id)
     
     if cld is None:  # Error case - CLD not found
         return jsonify({'message': message}), 404
@@ -103,6 +103,9 @@ def update_cld_route(user_id, cld_id):
     date = data.get('date')
     variables = data.get('variables')
     relationships = data.get('relationships')
+
+    share_token = data.get('share_token')
+    changes_summary = data.get('changes_summary')
     
     # Validate that at least one field to update is provided
     if not any([name, description, date, variables, relationships]):
@@ -121,7 +124,9 @@ def update_cld_route(user_id, cld_id):
         description, 
         date,
         variables,
-        relationships
+        relationships,
+        share_token=share_token,
+        changes_summary=changes_summary
     )
     
     if not cld:
@@ -152,7 +157,7 @@ def identify_feedback_loops(user_id, cld_id):
     
     # For GET requests, retrieve existing feedback loops without re-analyzing
     if request.method == 'GET':
-        cld, get_message = view_model.get_cld(cld_id, user_id)
+        cld, get_message = view_model.get_cld_by_id(cld_id)
         
         if cld is None:  # Error case - CLD not found
             return jsonify({'message': get_message}), 404
@@ -168,7 +173,7 @@ def identify_feedback_loops(user_id, cld_id):
     # POST request - analyze and identify feedback loops
     try:
         print(f"Identifying feedback loops for CLD {cld_id}")
-        loops, message = view_model.identify_feedback_loops(cld_id, user_id)
+        loops, message = view_model.identify_feedback_loops(cld_id)
         
         if loops is None:  # Error case - CLD not found
             print(f"Error identifying feedback loops: {message}")
@@ -191,7 +196,7 @@ def identify_archetypes(user_id, cld_id):
     
     # For GET requests, retrieve existing archetypes without re-analyzing
     if request.method == 'GET':
-        cld, get_message = view_model.get_cld(cld_id, user_id)
+        cld, get_message = view_model.get_cld_by_id(cld_id)
         
         if cld is None:  # Error case - CLD not found
             return jsonify({'message': get_message}), 404
@@ -207,7 +212,7 @@ def identify_archetypes(user_id, cld_id):
     # POST request - analyze and identify archetypes
     try:
         print(f"Identifying archetypes for CLD {cld_id}")
-        archetypes, message = view_model.identify_archetypes(cld_id, user_id)
+        archetypes, message = view_model.identify_archetypes(cld_id)
         
         if archetypes is None:  # Error case - CLD not found
             print(f"Error identifying archetypes: {message}")
@@ -267,7 +272,7 @@ def revoke_share_link(user_id, cld_id):
 
 @cld_routes.route('/cld/shared/<string:token>', methods=['GET'])
 @token_required
-def get_shared_cld(user_id, token):  # user_id vem do token JWT (qualquer usuário logado)
+def get_shared_cld(user_id, token):
     view_model = CLDViewModel(db.session)
     cld, message = view_model.get_cld_by_token(token)
 
@@ -275,3 +280,32 @@ def get_shared_cld(user_id, token):  # user_id vem do token JWT (qualquer usuár
         return jsonify({'message': message}), 404
 
     return jsonify(cld), 200
+
+
+@cld_routes.route('/cld/shared/ownerVariables', methods=['GET'])
+@token_required
+def get_shared_cld_owner_variables(user_id):
+    view_model = CLDViewModel(db.session)
+    token = request.args.get('token')
+    if not token:
+        return jsonify({'message': 'Token missing'}), 400
+
+    owner_id = view_model.get_owner_id(token)
+    if owner_id is None:
+        return jsonify({'message': 'Invalid or revoked share token'}), 404
+
+    variables, message = view_model.get_cld_owner_variables(owner_id)
+
+    if not variables:
+        return jsonify([]), 200
+
+    formatted_variables = [
+        {
+            'id': var.id,
+            'name': var.name,
+            'description': var.description
+        }
+        for var in variables
+    ]
+
+    return jsonify(formatted_variables), 200

@@ -54,7 +54,6 @@ class CLDService {
 
   async updateCLD(id, cldData) {
     try {
-      // Make sure we're sending all necessary CLD data, including variables and relationships
       const dataToSend = {
         name: cldData.name,
         description: cldData.description,
@@ -68,6 +67,14 @@ class CLDService {
       
       if (cldData.relationships) {
         dataToSend.relationships = cldData.relationships;
+      }
+
+      if(cldData.changes_summary) {
+        dataToSend.changes_summary = cldData.changes_summary;
+      }
+
+      if(cldData.share_token){
+        dataToSend.share_token = cldData.share_token;
       }
       
       console.log(`CLD Service - Updating CLD ${id} with data:`, dataToSend);

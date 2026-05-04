@@ -28,6 +28,15 @@ export function useCLDCanvasViewModel() {
     const provideStateCallback = ref(null);
     const applyStateCallback = ref(null);
     const remoteNodeMovedCallback = ref(null);
+    const remoteNodeAddedCallback = ref(null);
+    const remoteNodeRemovedCallback = ref(null);
+    const remoteEdgeAddedCallback = ref(null);
+    const remoteEdgeRemovedCallback = ref(null);
+    const diagramNameRef = ref(null);
+    const lastSaveStackSize = ref(0);
+    const hasUnsavedChanges = computed(() => {
+        return undoStack.value.length > lastSaveStackSize.value;
+    });
 
 
     const newVariable = reactive({
@@ -35,15 +44,21 @@ export function useCLDCanvasViewModel() {
         description: ''
     });
 
-    const fetchVariables = async () => {
+    const fetchVariables = async (diagramId = null, shareToken = null) => {
         loading.value = true;
         error.value = null;
 
         try {
-            const response = await ApiService.get('variables');
+            let response;
+
+            if (shareToken) {
+                response = await ApiService.get(`cld/shared/ownerVariables?token=${shareToken}`);
+            } else {
+                response = await ApiService.get('variables');
+            }
+
             variables.value = response.data || [];
         } catch (err) {
-            error.value = 'Erro ao carregar variáveis';
             console.error('Error fetching variables:', err);
         } finally {
             loading.value = false;
@@ -95,7 +110,7 @@ export function useCLDCanvasViewModel() {
         return shapes.value.find((s) => s.id === shapeId);
     };
 
-    const createVariable = async () => {
+    const createVariable = async (shareToken = null) => {
         if (!newVariable.name.trim()) {
             return false;
         }
@@ -103,14 +118,24 @@ export function useCLDCanvasViewModel() {
         creatingVariable.value = true;
         error.value = null;
 
-        try {
-            await ApiService.post('variable', {
-                name: newVariable.name.trim(),
-                description: newVariable.description.trim()
-            });
+        const payload = {
+            name: newVariable.name.trim(),
+            description: newVariable.description.trim()
+        }
 
+        if (shareToken) {
+           payload.shareToken = shareToken;
+        }
+        try {
+            const response = await ApiService.post('variable', payload);
+            const newVariable = response.data;
             resetVariableForm();
-            await fetchVariables();
+             if (diagram.value) {
+                publishDiagramEvent(diagram.value.id, 'VARIABLE_ADDED', {
+                    variable: newVariable,
+                    clientId: clientId.value
+                }).catch(console.error);
+            }
             showCreateModal.value = false;
             return true;
         } catch (err) {
@@ -172,6 +197,7 @@ export function useCLDCanvasViewModel() {
             }
 
             // Populate nodes and edges
+            diagramNameRef.value = diagram.value.name || diagram.value.title || 'Untitled';
             nodes.value = diagram.value?.nodes || [];
             edges.value = diagram.value?.edges || [];
 
@@ -284,6 +310,22 @@ export function useCLDCanvasViewModel() {
     const addConnection = (sourceId, targetId, polarity = 'positive') => {
         if (!diagram.value) return null;
 
+        const hasConflict = edges.value.some(edge =>
+            edge.source === sourceId &&
+            edge.target === targetId &&
+            edge.polarity !== polarity
+        );
+
+        if (hasConflict) {
+            error.value = "Conflito: Não é possível ter relacionamentos positivos e negativos entre as mesmas variáveis na mesma direção.";
+
+            setTimeout(() => {
+                error.value = null;
+            }, 5000);
+
+            return null;
+        }
+
         const newRelationship = {
             id: generateId(),
             source: sourceId,
@@ -299,12 +341,22 @@ export function useCLDCanvasViewModel() {
         diagram.value.edges.push(newRelationship);
         diagram.value.relationships.push(newRelationship);
 
+        undoStack.value.push({
+            action: 'EDGE_ADDED',
+            data: { edge: newRelationship }
+        });
+        redoStack.value = [];
+
+        publishDiagramEvent(diagram.value.id, 'EDGE_ADDED', {
+            edge: newRelationship,
+            clientId: clientId.value
+        }).catch(err => console.error('Erro ao enviar evento EDGE_ADDED', err));
+
         return newRelationship;
     };
 
     const persistDiagram = async (currentNodes, currentEdges) => {
         if (!diagram.value || !diagram.value.id) {
-            error.value = "Nenhum diagrama selecionado para salvar.";
             return false;
         }
 
@@ -321,17 +373,31 @@ export function useCLDCanvasViewModel() {
                     type: edge.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE'
                 };
             });
-
-            const apiData = {
+            const payload= {
                 name: diagram.value.name || diagram.value.title || '',
                 description: diagram.value.description || '',
                 date: diagram.value.date || new Date().toISOString().split('T')[0],
                 variables: variableIds,
-                relationships: relationships
-            };
+                relationships: relationships,
+                changes_summary: getChangesSummary()
+            }
+            const path = window.location.pathname;
+            let shareToken = null;
 
-            await CLDService.updateCLD(diagram.value.id, apiData);
+            if (path.includes('/shared/')) {
+                shareToken = path.split('/shared/')[1];
+            }
 
+            if (shareToken) {
+                payload.share_token = shareToken;
+            }
+
+
+            await CLDService.updateCLD(diagram.value.id, payload);
+            if (shareToken){
+                await fetchSharedDiagram(shareToken);
+                return true;
+            }
             await fetchDiagram(diagram.value.id);
             return true;
 
@@ -341,21 +407,52 @@ export function useCLDCanvasViewModel() {
             return false;
         } finally {
             isLoadingDiagram.value = false;
+            lastSaveStackSize.value = undoStack.value.length;
         }
     };
 
-    const removeNodeFromDiagram = (nodeId) => {
+    const removeNodeFromDiagram = (nodeId, visEdges = []) => {
         if (!diagram.value) return;
         const nodeToRemove = nodes.value.find(n => n.id === nodeId);
         if (!nodeToRemove) return;
 
+
+        const currentPos = provideStateCallback.value ? provideStateCallback.value() : {};
+        const nodePos = currentPos[nodeId] || currentPos[String(nodeId)] || currentPos[Number(nodeId)] || { x: 0, y: 0 };
+
+        let edgesToRemove = edges.value.filter(e => e.source === nodeId || e.target === nodeId);
+
+        if (visEdges && visEdges.length > 0) {
+            visEdges.forEach(ve => {
+                if (!edgesToRemove.some(e => String(e.id) === String(ve.id))) {
+                    edgesToRemove.push({
+                        id: ve.id,
+                        source: ve.from,
+                        target: ve.to,
+                        polarity: ve.label === '+' ? 'positive' : 'negative'
+                    });
+                }
+            });
+        }
         nodes.value = nodes.value.filter(n => n.id !== nodeId);
         edges.value = edges.value.filter(e => e.source !== nodeId && e.target !== nodeId);
 
+        if (remoteNodeRemovedCallback.value) {
+            remoteNodeRemovedCallback.value(nodeId);
+        }
+        edgesToRemove.forEach(edge => {
+            if (remoteEdgeRemovedCallback.value) {
+                remoteEdgeRemovedCallback.value(edge.id);
+            }
+        });
+
         undoStack.value.push({
             action: 'NODE_REMOVED',
-            node: { ...nodeToRemove },
-          });
+            data: {
+                node: { ...nodeToRemove, x: nodePos.x, y: nodePos.y },
+                deletedEdges: JSON.parse(JSON.stringify(edgesToRemove))
+            }
+        });
         redoStack.value = [];
 
         publishDiagramEvent(diagram.value.id, 'NODE_REMOVED', {
@@ -364,50 +461,122 @@ export function useCLDCanvasViewModel() {
         }).catch(console.error);
     };
 
-    const removeEdgeFromDiagram = (edgeId) => {
+    const removeEdgeFromDiagram = (edgeId, visEdge = null) => {
         if (!diagram.value) return;
 
-        edges.value = edges.value.filter(e => e.id !== edgeId);
+        let edgeToRemove = edges.value.find(e => String(e.id) === String(edgeId));
+
+        if (!edgeToRemove && visEdge) {
+            edgeToRemove = {
+                id: edgeId,
+                source: visEdge.from,
+                target: visEdge.to,
+                polarity: visEdge.label === '+' ? 'positive' : 'negative'
+            };
+        }
+
+        if (!edgeToRemove) {
+            console.warn('Aresta não encontrada para deletar:', edgeId);
+            return;
+        }
+
+        edges.value = edges.value.filter(e => String(e.id) !== String(edgeId));
+
+        if (remoteEdgeRemovedCallback.value) {
+            remoteEdgeRemovedCallback.value(edgeId);
+        }
+
+        undoStack.value.push({
+            action: 'EDGE_REMOVED',
+            data: { edge: JSON.parse(JSON.stringify(edgeToRemove)) }
+        });
+        redoStack.value = [];
+
+        publishDiagramEvent(diagram.value.id, 'EDGE_REMOVED', {
+            edgeId: edgeId,
+            source: edgeToRemove.source,
+            target: edgeToRemove.target,
+            polarity: edgeToRemove.polarity,
+            clientId: clientId.value
+        }).catch(console.error);
     };
 
-    const handleKafkaEvent = (event) => {
+    const handleKafkaEvent = async (event) => {
         const { action, data, clientId: eventClientId } = event;
         console.log(`Received Kafka event: ${action} from client ${eventClientId}`, data);
         if (eventClientId && eventClientId === clientId.value) return;
 
         switch (action) {
-            case 'ELEMENTS_DELETED':
-                if (data.nodes) {
-                    nodes.value = nodes.value.filter(n => !data.nodes.includes(n.id));
-                }
-                if (data.edges) {
-                    edges.value = edges.value.filter(e => !data.edges.includes(e.id));
-                }
-                break;
-
             case 'NODE_ADDED':
                 if (!nodes.value.some(n => n.id === data.node.id)) {
                     nodes.value.push(data.node);
+                    if (remoteNodeAddedCallback.value) remoteNodeAddedCallback.value(data.node);
                 }
-
                 break;
             case 'NODE_REMOVED':
-              nodes.value = nodes.value.filter(n => n.id !== data.nodeId);
-              edges.value = edges.value.filter(e => e.source !== data.nodeId && e.target !== data.nodeId);
-              break;
+                const nodeIdx = nodes.value.findIndex(n => n.id === data.nodeId);
+                if (nodeIdx > -1){
+                    nodes.value.splice(nodeIdx, 1);
+                    if (remoteNodeRemovedCallback.value) remoteNodeRemovedCallback.value(data.nodeId);
+                }
+
+                const edgesToRemove = edges.value.filter(e => e.source === data.nodeId || e.target === data.nodeId);
+                edgesToRemove.forEach(e => {
+                    const eIdx = edges.value.findIndex(edge => edge.id === e.id);
+                    if(eIdx > -1){
+                        edges.value.splice(eIdx, 1);
+                        if (remoteNodeRemovedCallback.value) remoteNodeRemovedCallback.value(data.nodeId);
+                    }
+                });
+                break;
 
             case 'EDGE_ADDED':
               if (!edges.value.some(e => e.id === data.edge.id)) {
                 edges.value.push(data.edge);
+                if (remoteEdgeAddedCallback.value) remoteEdgeAddedCallback.value(data.edge);
               }
               break;
 
             case 'EDGE_REMOVED':
-              edges.value = edges.value.filter(e => e.id !== data.edgeId);
-              break;
+                let edgeIdx = edges.value.findIndex(e => String(e.id) === String(data.edgeId));
+                if (edgeIdx === -1 && data.source && data.target) {
+                    edgeIdx = edges.value.findIndex(e => String(e.source) === String(data.source) && String(e.target) === String(data.target));
+                }
+
+                if (edgeIdx > -1) {
+                    edges.value.splice(edgeIdx, 1);
+                }
+
+                if (remoteEdgeRemovedCallback.value) {
+                    remoteEdgeRemovedCallback.value(data.edgeId, data.source, data.target);
+                }
+                break;
+
+            case 'VARIABLE_ADDED':
+                const path = window.location.pathname;
+                let diagramId = null;
+                let shareToken = null;
+
+                if (path.includes('/shared/')) {
+                    shareToken = path.split('/shared/')[1];
+                } else {
+                    diagramId = path.split('/cld/')[1];
+                }
+
+                await fetchVariables(diagramId, shareToken);
+                break;
 
             case 'UNDO_PERFORMED':
-                fetchDiagram(diagram.value.id);
+                await fetchDiagram(diagram.value.id);
+                break;
+
+            case 'DIAGRAM_NAME_UPDATED':
+                if (data.clientId !== clientId.value) {
+                    diagramNameRef.value = data.name;
+                    if (diagram.value) {
+                        diagram.value.name = data.name;
+                    }
+                }
                 break;
         }
     };
@@ -422,7 +591,6 @@ export function useCLDCanvasViewModel() {
                 const positions = provideStateCallback.value ? provideStateCallback.value() : {};
 
                 const currentState = {
-                    // Remove a reatividade do Vue para o Socket conseguir transmitir o JSON corretamente
                     nodes: JSON.parse(JSON.stringify(nodes.value)),
                     edges: JSON.parse(JSON.stringify(edges.value)),
                     positions: JSON.parse(JSON.stringify(positions))
@@ -437,12 +605,10 @@ export function useCLDCanvasViewModel() {
                 nodes.value = state.nodes || [];
                 edges.value = state.edges || [];
 
-                // Salva as posições recebidas localmente antes de recriar o diagrama
                 if (applyStateCallback.value && state.positions) {
                     applyStateCallback.value(state.positions);
                 }
 
-                // Força a re-renderização com os dados recebidos da memória dos outros
                 diagram.value = { ...diagram.value, nodes: nodes.value, edges: edges.value };
             }
         });
@@ -465,7 +631,7 @@ export function useCLDCanvasViewModel() {
     const performUndo = () => {
       if (undoStack.value.length === 0) return;
 
-      const lastAction = undoStack.value.pop(); // remove da pilha de undo
+      const lastAction = undoStack.value.pop();
       const { action, data } = lastAction;
       let inverseAction;
       let inverseData;
@@ -475,17 +641,31 @@ export function useCLDCanvasViewModel() {
           inverseAction = 'NODE_REMOVED';
           inverseData = { nodeId: data.node.id, clientId: clientId.value };
           nodes.value = nodes.value.filter(n => n.id !== data.node.id);
+
+          const edgesToDelete = edges.value.filter(e => e.source === data.node.id || e.target === data.node.id);
           edges.value = edges.value.filter(
             e => e.source !== data.node.id && e.target !== data.node.id
           );
+          if (remoteNodeRemovedCallback.value) remoteNodeRemovedCallback.value(data.node.id);
+          edgesToDelete.forEach(edge => {
+              if (remoteEdgeRemovedCallback.value) remoteEdgeRemovedCallback.value(edge.id);
+              publishDiagramEvent(diagram.value.id, 'EDGE_REMOVED', { edgeId: edge.id, clientId: clientId.value }).catch(console.error);
+          });
           break;
 
         case 'NODE_REMOVED':
           inverseAction = 'NODE_ADDED';
           inverseData = { node: data.node, clientId: clientId.value };
           nodes.value.push(data.node);
-          if (data.deletedEdges) {
+          if (remoteNodeAddedCallback.value) remoteNodeAddedCallback.value(data.node);
+
+          if (data.deletedEdges && data.deletedEdges.length > 0) {
             edges.value.push(...data.deletedEdges);
+
+            data.deletedEdges.forEach(edge => {
+                if (remoteEdgeAddedCallback.value) remoteEdgeAddedCallback.value(edge);
+                publishDiagramEvent(diagram.value.id, 'EDGE_ADDED', { edge: edge, clientId: clientId.value }).catch(console.error);
+            });
           }
           break;
 
@@ -493,6 +673,7 @@ export function useCLDCanvasViewModel() {
           inverseAction = 'EDGE_REMOVED';
           inverseData = { edgeId: data.edge.id, clientId: clientId.value };
           edges.value = edges.value.filter(e => e.id !== data.edge.id);
+          if (remoteEdgeRemovedCallback.value) remoteEdgeRemovedCallback.value(data.edge.id);
           break;
 
         case 'EDGE_REMOVED':
@@ -500,6 +681,7 @@ export function useCLDCanvasViewModel() {
           inverseData = { edge: data.edge, clientId: clientId.value };
           if (!edges.value.some(e => e.id === data.edge.id)) {
             edges.value.push(data.edge);
+            if (remoteEdgeAddedCallback.value) remoteEdgeAddedCallback.value(data.edge);
           }
           break;
 
@@ -544,9 +726,6 @@ export function useCLDCanvasViewModel() {
         try {
             await CLDService.revokeShareToken(diagram.value.id);
             currentShareToken.value = null;
-            // Opcional: Gerar um novo imediatamente se o usuário quiser resetar
-            // const token = await CLDService.generateShareToken(diagram.value.id);
-            // currentShareToken.value = token;
         } catch (err) {
             error.value = 'Erro ao revogar link';
         } finally {
@@ -556,7 +735,6 @@ export function useCLDCanvasViewModel() {
 
     const getShareableUrl = computed(() => {
         if (!currentShareToken.value) return '';
-        // Ajuste o baseUrl conforme o domínio da sua aplicação no front
         const baseUrl = window.location.origin;
         return `${baseUrl}/calmo/cld/shared/${currentShareToken.value}`;
     });
@@ -564,7 +742,6 @@ export function useCLDCanvasViewModel() {
     const copyShareLink = async () => {
         try {
             await navigator.clipboard.writeText(getShareableUrl.value);
-            // Poderia adicionar um toast/notification de sucesso aqui
         } catch (err) {
             console.error('Failed to copy text: ', err);
         }
@@ -592,6 +769,7 @@ export function useCLDCanvasViewModel() {
                 diagram.value = diagramData;
             }
 
+            diagramNameRef.value = diagram.value.name || diagram.value.title || 'Untitled';
             nodes.value = diagram.value?.nodes || [];
             edges.value = diagram.value?.edges || [];
         } catch (err) {
@@ -599,6 +777,61 @@ export function useCLDCanvasViewModel() {
             console.error('Error fetching shared diagram:', err);
         } finally {
             isLoadingDiagram.value = false;
+        }
+    };
+
+    const getChangesSummary = () => {
+        const newActions = undoStack.value.slice(lastSaveStackSize);
+
+        if (newActions.length === 0) return "Atualização geral e reposicionamentos.";
+
+        const actionNames = {
+            'NODE_ADDED': 'Variable Added',
+            'NODE_REMOVED': 'Variable Removed',
+            'EDGE_ADDED': 'Conexões criadas',
+            'EDGE_REMOVED': 'Conexões removidas'
+        };
+
+        const counts = {};
+        newActions.forEach(item => {
+            const name = actionNames[item.action] || item.action;
+            counts[name] = (counts[name] || 0) + 1;
+        });
+
+        return Object.entries(counts)
+            .map(([action, count]) => `${count}x ${action}`)
+            .join(', ');
+    };
+
+    const saveDiagramName = async () => {
+        if (!diagram.value || !diagramNameRef.value.trim()) return;
+
+        try {
+            const payload = {
+                name: diagramNameRef.value,
+                changes_summary: `Changed CLD name to "${diagramNameRef.value}"`
+            };
+
+            const path = window.location.pathname;
+            let shareToken = null;
+
+            if (path.includes('/shared/')) {
+                shareToken = path.split('/shared/')[1];
+            }
+
+            if (shareToken) {
+                payload.share_token = shareToken;
+            }
+
+            await ApiService.put(`cld/${diagram.value.id}`, payload);
+
+            publishDiagramEvent(diagram.value.id, 'DIAGRAM_NAME_UPDATED', {
+                name: diagramNameRef.value,
+                clientId: clientId.value
+            }).catch(console.error);
+
+        } catch (error) {
+            console.error('Erro ao atualizar o nome do diagrama:', error);
         }
     };
 
@@ -648,6 +881,14 @@ export function useCLDCanvasViewModel() {
         applyStateCallback,
         remoteNodeMovedCallback,
         emitNodeMovement,
-        fetchSharedDiagram
+        fetchSharedDiagram,
+        remoteNodeAddedCallback,
+        remoteNodeRemovedCallback,
+        remoteEdgeAddedCallback,
+        remoteEdgeRemovedCallback,
+        clientId : computed(() => clientId.value),
+        diagramNameRef,
+        saveDiagramName,
+        hasUnsavedChanges
     };
 }

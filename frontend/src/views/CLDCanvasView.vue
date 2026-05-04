@@ -6,7 +6,14 @@
                     <i class="fas fa-arrow-left"></i>
                 </button>
                 <div class="toolbar-divider"></div>
-                <h2 class="canvas-title">{{ diagram ? diagram.title : 'New Canvas' }}</h2>
+                <input
+                    type="text"
+                    v-model="diagramNameRef"
+                    @blur="saveDiagramName"
+                    @keyup.enter="$event.target.blur()"
+                    class="diagram-title-input"
+                    placeholder="Nome do Diagrama"
+                />
             </div>
 
             <div class="toolbar-center">
@@ -72,11 +79,8 @@
           </div>
 
             <div class="toolbar-right">
-                <button class="tool-btn primary" style="background-color: #2b7042; border-color: #3b8c56;" @click="openShareModal" title="Share Diagram">
+                <button class="tool-btn primary" v-if="isOwner" style="background-color: #2b7042; border-color: #3b8c56;" @click="openShareModal" title="Share Diagram">
                   <i class="fas fa-share-alt"></i> Share
-                </button>
-                <button class="tool-btn" @click="redistributeNodes" title="Redistribute Nodes">
-                    <i class="fas fa-sync"></i>
                 </button>
                 <button class="tool-btn primary" @click="saveDiagram" title="Save">
                     <i class="fas fa-save"></i> Save
@@ -389,13 +393,14 @@
 </template>
 
 <script setup>
-import {onMounted, ref, nextTick, watch, onUnmounted} from 'vue';
-import { useRouter, useRoute } from 'vue-router';
+import {onMounted, ref, nextTick, watch, onUnmounted, onBeforeUnmount} from 'vue';
+import {useRouter, useRoute, onBeforeRouteLeave} from 'vue-router';
 import { useCLDCanvasViewModel } from '@/viewmodels/CLDCanvasViewModel';
 import { useCLDDiagramViewModel } from '@/viewmodels/CLDDiagramViewModel';
 
 const router = useRouter();
 const route = useRoute();
+const isOwner = ref(false);
 
 // ViewModels
 const {
@@ -436,7 +441,14 @@ const {
     remoteNodeMovedCallback,
     emitNodeMovement,
     fetchSharedDiagram,
-    clientId
+    remoteNodeAddedCallback,
+    remoteNodeRemovedCallback,
+    remoteEdgeAddedCallback,
+    remoteEdgeRemovedCallback,
+    clientId,
+    diagramNameRef,
+    saveDiagramName,
+    hasUnsavedChanges
 } = useCLDCanvasViewModel();
 
 const {
@@ -462,6 +474,9 @@ const {
     getCurrentPositions,
     updateNodePosition,
     nodeDraggedCallback,
+    addNodeToCanvas,
+    removeNodeFromCanvas,
+    removeEdgeFromCanvas
 } = useCLDDiagramViewModel();
 
 // UI State
@@ -492,6 +507,12 @@ remoteNodeMovedCallback.value = updateNodePosition;
 nodeDraggedCallback.value = (nodeId, position) => {
     emitNodeMovement(nodeId, position);
 };
+
+
+remoteNodeAddedCallback.value = addNodeToCanvas;
+remoteNodeRemovedCallback.value = removeNodeFromCanvas;
+remoteEdgeAddedCallback.value = addEdgeToCanvas;
+remoteEdgeRemovedCallback.value = removeEdgeFromCanvas;
 
 // Layers System
 const layers = ref([
@@ -689,7 +710,8 @@ const goBack = () => {
 };
 
 const handleCreateVariable = async () => {
-    const success = await createVariable();
+    const shareToken = route.params.token;
+    const success = await createVariable(shareToken);
     if (success) {
         console.log('Variable created successfully');
     }
@@ -719,6 +741,7 @@ const handleKeyDown = (e) => {
 
 onMounted(async () => {
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('beforeunload', handleBeforeUnload);
     edgeAddedCallback.value = (source, target, polarity) => {
         const newEdge = addConnection(source, target, polarity);
         if (newEdge) {
@@ -726,20 +749,25 @@ onMounted(async () => {
         }
     };
 
-    await fetchVariables();
     const diagramId = route.params.id;
     const token = route.params.token;
 
     if (token) {
         await fetchSharedDiagram(token);
+        isOwner.value = false;
         if (diagram.value) {
-            initCollabMode(diagram.value.id, clientId);
+            await fetchVariables(null, token);
+            initCollabMode(diagram.value.id, clientId.value);
         }
     } else if (diagramId) {
         await fetchDiagram(diagramId);
+        isOwner.value = true;
         if (diagram.value) {
-            initCollabMode(diagram.value.id, clientId);
+            await fetchVariables(diagramId, null);
+            initCollabMode(diagram.value.id, clientId.value);
         }
+    } else {
+        await fetchVariables();
     }
 
     await nextTick();
@@ -748,11 +776,35 @@ onMounted(async () => {
     }
 });
 
+const handleBeforeUnload = (event) => {
+    if (hasUnsavedChanges.value) {
+        event.preventDefault();
+        event.returnValue = '';
+    }
+};
 
-onUnmounted(() => {
+
+
+onBeforeUnmount(() => {
+    window.removeEventListener('beforeunload', handleBeforeUnload);
     window.removeEventListener('keydown', handleKeyDown);
     stopCollabMode();
 });
+
+onBeforeRouteLeave((to, from, next) => {
+    if (hasUnsavedChanges.value) {
+
+        const userConfirmed = window.confirm('Você tem alterações não salvas. Tem certeza que deseja sair?');
+        if (userConfirmed) {
+            next();
+        } else {
+            next(false);
+        }
+    } else {
+        next();
+    }
+});
+
 
 watch(() => diagram.value, (newDiagram) => {
     if (newDiagram && networkContainer.value) {
@@ -1425,5 +1477,51 @@ watch(() => diagram.value, (newDiagram) => {
     background-color: #0e639c;
     color: #ffffff;
     border-color: #1177bb;
+}
+
+.diagram-title-input {
+    background: transparent;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    outline: none;
+    box-shadow: none;
+
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: white;
+    font-family: inherit;
+
+    padding: 4px 8px;
+    margin: 0;
+    width: auto;
+    min-width: 250px;
+    max-width: 100%;
+
+    transition: all 0.2s ease-in-out;
+}
+
+.diagram-title-input:hover {
+    background-color: rgba(0, 0, 0, 0.04);
+    cursor: text;
+}
+
+.diagram-title-input:focus {
+    background-color: #ffffff;
+    border-bottom: 2px solid #42b883;
+    border-radius: 6px 6px 0 0;
+    color: #2c3e50;
+}
+
+@media (prefers-color-scheme: dark) {
+    .diagram-title-input {
+        color: #f8f9fa;
+    }
+    .diagram-title-input:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+    .diagram-title-input:focus {
+        background-color: #1e1e1e;
+        border-bottom-color: #42b883;
+    }
 }
 </style>

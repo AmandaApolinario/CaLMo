@@ -102,6 +102,21 @@ def create_app():
                 END $$;
             """))
 
+            db.session.execute(text("""
+                DO $$ BEGIN
+                CREATE TABLE IF NOT EXISTS cld_history (
+                    id VARCHAR(36) PRIMARY KEY,
+                    cld_id VARCHAR(36) REFERENCES clds(id) ON DELETE CASCADE,
+                    user_id VARCHAR(36) REFERENCES users(id),
+                    action_summary TEXT,
+                    timestamp TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+                END $$;
+            """))
+
+
+
+
             db.session.commit()
 
             # Cria as tabelas (só se não existirem)

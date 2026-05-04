@@ -18,12 +18,10 @@ class WebSocketService {
 
         this.socket.on("connect", () => {
             this.connected.value = true;
-            console.log("✅ Conectado ao WebSocket");
         });
 
         this.socket.on("disconnect", () => {
             this.connected.value = false;
-            console.log("❌ Desconectado do WebSocket");
         });
     }
 
@@ -31,7 +29,6 @@ class WebSocketService {
     joinDiagram(diagramId) {
         if (!this.socket) return;
         this.socket.emit("join_diagram", { diagram_id: diagramId });
-        console.log(`📡 Entrou na sala do diagrama: ${diagramId}`);
     }
 
     /**

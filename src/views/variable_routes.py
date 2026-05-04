@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
-from ..viewmodels import VariableViewModel
+
+from ..viewmodels import VariableViewModel, CLDViewModel
 from ..auth import verify_token
 from functools import wraps
 from .. import db
@@ -28,11 +29,21 @@ def create_new_variable(user_id):
     if not data or not 'name' in data or not 'description' in data:
         return jsonify({'message': 'Bad Request'}), 400
 
+    target_user_id = user_id
+    share_token = data.get('share_token')
+
+    if share_token:
+        cld_viewmodel = CLDViewModel(db.session)
+        owner_id = cld_viewmodel.get_owner_id(share_token)
+        if not owner_id:
+            return jsonify({'message': 'Invalid share token'}), 400
+        target_user_id = owner_id
+
     name = data['name']
     description = data['description']
 
     view_model = VariableViewModel(db.session)
-    variable, message = view_model.create_variable(user_id, name, description)
+    variable, message = view_model.create_variable(target_user_id, name, description)
     
     if not variable:
         return jsonify({'message': message}), 400

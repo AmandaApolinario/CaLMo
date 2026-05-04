@@ -1,7 +1,8 @@
+import uuid
 from datetime import datetime
 from ..models.repositories import CLDRepository, RelationshipRepository, VariableRepository
 from ..models.domain_logic import CLDAnalyzer
-from ..models.entities import RelationshipType, Variable, CLD, Relationship
+from ..models.entities import RelationshipType, Variable, CLD, Relationship, CLDHistory
 import secrets
 
 class CLDViewModel:
@@ -95,9 +96,9 @@ class CLDViewModel:
         
         return cld_list, "CLDs retrieved successfully"
     
-    def get_cld(self, cld_id, user_id):
+    def get_cld(self, cld_id):
         """Get a specific CLD by ID"""
-        cld = self.cld_repo.get_cld_by_user(self.db_session, cld_id, user_id)
+        cld = self.cld_repo.get_cld_by_id(self.db_session, cld_id)
         if not cld:
             return None, "CLD not found or not owned by user"
         
@@ -126,7 +127,7 @@ class CLDViewModel:
         # Return empty array if no relationships found
         return relationships_data, "Relationships retrieved successfully"
     
-    def update_cld(self, cld_id, user_id, name=None, description=None, date_str=None, variables=None, relationships=None):
+    def update_cld(self, cld_id, user_id, name=None, description=None, date_str=None, variables=None, relationships=None, share_token=None, changes_summary=None):
         """Update an existing CLD"""
         date = None
         if date_str:
@@ -134,7 +135,7 @@ class CLDViewModel:
                 date = datetime.strptime(date_str, "%Y-%m-%d").date()
             except ValueError:
                 return None, "Invalid date format. Use YYYY-MM-DD"
-                
+
         try:
             # Add debug logging
             print(f"ViewModel: Updating CLD {cld_id} with name={name}, description={description}, date={date}")
@@ -144,7 +145,10 @@ class CLDViewModel:
                 print(f"ViewModel: Updating relationships: {relationships}")
             
             # Get the CLD first to verify it exists
-            cld = self.cld_repo.get_cld_by_user(self.db_session, cld_id, user_id)
+            if share_token:
+                cld = self.db_session.query(CLD).filter_by(id=cld_id, share_token=share_token).first()
+            else:
+                cld = self.cld_repo.get_cld_by_user(self.db_session, cld_id, user_id)
             if not cld:
                 return None, "CLD not found or not owned by user"
                 
@@ -162,10 +166,7 @@ class CLDViewModel:
                 cld.variables = []
                 # Add new variables
                 for var_id in variables:
-                    variable = self.db_session.query(Variable).filter_by(
-                        id=var_id,
-                        user_id=user_id
-                    ).first()
+                    variable = self.var_repo.get_variable_by_id(self.db_session, var_id)
                     if not variable:
                         self.db_session.rollback()
                         return None, f"Variable {var_id} not found or does not belong to user"
@@ -195,6 +196,16 @@ class CLDViewModel:
                         type=rel_type
                     )
                     self.db_session.add(relationship)
+
+            if changes_summary:
+                history_entry = CLDHistory(
+                    id=str(uuid.uuid4()),
+                    cld_id=cld.id,
+                    user_id=user_id,
+                    action_summary=changes_summary,
+                    timestamp=datetime.utcnow()
+                )
+                self.db_session.add(history_entry)
                 
             # Commit the changes directly
             self.db_session.commit()
@@ -225,7 +236,7 @@ class CLDViewModel:
         except Exception as e:
             return False, f"Error deleting CLD: {str(e)}"
     
-    def identify_feedback_loops(self, cld_id, user_id):
+    def identify_feedback_loops(self, cld_id):
         """Identify feedback loops in a CLD"""
         cld = self.cld_repo.get_cld_by_id(self.db_session, cld_id)
         if not cld:
@@ -260,9 +271,9 @@ class CLDViewModel:
             self.db_session.rollback()
             return None, f"Error identifying feedback loops: {str(e)}"
     
-    def identify_archetypes(self, cld_id, user_id):
+    def identify_archetypes(self, cld_id):
         """Identify system archetypes in a CLD"""
-        cld = self.cld_repo.get_cld_by_user(self.db_session, cld_id, user_id)
+        cld = self.cld_repo.get_cld_by_id(self.db_session, cld_id)
         if not cld:
             return None, "CLD not found or not owned by user"
             
@@ -340,7 +351,13 @@ class CLDViewModel:
         }
 
     def generate_share_token(self, cld_id, user_id):
-        """Gera ou recupera o token de compartilhamento permanente de um CLD"""
+        """Generate or retrieve a persistent share token for a CLD.
+
+        If the CLD does not already have a share token, create a new
+        cryptographically-secure token and persist it. Returns the token
+        and a status message, or (None, message) if the CLD wasn't found
+        or doesn't belong to the requesting user.
+        """
         cld = self.cld_repo.get_cld_by_user(self.db_session, cld_id, user_id)
         if not cld:
             return None, "CLD not found or not owned by user"
@@ -353,7 +370,13 @@ class CLDViewModel:
         return cld.share_token, "Share token retrieved successfully"
 
     def revoke_share_token(self, cld_id, user_id):
-        """Revoga (deleta) o token atual, exigindo a geração de um novo futuramente"""
+        """Revoke (delete) the current share token for a CLD.
+
+        This removes the existing share token so any previously issued
+        share links become invalid. Returns (True, message) on success
+        or (False, message) if the CLD wasn't found or doesn't belong
+        to the requesting user.
+        """
         cld = self.cld_repo.get_cld_by_user(self.db_session, cld_id, user_id)
         if not cld:
             return False, "CLD not found or not owned by user"
@@ -363,7 +386,12 @@ class CLDViewModel:
         return True, "Share token revoked successfully"
 
     def get_cld_by_token(self, token):
-        """Busca um CLD usando o token de compartilhamento (para usuários convidados)"""
+        """Retrieve a CLD by its share token for guest access.
+
+        Look up the CLD associated with the provided share token. If the
+        token is invalid or has been revoked, return (None, message).
+        On success return the formatted CLD data and a success message.
+        """
         cld = self.db_session.query(CLD).filter_by(share_token=token).first()
         if not cld:
             return None, "Invalid or revoked share token"
@@ -372,9 +400,40 @@ class CLDViewModel:
         return cld_data, "CLD retrieved successfully"
 
     def get_cld_by_id(self, cld_id):
-        """Busca um CLD por ID, garantindo que pertence ao usuário"""
+        """Get a CLD entity by its ID.
+
+        This returns the raw CLD object (not the formatted dict). If the
+        CLD does not exist return (None, message). Note: caller is
+        responsible for verifying ownership where necessary.
+        """
         cld = self.cld_repo.get_cld_by_id(self.db_session, cld_id)
         if not cld:
             return None, "CLD not found or not owned by user"
 
         return cld, "CLD retrieved successfully"
+
+    def get_cld_owner_variables(self, user_id):
+        """Return variables that belong to a given user.
+
+        This helper fetches all variables owned by the user. Returns a
+        list of Variable objects and a message, or (None, message) when
+        no variables are found.
+        """
+
+        variables = self.var_repo.get_user_variables(self.db_session, user_id)
+        if not variables:
+            return None, "Variables not found"
+        return variables, "Variables retrieved successfully"
+
+
+    def get_owner_id(self, token):
+        """Return the owner (user_id) of a CLD identified by a share token.
+
+        Useful to determine which user created the shared CLD. Returns
+        the user_id integer or None if the token is invalid or revoked.
+        """
+        cld = self.db_session.query(CLD).filter_by(share_token=token).first()
+        if not cld:
+            return None
+        return cld.user_id
+

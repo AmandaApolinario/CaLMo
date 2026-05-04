@@ -332,10 +332,16 @@ export function useCLDDiagramViewModel() {
     // Selection & UX
     network.value.on('selectNode', (params) => handleNodeSelection(params, diagram));
     network.value.on('click', (params) => {
-      if (params.nodes.length === 0) {
+      if (params.nodes.length === 0 && params.edges.length === 0) {
         clearNodeSelection();
-      } else {
-        handleNodeSelection({ nodes: params.nodes }, diagram);
+      }
+      else if (params.nodes.length > 0) {
+        selectedNode.value = params.nodes[0];
+        selectedNodeInfo.value = { nodeName: '', loops: [], archetypes: [] };
+      }
+      else if (params.edges.length > 0) {
+        selectedNode.value = null;
+        selectedNodeInfo.value = { nodeName: '', loops: [], archetypes: [] };
       }
     });
     network.value.on('dragEnd', () => saveNodePositions(diagram.id));
@@ -351,23 +357,34 @@ export function useCLDDiagramViewModel() {
       const sel = network.value.getSelection();
       hasSelection.value = sel.nodes.length > 0 || sel.edges.length > 0;
     });
+    network.value.on('doubleClick', (params) => {
+      if (params.nodes.length > 0) {
+        handleNodeSelection({ nodes: params.nodes }, diagram);
+      }
+    });
 
     setTimeout(() => {
-      network.value.fit({ animation: false });
+      if (network && network.value) {
+        network.value.fit({ animation: false });
+      }
     }, 500);
 
     if (!savedPositions) {
       network.value.setOptions({ physics: { enabled: true } });
       network.value.once('stabilizationIterationsDone', () => {
         setTimeout(() => {
-          network.value.fit({ animation: false });
+          if (network && network.value) {
+            network.value.fit({ animation: false });
+          }
         }, 100);
       });
     } else {
       setTimeout(() => {
-        network.value.setOptions({ physics: { enabled: false } });
-        network.value.stopSimulation();
-        network.value.fit({ animation: false });
+        if (network && network.value) {
+          network.value.setOptions({ physics: { enabled: false } });
+          network.value.stopSimulation();
+          network.value.fit({ animation: false });
+        }
       }, 100);
     }
 
@@ -534,7 +551,9 @@ export function useCLDDiagramViewModel() {
     }
 
     if (overlapsFixed > 0) {
-      network.value.fit({ animation: { duration: 500, easingFunction: 'easeOutQuad' } });
+      if (network && network.value) {
+        network.value.fit({animation: {duration: 500, easingFunction: 'easeOutQuad'}});
+      }
     }
   }
 
@@ -564,8 +583,10 @@ export function useCLDDiagramViewModel() {
 
     setTimeout(() => {
       ensureNoOverlap();
-      network.value.setOptions({ physics: { enabled: false } });
-      network.value.fit({ animation: { duration: 1000, easingFunction: 'easeInOutQuad' } });
+      if (network && network.value) {
+        network.value.setOptions({ physics: { enabled: false } });
+        network.value.fit({ animation: { duration: 1000, easingFunction: 'easeInOutQuad' } });
+      }
     }, 1500);
   }
 
@@ -603,6 +624,7 @@ export function useCLDDiagramViewModel() {
     network.value.disableEditMode();
 
     if (mode === 'pan') {
+
       network.value.setOptions({
         interaction: { dragNodes: false, selectable: false }
       });
@@ -662,22 +684,20 @@ export function useCLDDiagramViewModel() {
   function deleteSelectedElements(removeNodeCb, removeEdgeCb) {
     if (!network.value) return;
 
-
     const selection = network.value.getSelection();
 
     if (selection.nodes.length > 0) {
       selection.nodes.forEach(nodeId => {
-        if (removeNodeCb) removeNodeCb(nodeId);
-        network.value.body.data.nodes.remove(nodeId);
-      });
-    }
+        const connectedEdgeIds = network.value.getConnectedEdges(nodeId);
+        const visEdges = connectedEdgeIds.map(id => network.value.body.data.edges.get(id));
 
-    if (selection.edges.length > 0) {
+        if (removeNodeCb) removeNodeCb(nodeId, visEdges);
+      });
+    } else if (selection.edges.length > 0) {
       selection.edges.forEach(edgeId => {
-        if (network.value.body.data.edges.get(edgeId)) {
-          if (removeEdgeCb) removeEdgeCb(edgeId);
-          network.value.body.data.edges.remove(edgeId);
-        }
+        const visEdge = network.value.body.data.edges.get(edgeId);
+
+        if (removeEdgeCb) removeEdgeCb(edgeId, visEdge);
       });
     }
 
@@ -695,8 +715,76 @@ export function useCLDDiagramViewModel() {
     try {
         network.value.moveNode(nodeId, x, y);
     } catch (e) {
-        // Ignora se o nó ainda não estiver renderizado no cliente alvo
     }
+  }
+
+  function addNodeToCanvas(nodeData) {
+    if (!network.value) return;
+    try {
+        const bgColor = (typeof NODE_COLORS !== 'undefined' && NODE_COLORS.regular) ? NODE_COLORS.regular.background : '#FDE5A6';
+        const borderColor = (typeof NODE_COLORS !== 'undefined' && NODE_COLORS.regular) ? NODE_COLORS.regular.border : '#D8C28D';
+
+        const nodeObj = {
+            id: nodeData.id,
+            label: wrapLabel(nodeData.name, 30, 3),
+            shape: 'ellipse',
+            font: { size: 18, color: '#000000', face: 'Arial', multi: true },
+            borderWidth: 2,
+            widthConstraint: { maximum: 200 },
+            title: nodeData.name,
+            color: {
+                background: bgColor,
+                border: borderColor,
+                highlight: { background: bgColor, border: borderColor }
+            }
+        };
+
+        if (nodeData.x !== undefined && nodeData.y !== undefined) {
+            nodeObj.x = Number(nodeData.x);
+            nodeObj.y = Number(nodeData.y);
+        }
+
+        network.value.body.data.nodes.add(nodeObj);
+
+        if (nodeData.x !== undefined && nodeData.y !== undefined) {
+            network.value.moveNode(nodeObj.id, Number(nodeData.x), Number(nodeData.y));
+        }
+    } catch (e) {
+        console.warn('Node já existe ou erro ao adicionar:', e);
+    }
+  }
+
+  function removeNodeFromCanvas(nodeId) {
+      if (!network.value) return;
+      try {
+        network.value.body.data.nodes.remove(nodeId);
+      } catch(e){
+        console.log(e);
+      }
+  }
+
+  function removeEdgeFromCanvas(edgeId, source, target) {
+      if (!network.value) return;
+      try {
+          if (network.value.body.data.edges.get(edgeId)) {
+              network.value.body.data.edges.remove(edgeId);
+              return;
+          } else if (network.value.body.data.edges.get(String(edgeId))) {
+              network.value.body.data.edges.remove(String(edgeId));
+              return;
+          }
+
+          if (source && target) {
+              const allEdges = network.value.body.data.edges.get();
+              const visualEdge = allEdges.find(e =>
+                  String(e.from) === String(source) && String(e.to) === String(target)
+              );
+
+              if (visualEdge) {
+                  network.value.body.data.edges.remove(visualEdge.id);
+              }
+          }
+      } catch(e) { console.warn(e); }
   }
 
   return {
@@ -722,6 +810,9 @@ export function useCLDDiagramViewModel() {
     deleteSelectedElements,
     getCurrentPositions,
     updateNodePosition,
-    nodeDraggedCallback
+    nodeDraggedCallback,
+    addNodeToCanvas,
+    removeEdgeFromCanvas,
+    removeNodeFromCanvas
   };
 }

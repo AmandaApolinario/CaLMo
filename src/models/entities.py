@@ -1,7 +1,7 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Enum as SqlEnum, Date, Text, Table
+from sqlalchemy import Column, Integer, String, ForeignKey, Enum as SqlEnum, Date, Text, Table, DateTime
 from sqlalchemy.orm import relationship
 import enum
-from datetime import date
+from datetime import date, datetime
 import uuid
 import networkx as nx
 from .. import db
@@ -143,3 +143,13 @@ class Archetype(db.Model):
 
     cld = relationship('CLD', back_populates='archetypes', passive_deletes=True)
     variables = relationship('Variable', secondary=archetype_variables)
+
+class CLDHistory(db.Model):
+    __tablename__ = 'cld_history'
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    cld_id = Column(String(36), ForeignKey('clds.id', ondelete="CASCADE"))
+    user_id = Column(String(36), ForeignKey('users.id'))
+    action_summary = Column(Text)
+    timestamp = Column(DateTime, default=datetime.timestamp(datetime.now()))
+
+    user = relationship('User')
