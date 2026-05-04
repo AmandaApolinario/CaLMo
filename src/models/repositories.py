@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-from .entities import User, Variable, CLD, Relationship, RelationshipType
+from .entities import User, Variable, CLD, Relationship, RelationshipType, CLDHistory
 from werkzeug.security import generate_password_hash, check_password_hash
 
 class UserRepository:
@@ -131,3 +131,8 @@ class RelationshipRepository:
     @staticmethod
     def get_relationships_by_cld(db: Session, cld_id):
         return db.query(Relationship).filter_by(cld_id=cld_id).all()
+
+class CLDHistoryRepository:
+    @staticmethod
+    def get_history(db: Session, cld_id):
+        return db.query(CLDHistory).filter_by(cld_id=cld_id).order_by(CLDHistory.timestamp.desc()).all()

@@ -37,6 +37,10 @@ export function useCLDCanvasViewModel() {
     const hasUnsavedChanges = computed(() => {
         return undoStack.value.length > lastSaveStackSize.value;
     });
+    const historyList = ref([]);
+    const isHistoryModalOpen = ref(false);
+    const isLoadingHistory = ref(false);
+    const pendingChanges = ref([]);
 
 
     const newVariable = reactive({
@@ -504,8 +508,11 @@ export function useCLDCanvasViewModel() {
     const handleKafkaEvent = async (event) => {
         const { action, data, clientId: eventClientId } = event;
         console.log(`Received Kafka event: ${action} from client ${eventClientId}`, data);
-        if (eventClientId && eventClientId === clientId.value) return;
 
+        if (action !== 'NODE_MOVED' && action !== 'DIAGRAM_SAVED') {
+            pendingChanges.value.push({ action: action, data: data });
+        }
+        if (eventClientId && eventClientId === clientId.value) return;
         switch (action) {
             case 'NODE_ADDED':
                 if (!nodes.value.some(n => n.id === data.node.id)) {
@@ -781,26 +788,45 @@ export function useCLDCanvasViewModel() {
     };
 
     const getChangesSummary = () => {
-        const newActions = undoStack.value.slice(lastSaveStackSize);
+        const newActions = pendingChanges.value;
 
-        if (newActions.length === 0) return "Atualização geral e reposicionamentos.";
+        if (newActions.length === 0) return "General update and repositioning.";
 
-        const actionNames = {
+        const actionLabels = {
             'NODE_ADDED': 'Variable Added',
             'NODE_REMOVED': 'Variable Removed',
-            'EDGE_ADDED': 'Conexões criadas',
-            'EDGE_REMOVED': 'Conexões removidas'
+            'EDGE_ADDED': 'New Relationship',
+            'EDGE_REMOVED': 'Removed Relationship'
         };
 
-        const counts = {};
-        newActions.forEach(item => {
-            const name = actionNames[item.action] || item.action;
-            counts[name] = (counts[name] || 0) + 1;
+        const getNodeName = (id) => {
+            let found = nodes.value.find(n => String(n.id) === String(id));
+            if (!found) found = variables.value.find(v => String(v.id) === String(id));
+            return found ? (found.name || found.label) : 'Unknown Variable';
+        };
+
+        const summaryLines = newActions.map(item => {
+            const prefix = actionLabels[item.action] || item.action;
+
+            if (item.action === 'NODE_ADDED' || item.action === 'NODE_REMOVED') {
+                const nodeName = item.data.node?.name || item.data.node?.label || 'Unknown Variable';
+                return `${prefix}: ${nodeName}`;
+            }
+            else if (item.action === 'EDGE_ADDED' || item.action === 'EDGE_REMOVED') {
+                const edge = item.data.edge;
+                const sourceName = getNodeName(edge.source);
+                const targetName = getNodeName(edge.target);
+
+                const polarity = edge.polarity ? String(edge.polarity).toUpperCase() : 'UNKNOWN';
+
+                return `${prefix}: ${sourceName} -> ${targetName}, ${polarity}`;
+            }
+
+            return `${prefix}`;
         });
 
-        return Object.entries(counts)
-            .map(([action, count]) => `${count}x ${action}`)
-            .join(', ');
+
+        return summaryLines.join('\n');
     };
 
     const saveDiagramName = async () => {
@@ -834,6 +860,51 @@ export function useCLDCanvasViewModel() {
             console.error('Erro ao atualizar o nome do diagrama:', error);
         }
     };
+
+    const openHistoryModal = async () => {
+        if (!diagram.value?.id) return;
+
+        isHistoryModalOpen.value = true;
+        isLoadingHistory.value = true;
+
+        try {
+            const response = await ApiService.get(`cld/${diagram.value.id}/history`);
+            historyList.value = response.data;
+        } catch (error) {
+            console.error('Erro ao buscar o histórico:', error);
+        } finally {
+            isLoadingHistory.value = false;
+        }
+    };
+
+    const closeHistoryModal = () => {
+        isHistoryModalOpen.value = false;
+    };
+
+    const formatHistoryText = (text) => {
+        if (!text) return '';
+
+        let safeText = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+        return safeText.split('\n').map(line => {
+            let htmlLine = line.trim();
+
+            htmlLine = htmlLine.replace(/^([^:]+:)/, '<strong style="font-weight: bold">$1</strong>');
+
+            if (htmlLine.match(/(\+|, POSITIVE)$/)) {
+                htmlLine = htmlLine.replace(/(➔|-&gt;)/g, '<i class="fa-solid fa-arrow-right" style="color: rgb(56, 142, 60);"></i>');
+                htmlLine = htmlLine.replace(/\s*\+$/, ' <span class="badge badge-positive">+</span>');
+            }
+            else if (htmlLine.match(/(-|, NEGATIVE)$/)) {
+                htmlLine = htmlLine.replace(/(➔|-&gt;)/g, '<i class="fa-solid fa-arrow-right" style="color: rgb(211, 47, 47);"></i>');
+                htmlLine = htmlLine.replace(/\s*-$/, ' <span class="badge badge-negative">-</span>');
+            }
+
+            return `<div class="history-line">${htmlLine}</div>`;
+        }).join('');
+    };
+
+
 
     return {
         variables: computed(() => variables.value),
@@ -889,6 +960,12 @@ export function useCLDCanvasViewModel() {
         clientId : computed(() => clientId.value),
         diagramNameRef,
         saveDiagramName,
-        hasUnsavedChanges
+        hasUnsavedChanges,
+        isHistoryModalOpen : computed(() => isHistoryModalOpen.value),
+        openHistoryModal,
+        closeHistoryModal,
+        historyList: computed(() => historyList.value),
+        isLoadingHistory: computed(() => isLoadingHistory.value),
+        formatHistoryText,
     };
 }

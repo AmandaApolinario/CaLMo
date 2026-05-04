@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from ..models.repositories import CLDRepository, RelationshipRepository, VariableRepository
+from ..models.repositories import CLDRepository, RelationshipRepository, VariableRepository, CLDHistoryRepository
 from ..models.domain_logic import CLDAnalyzer
 from ..models.entities import RelationshipType, Variable, CLD, Relationship, CLDHistory
 import secrets
@@ -11,6 +11,7 @@ class CLDViewModel:
         self.cld_repo = CLDRepository()
         self.rel_repo = RelationshipRepository()
         self.var_repo = VariableRepository()
+        self.cld_history_repo = CLDHistoryRepository()
         self.analyzer = CLDAnalyzer
     
     def create_cld(self, user_id, name, date_str, description, variable_ids, relationships_data):
@@ -437,3 +438,14 @@ class CLDViewModel:
             return None
         return cld.user_id
 
+    def get_cld_history(self, cld_id):
+        histories = self.cld_history_repo.get_history(self.db_session, cld_id)
+        result = []
+        for h in histories:
+            result.append({
+                'id': h.id,
+                'user_name': h.user.name if h.user else 'Unknown User',
+                'action_summary': h.action_summary,
+                'timestamp': h.timestamp.isoformat()
+            })
+        return result

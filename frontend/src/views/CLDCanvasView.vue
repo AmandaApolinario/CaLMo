@@ -82,6 +82,9 @@
                 <button class="tool-btn primary" v-if="isOwner" style="background-color: #2b7042; border-color: #3b8c56;" @click="openShareModal" title="Share Diagram">
                   <i class="fas fa-share-alt"></i> Share
                 </button>
+                <button @click="openHistoryModal" class="btn-history">
+                    <i class="fa-solid fa-clock-rotate-left"></i> CLD History
+                </button>
                 <button class="tool-btn primary" @click="saveDiagram" title="Save">
                     <i class="fas fa-save"></i> Save
                 </button>
@@ -389,6 +392,33 @@
                 </div>
             </div>
       </div>
+
+      <div v-if="isHistoryModalOpen" class="history-modal-overlay" @click.self="closeHistoryModal">
+          <div class="history-modal-content">
+              <div class="history-header">
+                  <h2>CLD History</h2>
+                  <button @click="closeHistoryModal" class="close-btn">✖</button>
+              </div>
+
+              <div v-if="isLoadingHistory" class="history-loading">
+                  Loading CLD History...
+              </div>
+
+              <div v-else-if="historyList.length === 0" class="history-empty">
+                  No changes saved yet.
+              </div>
+
+              <ul v-else class="history-list">
+                  <li v-for="item in historyList" :key="item.id" class="history-item">
+                      <div class="history-meta">
+                          <strong>{{ item.user_name }}</strong> saved on
+                          <span>{{ new Date(item.timestamp).toLocaleString() }}</span>
+                      </div>
+                      <div class="history-summary" v-html="formatHistoryText(item.action_summary)"></div>
+                  </li>
+              </ul>
+          </div>
+      </div>
     </div>
 </template>
 
@@ -448,7 +478,13 @@ const {
     clientId,
     diagramNameRef,
     saveDiagramName,
-    hasUnsavedChanges
+    hasUnsavedChanges,
+    isHistoryModalOpen,
+    openHistoryModal,
+    closeHistoryModal,
+    historyList,
+    isLoadingHistory,
+    formatHistoryText
 } = useCLDCanvasViewModel();
 
 const {
@@ -1523,5 +1559,133 @@ watch(() => diagram.value, (newDiagram) => {
         background-color: #1e1e1e;
         border-bottom-color: #42b883;
     }
+}
+
+.btn-history {
+    background-color: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: 0.2s;
+}
+.btn-history:hover {
+    background-color: #e2e8f0;
+}
+
+.history-modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.history-modal-content {
+    background: white;
+    width: 500px;
+    max-width: 90%;
+    max-height: 80vh;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+}
+
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.history-header h2 { margin: 0; font-size: 1.25rem; }
+
+.close-btn {
+    background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #64748b;
+}
+
+.history-list {
+    list-style: none;
+    padding: 0; margin: 0;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.history-item {
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px dashed #e2e8f0;
+}
+
+.history-item:last-child { border-bottom: none; }
+
+.history-meta {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin-bottom: 8px;
+}
+
+.history-meta strong { color: #0f172a; }
+
+.history-summary {
+    font-family: monospace;
+    background-color: #f8fafc;
+    padding: 10px;
+    border-radius: 6px;
+    white-space: pre-wrap;
+    font-size: 0.9rem;
+    color: #334155;
+    border: 1px solid #e2e8f0;
+}
+
+.history-loading, .history-empty {
+    padding: 40px; text-align: center; color: #64748b;
+}
+
+.history-line {
+    padding: 4px 0;
+    line-height: 1.5;
+}
+
+.text-positive {
+    color: #10b981;
+    margin: 0 8px;
+    font-size: 1.1em;
+}
+
+/* Seta Vermelha */
+.text-negative {
+    color: #ef4444;
+    margin: 0 8px;
+    font-size: 1.1em;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    color: white;
+    font-family: Arial, sans-serif;
+    font-size: 1rem;
+    font-weight: bold;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.badge-positive {
+    background-color: #10b981;
+}
+
+.badge-negative {
+    background-color: #ef4444;
 }
 </style>

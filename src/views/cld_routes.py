@@ -309,3 +309,14 @@ def get_shared_cld_owner_variables(user_id):
     ]
 
     return jsonify(formatted_variables), 200
+
+
+@cld_routes.route('/cld/<string:cld_id>/history', methods=['GET'])
+def get_cld_history_route(cld_id):
+    try:
+        view_model = CLDViewModel(db.session)
+        result = view_model.get_cld_history(cld_id)
+        return jsonify(result), 200
+    except Exception as e:
+        print(f"Erro ao buscar histórico: {e}")
+        return jsonify({'message': 'Server Error'}), 500
