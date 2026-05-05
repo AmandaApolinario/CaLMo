@@ -4,6 +4,24 @@
     <div class="variables-content">
       <div class="header">
         <h1>Variables Management</h1>
+        <div class="header-actions">
+          <input
+            type="file"
+            ref="fileInput"
+            @change="handleFileUpload"
+            accept=".json,.csv,.xmile,.stmx"
+            style="display: none;"
+          />
+          <button @click="triggerFileInput" class="btn-edit" :disabled="isImporting">
+            <i class="fas" :class="isImporting ? 'fa-spinner fa-spin' : 'fa-file-import'"></i>
+            {{ isImporting ? 'Importing...' : 'Import Variables' }}
+          </button>
+        </div>
+      </div>
+
+      <div v-if="message && message.includes('Successfully')" class="global-success">
+        <i class="fas fa-check-circle"></i> {{ message }}
+      </div>
       </div>
 
       <div class="layout">
@@ -83,11 +101,10 @@
         </div>
       </div>
     </div>
-  </div>
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import {onMounted, ref} from 'vue'
 import NavBar from '../components/NavBar.vue'
 import { useVariablesViewModel } from '@/viewmodels/VariablesViewModel'
 
@@ -103,7 +120,9 @@ const {
   submitForm,
   deleteVariable,
   startEditing,
-  cancelEditing
+  cancelEditing,
+  importVariablesFromFile,
+  isImporting
 } = useVariablesViewModel()
 
 // Handler functions
@@ -122,6 +141,22 @@ const deleteVariableHandler = async (id) => {
   await deleteVariable(id)
 }
 
+const fileInput = ref(null);
+
+const triggerFileInput = () => {
+  if (fileInput.value) {
+    fileInput.value.click();
+  }
+};
+
+const handleFileUpload = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  await importVariablesFromFile(file);
+  event.target.value = '';
+};
+
 onMounted(() => {
   fetchVariables()
 })
@@ -130,6 +165,7 @@ onMounted(() => {
 <style scoped>
 .variables-container {
   min-height: 100vh;
+  width: 100%;
   background-color: #f5f7fa;
   margin: 0;
   padding: 0;
@@ -145,6 +181,9 @@ onMounted(() => {
   margin: 0;
   padding: 2rem 3rem 1.5rem 3rem;
   border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .layout {
@@ -407,4 +446,5 @@ onMounted(() => {
 .fas {
   font-size: 1rem;
 }
+
 </style>
