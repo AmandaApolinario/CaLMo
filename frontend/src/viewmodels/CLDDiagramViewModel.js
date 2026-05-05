@@ -204,6 +204,9 @@ export function useCLDDiagramViewModel() {
         if (savedPositions && savedPositions[node.id]) {
           nodeObj.x = savedPositions[node.id].x;
           nodeObj.y = savedPositions[node.id].y;
+        } else if (node.x !== undefined && node.y !== undefined) {
+          nodeObj.x = node.x;
+          nodeObj.y = node.y;
         }
 
         const archKeys = archetypeIdsByNode.get(nodeObj.id) || [];

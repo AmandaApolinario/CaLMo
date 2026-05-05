@@ -708,7 +708,7 @@ const onDrop = (event) => {
             [variable.id]: { x: canvasPosition.x, y: canvasPosition.y }
         });
 
-        addNodeToCLD(variable);
+        addNodeToCLD(variable, canvasPosition.x, canvasPosition.y);
 
         const layer = layers.value.find(l => l.id === selectedLayerId.value);
         if (layer) {

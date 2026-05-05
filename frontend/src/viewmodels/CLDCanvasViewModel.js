@@ -275,7 +275,7 @@ export function useCLDCanvasViewModel() {
         selectedNodeInfo.value = { nodeName: '', loops: [], archetypes: [] };
     };
 
-    const addNodeToCLD = async (variable) => {
+    const addNodeToCLD = async (variable, x, y) => {
         if (!diagram.value) return false;
 
         if (nodes.value.some(n => n.id === variable.id)) {
@@ -286,7 +286,9 @@ export function useCLDCanvasViewModel() {
         const newNode = {
             id: variable.id,
             name: variable.name,
-            description: variable.description
+            description: variable.description,
+            x: x,
+            y: y
         };
 
         nodes.value = [...nodes.value, newNode];
@@ -333,10 +335,8 @@ export function useCLDCanvasViewModel() {
             polarity: polarity
         };
 
-        // 1. Atualizamos a lista local quebrando a referência com a antiga
         edges.value = [...edges.value, newRelationship];
 
-        // 2. Atualizamos o objeto do diagrama limpamente! (Sem ".push" duplo)
         diagram.value = {
             ...diagram.value,
             edges: edges.value,
@@ -477,8 +477,7 @@ export function useCLDCanvasViewModel() {
 
     const removeEdgeFromDiagram = async (edgeId, visEdge = null) => {
         if (!diagram.value) return;
-
-        let edgeToRemove = edges.value.find(e => String(e.id) === String(edgeId));
+        let edgeToRemove = edges.value.find(e => e.id != null && String(e.id) === String(edgeId));
 
         if (!edgeToRemove && visEdge) {
             edgeToRemove = {
@@ -494,7 +493,19 @@ export function useCLDCanvasViewModel() {
             return;
         }
 
-        edges.value = edges.value.filter(e => String(e.id) !== String(edgeId));
+        edges.value = edges.value.filter(e => {
+            if (e.id != null && edgeToRemove.id != null && String(e.id) === String(edgeToRemove.id)) {
+                return false;
+            }
+            if (e.source != null && edgeToRemove.source != null &&
+                String(e.source) === String(edgeToRemove.source) &&
+                String(e.target) === String(edgeToRemove.target)) {
+                return false;
+            }
+            return true;
+        });
+
+        syncPositionsToNodes();
 
         diagram.value = {
             ...diagram.value,
@@ -502,7 +513,7 @@ export function useCLDCanvasViewModel() {
         };
 
         if (remoteEdgeRemovedCallback.value) {
-            remoteEdgeRemovedCallback.value(edgeId);
+            remoteEdgeRemovedCallback.value(edgeId, edgeToRemove.source, edgeToRemove.target);
         }
 
         undoStack.value.push({
@@ -518,6 +529,7 @@ export function useCLDCanvasViewModel() {
             polarity: edgeToRemove.polarity,
             clientId: clientId.value
         }).catch(console.error);
+
         await updateLoopsAndArchetypes();
     };
 
@@ -542,7 +554,7 @@ export function useCLDCanvasViewModel() {
                 const edgesToRemove = edges.value.filter(e => e.source === data.nodeId || e.target === data.nodeId);
                 edges.value = edges.value.filter(e => e.source !== data.nodeId && e.target !== data.nodeId);
 
-                // CRUCIAL: Atualiza o diagrama para que o Vis.js saiba que a peça sumiu
+                syncPositionsToNodes();
                 diagram.value = { ...diagram.value, nodes: nodes.value, edges: edges.value };
 
                 if (remoteNodeRemovedCallback.value) remoteNodeRemovedCallback.value(data.nodeId);
@@ -560,17 +572,23 @@ export function useCLDCanvasViewModel() {
               break;
 
             case 'EDGE_REMOVED':
-                let edgeToRemove = edges.value.find(e => String(e.id) === String(data.edgeId));
-                if (!edgeToRemove && data.source && data.target) {
-                    edgeToRemove = edges.value.find(e => String(e.source) === String(data.source) && String(e.target) === String(data.target));
-                }
-
-                if (edgeToRemove) {
-                    edges.value = edges.value.filter(e => e.id !== edgeToRemove.id);
-                    diagram.value = { ...diagram.value, edges: edges.value };
-                    if (remoteEdgeRemovedCallback.value) {
-                        remoteEdgeRemovedCallback.value(edgeToRemove.id, data.source, data.target);
+                edges.value = edges.value.filter(e => {
+                    if (e.id != null && data.edgeId != null && String(e.id) === String(data.edgeId)) {
+                        return false;
                     }
+                    if (e.source != null && data.source != null &&
+                        String(e.source) === String(data.source) &&
+                        String(e.target) === String(data.target)) {
+                        return false;
+                    }
+                    return true;
+                });
+
+                syncPositionsToNodes();
+                diagram.value = { ...diagram.value, edges: edges.value };
+
+                if (remoteEdgeRemovedCallback.value) {
+                    remoteEdgeRemovedCallback.value(data.edgeId, data.source, data.target);
                 }
                 break;
 
@@ -599,6 +617,7 @@ export function useCLDCanvasViewModel() {
 
             case 'ANALYSIS_UPDATED':
                 if (diagram.value) {
+                    syncPositionsToNodes();
                     diagram.value = {
                         ...diagram.value,
                         nodes: nodes.value,
@@ -954,6 +973,7 @@ export function useCLDCanvasViewModel() {
                 const uniqueArchetypes = getUniqueItems(liveAnalysis.archetypes);
 
                 if (diagram.value) {
+                    syncPositionsToNodes();
                     diagram.value = {
                         ...diagram.value,
                         nodes: nodes.value,
@@ -971,6 +991,19 @@ export function useCLDCanvasViewModel() {
             }
         } catch (error) {
             console.error('Erro ao reprocessar loops e arquétipos', error);
+        }
+    };
+
+    const syncPositionsToNodes = () => {
+        if (provideStateCallback.value) {
+            const currentPos = provideStateCallback.value();
+            nodes.value = nodes.value.map(node => {
+                const pos = currentPos[node.id] || currentPos[String(node.id)];
+                if (pos && pos.x !== undefined && pos.y !== undefined) {
+                    return { ...node, x: pos.x, y: pos.y };
+                }
+                return node;
+            });
         }
     };
 
