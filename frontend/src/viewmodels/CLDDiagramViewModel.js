@@ -873,6 +873,26 @@ export function useCLDDiagramViewModel() {
       } catch(e) { console.warn(e); }
   }
 
+  function exportToPNG(filename = 'diagrama_cld.png') {
+    if (!networkContainer.value) return;
+
+    const canvas = networkContainer.value.querySelector('canvas');
+    if (!canvas) {
+      console.warn('Canvas não encontrado para exportação.');
+      return;
+    }
+
+    const imageURL = canvas.toDataURL('image/png');
+
+    const downloadLink = document.createElement('a');
+    downloadLink.href = imageURL;
+    downloadLink.download = filename;
+
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+  }
+
   return {
     networkContainer,
     network,
@@ -899,6 +919,7 @@ export function useCLDDiagramViewModel() {
     nodeDraggedCallback,
     addNodeToCanvas,
     removeEdgeFromCanvas,
-    removeNodeFromCanvas
+    removeNodeFromCanvas,
+    exportToPNG
   };
 }

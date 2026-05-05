@@ -85,6 +85,9 @@
                 <button @click="openHistoryModal" class="btn-history">
                     <i class="fa-solid fa-clock-rotate-left"></i> CLD History
                 </button>
+                <button @click="handleExportPNG" class="tool-btn primary" title="Exportar as PNG">
+                  <i class="fas fa-image"></i> Export as PNG
+                </button>
                 <button class="tool-btn primary" @click="saveDiagram" title="Save">
                     <i class="fas fa-save"></i> Save
                 </button>
@@ -512,7 +515,8 @@ const {
     nodeDraggedCallback,
     addNodeToCanvas,
     removeNodeFromCanvas,
-    removeEdgeFromCanvas
+    removeEdgeFromCanvas,
+    exportToPNG
 } = useCLDDiagramViewModel();
 
 // UI State
@@ -817,6 +821,11 @@ const handleBeforeUnload = (event) => {
         event.preventDefault();
         event.returnValue = '';
     }
+};
+
+const handleExportPNG = () => {
+    const fileName = diagramNameRef.value ? `${diagramNameRef.value}.png` : 'diagrama_cld.png';
+    exportToPNG(fileName);
 };
 
 
@@ -1695,4 +1704,5 @@ watch(() => diagram.value, (newDiagram) => {
 .badge-negative {
     background-color: #ef4444;
 }
+
 </style>
