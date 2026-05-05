@@ -275,7 +275,7 @@ export function useCLDCanvasViewModel() {
         selectedNodeInfo.value = { nodeName: '', loops: [], archetypes: [] };
     };
 
-    const addNodeToCLD = (variable) => {
+    const addNodeToCLD = async (variable) => {
         if (!diagram.value) return false;
 
         if (nodes.value.some(n => n.id === variable.id)) {
@@ -307,11 +307,11 @@ export function useCLDCanvasViewModel() {
           node: newNode,
           clientId: getClientId()
         }).catch(err => console.error('Erro ao enviar evento NODE_ADDED', err));
-
+        await updateLoopsAndArchetypes();
         return true;
     };
 
-    const addConnection = (sourceId, targetId, polarity = 'positive') => {
+    const addConnection = async (sourceId, targetId, polarity = 'positive') => {
         if (!diagram.value) return null;
 
         const hasConflict = edges.value.some(edge =>
@@ -358,6 +358,7 @@ export function useCLDCanvasViewModel() {
             clientId: clientId.value
         }).catch(err => console.error('Erro ao enviar evento EDGE_ADDED', err));
 
+        await updateLoopsAndArchetypes();
         return newRelationship;
     };
 
@@ -417,7 +418,7 @@ export function useCLDCanvasViewModel() {
         }
     };
 
-    const removeNodeFromDiagram = (nodeId, visEdges = []) => {
+    const removeNodeFromDiagram = async (nodeId, visEdges = []) => {
         if (!diagram.value) return;
         const nodeToRemove = nodes.value.find(n => n.id === nodeId);
         if (!nodeToRemove) return;
@@ -471,9 +472,10 @@ export function useCLDCanvasViewModel() {
             nodeId,
             clientId: clientId.value
         }).catch(console.error);
+        await updateLoopsAndArchetypes();
     };
 
-    const removeEdgeFromDiagram = (edgeId, visEdge = null) => {
+    const removeEdgeFromDiagram = async (edgeId, visEdge = null) => {
         if (!diagram.value) return;
 
         let edgeToRemove = edges.value.find(e => String(e.id) === String(edgeId));
@@ -516,6 +518,7 @@ export function useCLDCanvasViewModel() {
             polarity: edgeToRemove.polarity,
             clientId: clientId.value
         }).catch(console.error);
+        await updateLoopsAndArchetypes();
     };
 
     const handleKafkaEvent = async (event) => {
@@ -528,51 +531,47 @@ export function useCLDCanvasViewModel() {
         if (eventClientId && eventClientId === clientId.value) return;
         switch (action) {
             case 'NODE_ADDED':
-                if (!nodes.value.some(n => n.id === data.node.id)) {
-                    nodes.value.push(data.node);
+               if (!nodes.value.some(n => n.id === data.node.id)) {
+                    nodes.value = [...nodes.value, data.node];
+                    diagram.value = { ...diagram.value, nodes: nodes.value };
                     if (remoteNodeAddedCallback.value) remoteNodeAddedCallback.value(data.node);
                 }
                 break;
             case 'NODE_REMOVED':
-                const nodeIdx = nodes.value.findIndex(n => n.id === data.nodeId);
-                if (nodeIdx > -1){
-                    nodes.value.splice(nodeIdx, 1);
-                    if (remoteNodeRemovedCallback.value) remoteNodeRemovedCallback.value(data.nodeId);
-                }
-
+                nodes.value = nodes.value.filter(n => n.id !== data.nodeId);
                 const edgesToRemove = edges.value.filter(e => e.source === data.nodeId || e.target === data.nodeId);
+                edges.value = edges.value.filter(e => e.source !== data.nodeId && e.target !== data.nodeId);
+
+                // CRUCIAL: Atualiza o diagrama para que o Vis.js saiba que a peça sumiu
+                diagram.value = { ...diagram.value, nodes: nodes.value, edges: edges.value };
+
+                if (remoteNodeRemovedCallback.value) remoteNodeRemovedCallback.value(data.nodeId);
                 edgesToRemove.forEach(e => {
-                    const eIdx = edges.value.findIndex(edge => edge.id === e.id);
-                    if(eIdx > -1){
-                        edges.value.splice(eIdx, 1);
-                        if (remoteNodeRemovedCallback.value) remoteNodeRemovedCallback.value(data.nodeId);
-                    }
+                    if (remoteEdgeRemovedCallback.value) remoteEdgeRemovedCallback.value(e.id);
                 });
-                await updateLoopsAndArchetypes();
                 break;
 
             case 'EDGE_ADDED':
               if (!edges.value.some(e => e.id === data.edge.id)) {
-                edges.value.push(data.edge);
+                edges.value = [...edges.value, data.edge];
+                diagram.value = { ...diagram.value, edges: edges.value };
                 if (remoteEdgeAddedCallback.value) remoteEdgeAddedCallback.value(data.edge);
               }
-              await updateLoopsAndArchetypes();
               break;
 
             case 'EDGE_REMOVED':
-                let edgeIdx = edges.value.findIndex(e => String(e.id) === String(data.edgeId));
-                if (edgeIdx === -1 && data.source && data.target) {
-                    edgeIdx = edges.value.findIndex(e => String(e.source) === String(data.source) && String(e.target) === String(data.target));
+                let edgeToRemove = edges.value.find(e => String(e.id) === String(data.edgeId));
+                if (!edgeToRemove && data.source && data.target) {
+                    edgeToRemove = edges.value.find(e => String(e.source) === String(data.source) && String(e.target) === String(data.target));
                 }
 
-                if (edgeIdx > -1) {
-                    edges.value.splice(edgeIdx, 1);
+                if (edgeToRemove) {
+                    edges.value = edges.value.filter(e => e.id !== edgeToRemove.id);
+                    diagram.value = { ...diagram.value, edges: edges.value };
+                    if (remoteEdgeRemovedCallback.value) {
+                        remoteEdgeRemovedCallback.value(edgeToRemove.id, data.source, data.target);
+                    }
                 }
-
-                if (remoteEdgeRemovedCallback.value) {
-                    remoteEdgeRemovedCallback.value(data.edgeId, data.source, data.target);
-                }
-                await updateLoopsAndArchetypes();
                 break;
 
             case 'VARIABLE_ADDED':
@@ -589,16 +588,24 @@ export function useCLDCanvasViewModel() {
                 await fetchVariables(diagramId, shareToken);
                 break;
 
-            case 'UNDO_PERFORMED':
-                await fetchDiagram(diagram.value.id);
-                break;
-
             case 'DIAGRAM_NAME_UPDATED':
                 if (data.clientId !== clientId.value) {
                     diagramNameRef.value = data.name;
                     if (diagram.value) {
                         diagram.value.name = data.name;
                     }
+                }
+                break;
+
+            case 'ANALYSIS_UPDATED':
+                if (diagram.value) {
+                    diagram.value = {
+                        ...diagram.value,
+                        nodes: nodes.value,
+                        edges: edges.value,
+                        feedback_loops: data.loops || [],
+                        archetypes: data.archetypes || []
+                    };
                 }
                 break;
         }
@@ -651,7 +658,7 @@ export function useCLDCanvasViewModel() {
       return clientId;
     };
 
-    const performUndo = () => {
+    const performUndo = async () => {
       if (undoStack.value.length === 0) return;
 
       const lastAction = undoStack.value.pop();
@@ -722,6 +729,7 @@ export function useCLDCanvasViewModel() {
 
       publishDiagramEvent(diagram.value.id, inverseAction, inverseData)
         .catch(err => console.error('Erro ao publicar undo:', err));
+      await updateLoopsAndArchetypes();
     };
 
     const openShareModal = async () => {
@@ -941,15 +949,25 @@ export function useCLDCanvasViewModel() {
                         return true;
                     });
                 };
+
+                const uniqueLoops = getUniqueItems(liveAnalysis.loops);
+                const uniqueArchetypes = getUniqueItems(liveAnalysis.archetypes);
+
                 if (diagram.value) {
                     diagram.value = {
                         ...diagram.value,
                         nodes: nodes.value,
                         edges: edges.value,
-                        feedback_loops: getUniqueItems(liveAnalysis.loops),
-                        archetypes: getUniqueItems(liveAnalysis.archetypes)
+                        feedback_loops: uniqueLoops,
+                        archetypes: uniqueArchetypes
                     };
                 }
+
+                publishDiagramEvent(diagram.value.id, 'ANALYSIS_UPDATED', {
+                    loops: uniqueLoops,
+                    archetypes: uniqueArchetypes,
+                    clientId: clientId.value
+                }).catch(console.error);
             }
         } catch (error) {
             console.error('Erro ao reprocessar loops e arquétipos', error);
