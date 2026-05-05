@@ -323,7 +323,8 @@ def get_cld_history_route(cld_id):
 
 
 @cld_routes.route('/cld/analyze', methods=['POST'])
-def analyze_live_diagram():
+@token_required
+def analyze_live_diagram(user_id):
     data = request.json
     nodes = data.get('nodes', [])
     edges = data.get('edges', [])
@@ -334,3 +335,23 @@ def analyze_live_diagram():
         return jsonify(result), 200
     else:
         return jsonify({"error": message}), 500
+
+@cld_routes.route('/cld/create-empty', methods=['POST'])
+@token_required
+def create_empty_diagram(user_id):
+    data = request.json
+    view_model = CLDViewModel(db.session)
+    result, message = view_model.createEmptyCLD(
+        user_id,
+        data['name'],
+        data['date'],
+        data['description']
+    )
+
+    if not result:
+        return jsonify({'message': message}), 400
+
+    return jsonify({
+        'message': 'CLD created successfully',
+        'cld_id': result
+    }), 201

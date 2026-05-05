@@ -507,3 +507,26 @@ class CLDViewModel:
             import traceback
             traceback.print_exc()
             return None, f"Error analyzing live state: {str(e)}"
+
+
+    def createEmptyCLD(self, user_id, name, date_str, description):
+
+        try:
+            cld_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            return None, "Invalid date format. Use YYYY-MM-DD"
+
+        try:
+            # Create the CLD
+            cld = self.cld_repo.create_cld(
+                self.db_session,
+                user_id=user_id,
+                name=name,
+                date=cld_date,
+                description=description
+            )
+            return cld.id, "CLD created successfully"
+        except Exception as e:
+            self.db_session.rollback()
+            return None, f"Error creating CLD: {str(e)}"
+

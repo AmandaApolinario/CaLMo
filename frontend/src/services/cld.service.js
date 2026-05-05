@@ -176,6 +176,22 @@ class CLDService {
       return null;
     }
   }
+
+  async createEmptyCLD(cldData) {
+    try{
+      console.log('CLD Service - Creating CLD with data:', cldData);
+      const response = await ApiService.post('cld/create-empty', cldData);
+      console.log('CLD Service - Create response:', response.data);
+
+      if(response.data && response.data.cld_id) {
+        return response.data.cld_id;
+      }
+    }catch (error) {
+      console.error('Error creating CLD:', error);
+      console.error('Error response:', error.response?.data);
+      throw new Error(error.response?.data?.message || error.message || 'Failed to create diagram');
+    }
+  }
 }
 
 export default new CLDService(); 

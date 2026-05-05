@@ -64,8 +64,7 @@
                   <div v-for="(edge, index) in diagram.edges" :key="index" class="relationship">
                     <div class="relationship-row">
                       <select v-model="edge.source" 
-                              @change="edge.target && checkForConflictingRelationship(index)" 
-                              required 
+                              @change="edge.target && checkForConflictingRelationship(index)"
                               class="relationship-select">
                         <option value="">Select source variable</option>
                         <option v-for="variable in variables" :key="variable.id" :value="variable.id">
@@ -75,7 +74,6 @@
                       
                       <select v-model="edge.polarity" 
                               @change="edge.source && edge.target && checkForConflictingRelationship(index)"
-                              required 
                               class="relationship-type">
                         <option value="positive">+ (Positive)</option>
                         <option value="negative">- (Negative)</option>
@@ -83,7 +81,6 @@
                       
                       <select v-model="edge.target" 
                               @change="checkForConflictingRelationship(index)"
-                              required 
                               class="relationship-select">
                         <option value="">Select target variable</option>
                         <option v-for="variable in filteredTargetVariables(edge.source)" 
@@ -123,6 +120,15 @@
             >
               {{ saving ? 'Creating...' : 'Create CLD' }}
             </button>
+            <button
+              type="submit"
+              :disabled="saving"
+              class="btn-submit"
+              @click="isCanvasRedirect = true"
+            >
+              <i class="fas fa-project-diagram"></i>
+              {{ saving && isCanvasRedirect ? 'Opening Canvas...' : 'Create & Open Canvas' }}
+            </button>
           </div>
         </form>
 
@@ -141,12 +147,13 @@
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount } from 'vue'
+import {onMounted, onBeforeUnmount, ref} from 'vue'
 import { useRouter } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
 import { useCLDEditorViewModel } from '@/viewmodels/CLDEditorViewModel'
 
 const router = useRouter()
+const isCanvasRedirect = ref(false)
 
 // Initialize the CLD Editor ViewModel
 const { 
@@ -192,19 +199,25 @@ onBeforeUnmount(() => {
 
 const handleSubmit = async () => {
   // Validate the diagram data
-  const validationError = validateDiagram()
-  if (validationError) {
-    error.value = validationError
-    return
+  if(!isCanvasRedirect.value) {
+   const validationError = validateDiagram()
+    if (validationError) {
+      error.value = validationError
+      return
+    }
   }
   
   // Create the diagram
   try {
-    const newDiagram = await createDiagram(diagram.value)
+    const newDiagram = await createDiagram(diagram.value, isCanvasRedirect.value)
     if (newDiagram) {
       // Redirect to the diagram list after successful creation
       setTimeout(() => {
-        router.push('/clds')
+        if (isCanvasRedirect.value) {
+          router.push(`/cld/${newDiagram}/canvas`)
+        } else {
+          router.push('/clds')
+        }
       }, 1000)
     }
   } catch (err) {
@@ -518,5 +531,15 @@ button {
 /* Font Awesome icons */
 .fas {
   font-size: 1.2rem;
+}
+
+.btn-canvas {
+  background-color: #2c3e50;
+  color: white;
+}
+
+.btn-canvas:hover {
+  background-color: #1a252f;
+  transform: translateY(-2px);
 }
 </style>

@@ -112,7 +112,7 @@ export function useCLDEditorViewModel() {
   };
   
   // Save a new diagram
-  const createDiagram = async (diagramData) => {
+  const createDiagram = async (diagramData, isCanvasRedirect = false) => {
     if (!diagramData) {
       error.value = 'No diagram data to save';
       return null;
@@ -149,8 +149,13 @@ export function useCLDEditorViewModel() {
       };
       
       console.log('Creating diagram with API data:', apiData);
+      if(isCanvasRedirect){
+        const newDiagram = await CLDService.createEmptyCLD(apiData);
+        successMessage.value = 'Diagram created successfully!';
+        return newDiagram;
+      }
+
       const newDiagram = await CLDService.createCLD(apiData);
-      
       successMessage.value = 'Diagram created successfully!';
       return newDiagram;
     } catch (err) {

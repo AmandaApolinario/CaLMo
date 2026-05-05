@@ -41,6 +41,9 @@
             <button @click="editDiagram(diagram.id)" class="btn-edit">
               <i class="fas fa-edit"></i> Edit
             </button>
+            <button @click="canvasDiagram(diagram.id)" class="btn-view">
+              <i class="fas fa-object-group"></i> Canvas
+            </button>
             <button @click="confirmDeleteDiagram(diagram.id)" class="btn-delete">
               <i class="fas fa-trash-alt"></i> Delete
             </button>
@@ -81,6 +84,10 @@ const viewDiagram = (id) => {
 
 const editDiagram = (id) => {
   router.push(`/cld/${id}/edit`)
+}
+
+const canvasDiagram = (id) => {
+  router.push(`/cld/${id}/canvas`)
 }
 
 // Handles CLD deletion with user confirmation
