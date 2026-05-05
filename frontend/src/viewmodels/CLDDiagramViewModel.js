@@ -7,7 +7,7 @@ import {
   getArchetypeColor,
   getLoopColor,
   getArchetypeInstanceColor,
-  ensureContrastWithBackground, // ensure instance color is not too close to node regular color
+  ensureContrastWithBackground, LOOP_COLORS, // ensure instance color is not too close to node regular color
 } from '@/theme/colors';
 import { makePieEllipseDataUrl } from '@/theme/nodeImages';
 
@@ -385,6 +385,52 @@ export function useCLDDiagramViewModel() {
       if (params.nodes.length > 0) {
         handleNodeSelection({ nodes: params.nodes }, diagram);
       }
+    });
+
+    network.value.on('afterDrawing', (ctx) => {
+      if (!diagram.feedback_loops || diagram.feedback_loops.length === 0) return;
+
+      diagram.feedback_loops.forEach((loop, index) => {
+        const isReinforcing = String(loop.type).toUpperCase().includes('REINFORCING') ||
+                              String(loop.type).toUpperCase() === 'POSITIVE';
+
+        const prefix = isReinforcing ? 'R' : 'B';
+        const labelText = `${prefix}${index + 1}`;
+        const color = isReinforcing ? LOOP_COLORS.REINFORCING: LOOP_COLORS.BALANCING;
+
+        const varIds = (loop.variables || []).map(v => typeof v === 'object' ? v.id : v);
+        if (varIds.length === 0) return;
+
+        const positions = network.value.getPositions(varIds);
+        let sumX = 0, sumY = 0, validNodes = 0;
+
+        varIds.forEach(id => {
+          if (positions[id]) {
+            sumX += positions[id].x;
+            sumY += positions[id].y;
+            validNodes++;
+          }
+        });
+
+        if (validNodes > 0) {
+          const centerX = sumX / validNodes;
+          const centerY = sumY / validNodes;
+
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, 16, 0, 2 * Math.PI, false);
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = color;
+          ctx.stroke();
+
+          ctx.font = 'bold 14px Arial';
+          ctx.fillStyle = color;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(labelText, centerX, centerY);
+        }
+      });
     });
 
     setTimeout(() => {
