@@ -275,6 +275,7 @@ const tint = (hex, alpha = 0.16) => {
 .cld-detail-container {
   min-height: 100vh;
   background-color: #f5f7fa;
+  width: 100%;
 }
 
 .cld-content {

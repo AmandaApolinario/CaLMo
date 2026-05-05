@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div style="width: 100%;">
     <DashboardNavBar />
     <div class="dashboard-container">
       <div class="dashboard-header">
@@ -119,6 +119,7 @@ const goToGettingStarted = () => {
   min-height: calc(100vh - 60px); /* Adjust for navbar height */
   background-color: #f5f7fa;
   padding: 2rem;
+  width: 100%;
 }
 
 .dashboard-header {

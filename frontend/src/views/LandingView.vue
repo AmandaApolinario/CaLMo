@@ -74,6 +74,7 @@ const goToRegister = () => {
   align-items: center;
   background: linear-gradient(to right, #f5f7fa, #e2e8f0);
   padding: 2rem;
+  width: 100%;
 }
 
 .landing-panel {

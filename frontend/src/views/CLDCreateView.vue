@@ -277,6 +277,7 @@ const checkForConflictingRelationship = (index) => {
 .create-cld-container {
   min-height: 100vh;
   background-color: #f5f7fa;
+  width: 100%;
 }
 
 .cld-content {

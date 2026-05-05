@@ -262,6 +262,7 @@ const checkForConflictingRelationship = (index) => {
   min-height: 100vh;
   background-color: #f8fafc;
   padding-bottom: 2rem;
+  width: 100%;
 }
 
 .cld-edit-content {
