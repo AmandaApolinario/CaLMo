@@ -6,6 +6,14 @@ export const JSONParser = {
       reader.onload = (e) => {
         try {
           const data = JSON.parse(e.target.result);
+          if (schema.xmlSelectors) {
+             return resolve({
+                diagram: data.diagram || { title: 'Imported CLD', description: '' },
+                nodes: data.nodes || [],
+                edges: data.edges || []
+             });
+          }
+
           const items = Array.isArray(data) ? data : [data];
           const expectedFields = Object.keys(schema.fields);
 
@@ -15,6 +23,7 @@ export const JSONParser = {
 
             for (const field of expectedFields) {
               const config = schema.fields[field];
+              // Busca ignorando maiúsculas e minúsculas
               const itemKey = Object.keys(item).find(k => k.toLowerCase() === field.toLowerCase());
               let value = itemKey ? item[itemKey] : undefined;
 

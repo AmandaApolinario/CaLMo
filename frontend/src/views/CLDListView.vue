@@ -4,9 +4,26 @@
     <div class="cld-content">
       <div class="header">
         <h1>Causal Loop Diagrams</h1>
+        <div class="header-actions">
+          <input
+            type="file"
+            ref="fileInput"
+            @change="handleFileUpload"
+            accept=".json,.xmile,.stmx"
+            style="display: none;"
+          />
+          <button @click="triggerFileInput" class="btn-import" :disabled="isImporting">
+            <i class="fas" :class="isImporting ? 'fa-spinner fa-spin' : 'fa-file-import'"></i>
+            {{ isImporting ? 'Importing...' : 'Import CLD' }}
+          </button>
+        </div>
         <button @click="createNewCLD" class="btn-create">
           <i class="fas fa-plus"></i> Create New CLD
         </button>
+      </div>
+
+      <div v-if="successMessage" class="global-success">
+        <i class="fas fa-check-circle"></i> {{ successMessage }}
       </div>
 
       <div v-if="loading" class="loading">
@@ -56,13 +73,14 @@
 
 <script setup>
 // Import necessary dependencies and components
-import { onMounted } from 'vue'
+import {onMounted, ref} from 'vue'
 import { useRouter } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
 import { useCLDListViewModel } from '@/viewmodels/CLDListViewModel'
 
 // Initialize router
 const router = useRouter()
+const fileInput = ref(null);
 
 // Initialize the ViewModel
 const { 
@@ -70,7 +88,10 @@ const {
   loading, 
   error, 
   fetchDiagrams, 
-  deleteDiagram 
+  deleteDiagram,
+  isImporting,
+  importCLDFromFile,
+  successMessage
 } = useCLDListViewModel();
 
 // Navigation handlers for CLD operations
@@ -99,6 +120,23 @@ const confirmDeleteDiagram = async (id) => {
 const formatDate = (dateString) => {
   return new Date(dateString).toLocaleDateString()
 }
+
+
+const triggerFileInput = () => {
+  if (fileInput.value) fileInput.value.click();
+};
+
+const handleFileUpload = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  try {
+    await importCLDFromFile(file);
+  } finally {
+    event.target.value = '';
+    if (isImporting !== undefined) isImporting.value = false;
+  }
+};
 
 onMounted(() => {
   fetchDiagrams()
@@ -324,5 +362,55 @@ h1 {
 /* Font Awesome icons */
 .fas, .far {
   font-size: 1rem;
+}
+
+.header-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.btn-import {
+  background-color: #2c3e50;
+  color: white;
+  padding: 0.9rem 1.8rem;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.05rem;
+  box-shadow: 0 2px 4px rgba(44, 62, 80, 0.3);
+}
+
+.btn-import:hover {
+  background-color: #1a252f;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(44, 62, 80, 0.3);
+}
+
+.btn-import:disabled {
+  background-color: #7f8c8d;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.global-success {
+  margin-bottom: 2rem;
+  padding: 1.2rem 1.5rem;
+  background-color: #d4edda;
+  color: #155724;
+  border-radius: 8px;
+  border-left: 4px solid #28a745;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-weight: 500;
+  font-size: 1.1rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 </style>

@@ -298,7 +298,7 @@ export function useCLDDiagramViewModel() {
         selectable: interactionMode.value === 'select'
       },
       physics: {
-        enabled: !hasSavedPositions,
+        enabled: false,
         stabilization: { enabled: !hasSavedPositions, iterations: 100, fit: true },
         barnesHut: {
           gravitationalConstant: -2000, centralGravity: 0.05,
