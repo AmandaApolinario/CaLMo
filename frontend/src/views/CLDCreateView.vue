@@ -54,6 +54,13 @@
               <!-- Variable Relationships -->
               <div class="form-group">
                 <label>Variable Relationships</label>
+                <div class="import-actions">
+                    <input type="file" ref="fileInput" @change="handleFileUpload" accept=".json,.csv,.xmile,.stmx" style="display: none;" />
+                    <button type="button" class="btn-import-sm" @click="triggerFileInput" :disabled="isImporting">
+                      <i class="fas fa-file-import"></i>
+                      {{ isImporting ? 'Importing...' : 'Import Data' }}
+                    </button>
+                  </div>
                 <div v-if="variables.length === 0" class="no-variables-message">
                   <p>No variables available. Please create variables first.</p>
                   <button type="button" @click="goToVariables" class="btn-secondary">
@@ -154,6 +161,7 @@ import { useCLDEditorViewModel } from '@/viewmodels/CLDEditorViewModel'
 
 const router = useRouter()
 const isCanvasRedirect = ref(false)
+const fileInput = ref(null)
 
 // Initialize the CLD Editor ViewModel
 const { 
@@ -170,7 +178,9 @@ const {
   addEdge,
   removeEdge,
   filteredTargetVariables,
-  validateDiagram
+  validateDiagram,
+  isImporting,
+  importRelationshipsFromFile
 } = useCLDEditorViewModel()
 
 // Initialize with an empty diagram
@@ -271,6 +281,24 @@ const checkForConflictingRelationship = (index) => {
     }
   }
 }
+
+const triggerFileInput = () => {
+    if (fileInput.value) fileInput.value.click();
+  };
+
+const handleFileUpload = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  try {
+    await importRelationshipsFromFile(file);
+  } finally {
+    event.target.value = '';
+    if (isImporting !== undefined) {
+      isImporting.value = false;
+    }
+  }
+};
 </script>
 
 <style scoped>
@@ -542,5 +570,37 @@ button {
 .btn-canvas:hover {
   background-color: #1a252f;
   transform: translateY(-2px);
+}
+
+.relationships-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.btn-import-sm {
+  background-color: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all 0.2s ease;
+}
+
+.btn-import-sm:hover {
+  background-color: #e2e8f0;
+  color: #0f172a;
+}
+
+.btn-import-sm:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 </style>

@@ -1,6 +1,7 @@
 import { ref, reactive, computed } from 'vue';
 import CLDService from '@/services/cld.service';
 import ApiService from '@/services/api.service';
+import {FileParserService} from "@/services/fileParser.service.js";
 
 export function useCLDEditorViewModel() {
   // Initialize with default empty structure to avoid null references
@@ -16,6 +17,16 @@ export function useCLDEditorViewModel() {
   const saving = ref(false);
   const error = ref(null);
   const successMessage = ref('');
+  const isImporting = ref(false);
+
+  const relationshipSchema = {
+    xmlSelector: 'connector',
+    fields: {
+      source: { required: true, xmlAttr: 'from' },
+      target: { required: true, xmlAttr: 'to' },
+      polarity: { required: false, default: 'positive', xmlAttr: 'polarity' }
+    }
+  };
   
   // Initialize empty diagram structure
   const createEmptyDiagram = () => {
@@ -282,6 +293,79 @@ export function useCLDEditorViewModel() {
     
     return null;
   };
+
+  const importRelationshipsFromFile = async (file) => {
+    isImporting.value = true;
+    error.value = null;
+    successMessage.value = '';
+
+    try {
+      const parsedEdges = await FileParserService.parseFile(file, relationshipSchema);
+
+      if (parsedEdges.length === 0) {
+        throw new Error('No valid relationships found in the file.');
+      }
+
+      const uniqueVarNames = new Set();
+      parsedEdges.forEach(edge => {
+        if (edge.source) uniqueVarNames.add(edge.source.trim());
+        if (edge.target) uniqueVarNames.add(edge.target.trim());
+      });
+
+      await fetchVariables();
+      const existingNamesMap = new Map();
+      variables.value.forEach(v => existingNamesMap.set(v.name.toLowerCase().trim(), v.id));
+
+      let newlyCreatedCount = 0;
+      for (const name of uniqueVarNames) {
+        const normalizedName = name.toLowerCase();
+        if (!existingNamesMap.has(normalizedName)) {
+          try {
+             const response = await ApiService.post('variable', { name: name, description: 'Created via Relationship Import' });
+             existingNamesMap.set(normalizedName, response.data.id);
+             newlyCreatedCount++;
+          } catch (e) {
+             console.error(`Failed to auto-create variable: ${name}`, e);
+          }
+        }
+      }
+
+      if (newlyCreatedCount > 0) {
+         await fetchVariables();
+         variables.value.forEach(v => existingNamesMap.set(v.name.toLowerCase().trim(), v.id));
+      }
+
+      if (!diagram.value.edges) diagram.value.edges = [];
+
+      let addedEdgesCount = 0;
+      parsedEdges.forEach(edge => {
+         const sourceId = existingNamesMap.get(edge.source.toLowerCase().trim());
+         const targetId = existingNamesMap.get(edge.target.toLowerCase().trim());
+
+         if (sourceId && targetId) {
+            let pol = String(edge.polarity).toLowerCase();
+            if (pol === '+' || pol === '1' || pol === 'positive') pol = 'positive';
+            else if (pol === '-' || pol === '-1' || pol === 'negative') pol = 'negative';
+            else pol = 'positive';
+
+            diagram.value.edges.push({
+               source: sourceId,
+               target: targetId,
+               polarity: pol
+            });
+            addedEdgesCount++;
+         }
+      });
+
+      successMessage.value = `Imported ${addedEdgesCount} relationships and auto-created ${newlyCreatedCount} missing variables!`;
+      setTimeout(() => { successMessage.value = '' }, 6000);
+    } catch (err) {
+      error.value = err.message || 'Failed to import relationships';
+      console.error('Import error:', err);
+    } finally {
+      isImporting.value = false;
+    }
+  };
   
   return {
     diagram,
@@ -299,6 +383,8 @@ export function useCLDEditorViewModel() {
     addEdge,
     removeEdge,
     filteredTargetVariables,
-    validateDiagram
+    validateDiagram,
+    isImporting,
+    importRelationshipsFromFile
   };
 } 
