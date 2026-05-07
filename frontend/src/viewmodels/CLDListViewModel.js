@@ -3,6 +3,7 @@ import CLDService from '@/services/cld.service';
 import {FileParserService} from "@/services/fileParser.service.js";
 import ApiService from "@/services/api.service.js";
 import {FileExportService} from "@/services/fileExport.service.js";
+import JSZip from "jszip";
 
 export function useCLDListViewModel() {
   const diagrams = ref([]);
@@ -298,9 +299,99 @@ export function useCLDListViewModel() {
   const exportSelectedDiagrams = async (format) => {
     if (selectedDiagrams.value.length === 0) return;
 
-    for (const id of selectedDiagrams.value) {
-      await exportDiagram(id, format);
-      await new Promise(resolve => setTimeout(resolve, 300));
+    loading.value = true;
+    error.value = null;
+
+    try {
+        const zip = new JSZip();
+
+        let globalVars = [];
+        try {
+            const varsResponse = await ApiService.get('variables');
+            globalVars = varsResponse.data || [];
+        } catch (e) {
+            console.warn('Could not fetch global variables for the exporter');
+        }
+
+        const idToNameMap = {};
+        globalVars.forEach(v => { if (v.id) idToNameMap[v.id] = v.name; });
+
+        for (const id of selectedDiagrams.value) {
+            const fullDiagram = await CLDService.getCLDById(id);
+            let filename = (fullDiagram.title || fullDiagram.name || 'diagrama').toLowerCase().replace(/\s/g, '_');
+
+            const rawNodes = fullDiagram.nodes || fullDiagram.variables || [];
+            rawNodes.forEach(n => { if (n.id) idToNameMap[n.id] = n.name; });
+
+            const formattedNodes = rawNodes.map(n => ({
+                name: n.name || idToNameMap[n.id] || 'Variável Desconhecida',
+                description: n.description || ''
+            }));
+
+            const rawEdges = fullDiagram.edges || fullDiagram.relationships || [];
+            const formattedEdges = rawEdges.map(e => {
+                const sId = e.source || e.source_id;
+                const tId = e.target || e.target_id;
+                const sourceName = e.source_name || idToNameMap[sId] || sId;
+                const targetName = e.target_name || idToNameMap[tId] || tId;
+                const pol = String(e.polarity || e.type || 'positive').toLowerCase();
+                const cleanPol = (pol === '+' || pol === 'positive' || pol === '1') ? 'positive' : 'negative';
+
+                return { source: sourceName, target: targetName, polarity: cleanPol };
+            });
+
+            const exportData = {
+                diagram: {
+                    title: fullDiagram.title || fullDiagram.name || 'Exported CLD',
+                    description: fullDiagram.description || ''
+                },
+                nodes: formattedNodes,
+                edges: formattedEdges
+            };
+
+            let fileContent = '';
+            let fileExtension = '';
+
+            if (format === 'json') {
+                fileContent = FileExportService.exportToJSON(exportData);
+                fileExtension = '.json';
+            } else if (format === 'csv') {
+                fileContent = FileExportService.exportToCSV(formattedEdges);
+                fileExtension = '.csv';
+            } else if (format === 'xmile') {
+                fileContent = FileExportService.exportToXMILE(exportData);
+                fileExtension = '.xmile';
+            }
+
+            let finalFilename = `${filename}${fileExtension}`;
+            let counter = 1;
+            while(zip.file(finalFilename)) {
+                finalFilename = `${filename}_(${counter})${fileExtension}`;
+                counter++;
+            }
+
+            zip.file(finalFilename, fileContent);
+        }
+
+        const blob = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `calmo_diagrams_${new Date().toISOString().split('T')[0]}.zip`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        successMessage.value = `Exported ${selectedDiagrams.value.length} CLDs!`;
+        selectedDiagrams.value = [];
+
+    } catch (err) {
+        error.value = 'Failed to export CLD.';
+        console.error(err);
+    } finally {
+        loading.value = false;
+        setTimeout(() => { if (successMessage.value) successMessage.value = ''; }, 5000);
     }
   };
 

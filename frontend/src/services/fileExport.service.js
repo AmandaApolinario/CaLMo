@@ -14,13 +14,11 @@ export const FileExportService = {
   },
 
   exportToJSON(data, filename) {
-    const jsonString = JSON.stringify(data, null, 2);
-    this.downloadFile(jsonString, `${filename}.json`, 'application/json');
+    return JSON.stringify(data, null, 2);
   },
 
   exportToCSV(data, filename) {
-    const csvString = Papa.unparse(data);
-    this.downloadFile(csvString, `${filename}.csv`, 'text/csv;charset=utf-8;');
+    return Papa.unparse(data);
   },
 
   exportToXMILE(cldData, filename) {
@@ -65,7 +63,7 @@ export const FileExportService = {
     xml += `    </model>\n`;
     xml += `</xmile>`;
 
-    this.downloadFile(xml, `${filename}.xmile`, 'application/xml');
+    return xml;
   },
 
   exportToXMILEVariables(variables, filename) {
@@ -91,6 +89,6 @@ export const FileExportService = {
       xml += `    </model>\n`;
       xml += `</xmile>`;
 
-      this.downloadFile(xml, `${filename}.xmile`, 'application/xml');
+      return xml;
     }
 };
