@@ -416,37 +416,40 @@ export function useCLDDiagramViewModel() {
           const centerX = sumX / validNodes;
           const centerY = sumY / validNodes;
 
-          const radius = 18;
+          const radius = 22;
           const startAngle = -Math.PI / 2 + 0.4;
           const endAngle = 1.5 * Math.PI - 0.4;
 
+          const arrowLengthRadians = 0.45;
+          const arrowHalfWidth = 8;
+
+          const baseAngle = endAngle - arrowLengthRadians;
+          const arcEndAngle = baseAngle + 0.05;
+
           ctx.beginPath();
-          ctx.arc(centerX, centerY, radius, startAngle, endAngle, false);
-          ctx.lineWidth = 2;
+          ctx.arc(centerX, centerY, radius, startAngle, arcEndAngle, false);
+          ctx.lineWidth = 4;
           ctx.strokeStyle = color;
           ctx.stroke();
 
-          const arrowSize = 8;
-          const arrowX = centerX + radius * Math.cos(endAngle);
-          const arrowY = centerY + radius * Math.sin(endAngle);
+          const tipX = centerX + radius * Math.cos(endAngle);
+          const tipY = centerY + radius * Math.sin(endAngle);
 
-          const tangentAngle = endAngle + Math.PI / 2;
+          const baseInnerX = centerX + (radius - arrowHalfWidth) * Math.cos(baseAngle);
+          const baseInnerY = centerY + (radius - arrowHalfWidth) * Math.sin(baseAngle);
+
+          const baseOuterX = centerX + (radius + arrowHalfWidth) * Math.cos(baseAngle);
+          const baseOuterY = centerY + (radius + arrowHalfWidth) * Math.sin(baseAngle);
 
           ctx.beginPath();
-          ctx.moveTo(arrowX, arrowY);
-          ctx.lineTo(
-            arrowX - arrowSize * Math.cos(tangentAngle - Math.PI / 6),
-            arrowY - arrowSize * Math.sin(tangentAngle - Math.PI / 6)
-          );
-          ctx.lineTo(
-            arrowX - arrowSize * Math.cos(tangentAngle + Math.PI / 6),
-            arrowY - arrowSize * Math.sin(tangentAngle + Math.PI / 6)
-          );
+          ctx.moveTo(tipX, tipY);
+          ctx.lineTo(baseInnerX, baseInnerY);
+          ctx.lineTo(baseOuterX, baseOuterY);
           ctx.closePath();
           ctx.fillStyle = color;
           ctx.fill();
 
-          ctx.font = 'bold 14px Arial';
+          ctx.font = 'bold 16px Arial';
           ctx.fillStyle = '#FFFFFF';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
