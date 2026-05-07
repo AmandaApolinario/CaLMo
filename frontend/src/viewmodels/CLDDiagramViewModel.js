@@ -416,16 +416,38 @@ export function useCLDDiagramViewModel() {
           const centerX = sumX / validNodes;
           const centerY = sumY / validNodes;
 
+          const radius = 18;
+          const startAngle = -Math.PI / 2 + 0.4;
+          const endAngle = 1.5 * Math.PI - 0.4;
+
           ctx.beginPath();
-          ctx.arc(centerX, centerY, 16, 0, 2 * Math.PI, false);
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-          ctx.fill();
+          ctx.arc(centerX, centerY, radius, startAngle, endAngle, false);
           ctx.lineWidth = 2;
           ctx.strokeStyle = color;
           ctx.stroke();
 
-          ctx.font = 'bold 14px Arial';
+          const arrowSize = 8;
+          const arrowX = centerX + radius * Math.cos(endAngle);
+          const arrowY = centerY + radius * Math.sin(endAngle);
+
+          const tangentAngle = endAngle + Math.PI / 2;
+
+          ctx.beginPath();
+          ctx.moveTo(arrowX, arrowY);
+          ctx.lineTo(
+            arrowX - arrowSize * Math.cos(tangentAngle - Math.PI / 6),
+            arrowY - arrowSize * Math.sin(tangentAngle - Math.PI / 6)
+          );
+          ctx.lineTo(
+            arrowX - arrowSize * Math.cos(tangentAngle + Math.PI / 6),
+            arrowY - arrowSize * Math.sin(tangentAngle + Math.PI / 6)
+          );
+          ctx.closePath();
           ctx.fillStyle = color;
+          ctx.fill();
+
+          ctx.font = 'bold 14px Arial';
+          ctx.fillStyle = '#FFFFFF';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(labelText, centerX, centerY);
