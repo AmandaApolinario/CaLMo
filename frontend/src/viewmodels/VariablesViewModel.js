@@ -1,6 +1,7 @@
 import { ref, reactive } from 'vue';
 import ApiService from '@/services/api.service';
 import {FileParserService} from "@/services/fileParser.service.js";
+import {FileExportService} from "@/services/fileExport.service.js";
 
 export function useVariablesViewModel() {
   const variables = ref([]);
@@ -10,6 +11,7 @@ export function useVariablesViewModel() {
   const isEditing = ref(false);
   const editingId = ref(null);
   const isImporting = ref(false);
+  const selectedVariables = ref([]);
   
   const newVariable = reactive({
     name: '',
@@ -175,6 +177,55 @@ export function useVariablesViewModel() {
     }
   };
 
+  const exportSelectedVariables = (format, filename = 'exported_variables') => {
+    if (selectedVariables.value.length === 0) return;
+
+    const varsToExport = variables.value.filter(v => selectedVariables.value.includes(v.id));
+
+    if (format === 'xmile') {
+      FileExportService.exportToXMILEVariables(varsToExport, filename);
+    } else {
+      const dataToExport = varsToExport.map(v => ({
+        name: v.name,
+        description: v.description || ''
+      }));
+      if (format === 'json') FileExportService.exportToJSON(dataToExport, filename);
+      if (format === 'csv') FileExportService.exportToCSV(dataToExport, filename);
+    }
+  };
+
+  const deleteSelectedVariables = async () => {
+    if (selectedVariables.value.length === 0) return;
+
+    loading.value = true;
+    error.value = null;
+    let successCount = 0;
+
+    try {
+      for (const id of selectedVariables.value) {
+        await ApiService.delete(`variable/${id}`);
+        successCount++;
+      }
+      message.value = `Successfully deleted ${successCount} variables!`;
+    } catch (err) {
+      error.value = 'Failed to delete some variables';
+      console.error('Error in bulk delete:', err);
+    } finally {
+      selectedVariables.value = [];
+      await fetchVariables();
+      loading.value = false;
+      setTimeout(() => { if (message.value.includes('Successfully')) message.value = ''; }, 5000);
+    }
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedVariables.value.length === variables.value.length && variables.value.length > 0) {
+      selectedVariables.value = [];
+    } else {
+      selectedVariables.value = variables.value.map(v => v.id);
+    }
+  };
+
   return {
     variables,
     loading,
@@ -188,6 +239,10 @@ export function useVariablesViewModel() {
     startEditing,
     cancelEditing,
     importVariablesFromFile,
-    isImporting
+    isImporting,
+    selectedVariables,
+    deleteSelectedVariables,
+    exportSelectedVariables,
+    toggleSelectAll
   };
 } 
