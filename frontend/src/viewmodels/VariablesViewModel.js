@@ -199,23 +199,32 @@ export function useVariablesViewModel() {
 
     loading.value = true;
     error.value = null;
-    let successCount = 0;
+    message.value = '';
 
-    try {
-      for (const id of selectedVariables.value) {
+    let successCount = 0;
+    const failedVariables = [];
+
+    for (const id of selectedVariables.value) {
+      try {
         await ApiService.delete(`variable/${id}`);
         successCount++;
+      } catch (err) {
+        const varObj = variables.value.find(v => v.id === id);
+        failedVariables.push(varObj ? varObj.name : id);
       }
-      message.value = `Successfully deleted ${successCount} variables!`;
-    } catch (err) {
-      error.value = 'Failed to delete some variables';
-      console.error('Error in bulk delete:', err);
-    } finally {
-      selectedVariables.value = [];
-      await fetchVariables();
-      loading.value = false;
-      setTimeout(() => { if (message.value.includes('Successfully')) message.value = ''; }, 5000);
     }
+
+    selectedVariables.value = [];
+    await fetchVariables();
+
+    if (failedVariables.length === 0) {
+      message.value = `Successfully deleted ${successCount} variables!`;
+    } else {
+      error.value = `Deleted ${successCount} variables. Failed: ${failedVariables.join(', ')}`;
+    }
+
+    loading.value = false;
+    setTimeout(() => { message.value = ''; error.value = null; }, 6000);
   };
 
   const toggleSelectAll = () => {

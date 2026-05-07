@@ -6,9 +6,13 @@
         <h1>Variables Management</h1>
       </div>
 
-      <div v-if="message && message.includes('Successfully')" class="global-success">
-        <i class="fas fa-check-circle"></i> {{ message }}
-      </div>
+      <div class="messages-container" v-if="message || error">
+        <div v-if="message" class="success-message">
+          <i class="fas fa-check-circle"></i> {{ message }}
+        </div>
+        <div v-if="error" class="error-message">
+          <i class="fas fa-exclamation-circle"></i> {{ error }}
+        </div>
       </div>
 
       <div class="layout">
@@ -59,8 +63,7 @@
               <h3>Your Variables</h3>
               <div class="total-count">{{ variables.length }} variables</div>
             </div>
-            <div class="actions">
-              <div v-if="variables.length > 0" class="list-controls">
+            <div v-if="variables.length > 0" class="list-controls">
                 <label class="select-all-container">
                   <input
                     type="checkbox"
@@ -70,22 +73,7 @@
                   <span class="checkmark"></span>
                   Select All
                 </label>
-              </div>
-              <div class="header-actions">
-                  <input
-                    type="file"
-                    ref="fileInput"
-                    @change="handleFileUpload"
-                    accept=".json,.csv,.xmile,.stmx"
-                    style="display: none;"
-                  />
-                  <button @click="triggerFileInput" class="btn-edit" :disabled="isImporting">
-                    <i class="fas" :class="isImporting ? 'fa-spinner fa-spin' : 'fa-file-import'"></i>
-                    {{ isImporting ? 'Importing...' : 'Import Variables' }}
-                  </button>
-                </div>
             </div>
-
             <transition name="fade">
               <div v-if="selectedVariables.length > 0" class="bulk-actions">
                 <span class="selected-count">{{ selectedVariables.length }} selected</span>
@@ -102,14 +90,26 @@
                 </button>
               </div>
             </transition>
+            <div class="actions">
+              <div class="header-actions">
+                  <input
+                    type="file"
+                    ref="fileInput"
+                    @change="handleFileUpload"
+                    accept=".json,.csv,.xmile,.stmx"
+                    style="display: none;"
+                  />
+                  <button @click="triggerFileInput" class="btn-edit" :disabled="isImporting">
+                    <i class="fas" :class="isImporting ? 'fa-spinner fa-spin' : 'fa-file-import'"></i>
+                    {{ isImporting ? 'Importing...' : 'Import Variables' }}
+                  </button>
+                </div>
+            </div>
           </div>
 
           
           <div v-if="loading" class="loading">
             <i class="fas fa-spinner fa-spin"></i> Loading variables...
-          </div>
-          <div v-else-if="error" class="error">
-            <i class="fas fa-exclamation-circle"></i> {{ error }}
           </div>
           <div v-else-if="variables.length === 0" class="empty">
             <i class="fas fa-box-open"></i>
@@ -138,6 +138,7 @@
         </div>
       </div>
     </div>
+  </div>
 </template>
 
 <script setup>
@@ -720,6 +721,39 @@ onMounted(() => {
   display: flex;
   gap: 2rem;
   align-items: center
+}
+
+.messages-container {
+  margin: 1.5rem 3rem 0 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.success-message {
+  background-color: #d4edda;
+  color: #155724;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  border-left: 4px solid #28a745;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-weight: 500;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.error-message {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  border-left: 4px solid #dc3545;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-weight: 500;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 </style>

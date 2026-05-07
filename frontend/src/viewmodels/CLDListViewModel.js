@@ -256,23 +256,43 @@ export function useCLDListViewModel() {
 
   const deleteSelectedDiagrams = async () => {
     if (selectedDiagrams.value.length === 0) return;
+
     loading.value = true;
     error.value = null;
+    successMessage.value = '';
+
     let successCount = 0;
-    try {
-      for (const id of selectedDiagrams.value) {
+    const failedDiagrams = [];
+
+    for (const id of selectedDiagrams.value) {
+      const diagramObj = diagrams.value.find(d => d.id === id);
+      const diagName = diagramObj ? diagramObj.title : `ID: ${id}`;
+
+      try {
         await CLDService.deleteCLD(id);
         successCount++;
+      } catch (err) {
+        console.error(`Failed to delete diagram ${diagName}:`, err);
+        failedDiagrams.push(diagName);
       }
-      successMessage.value = `Successfully deleted ${successCount} diagrams!`;
-    } catch (err) {
-      error.value = 'Failed to delete some diagrams';
-    } finally {
-      selectedDiagrams.value = [];
-      await fetchDiagrams();
-      loading.value = false;
-      setTimeout(() => { if (successMessage.value.includes('Successfully deleted')) successMessage.value = ''; }, 5000);
     }
+
+    if (failedDiagrams.length === 0) {
+      successMessage.value = `Successfully deleted ${successCount} diagrams!`;
+    } else if (successCount > 0) {
+      error.value = `Deleted ${successCount} diagrams. Failed to delete: ${failedDiagrams.join(', ')}.`;
+    } else {
+      error.value = `Failed to delete diagrams: ${failedDiagrams.join(', ')}.`;
+    }
+
+    selectedDiagrams.value = [];
+    await fetchDiagrams();
+    loading.value = false;
+
+    setTimeout(() => {
+      if (successMessage.value) successMessage.value = '';
+      if (error.value && error.value.includes('Failed to delete')) error.value = null;
+    }, 6000);
   };
 
   const exportSelectedDiagrams = async (format) => {
