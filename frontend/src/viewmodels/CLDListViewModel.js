@@ -2,6 +2,7 @@ import { ref, reactive, computed } from 'vue';
 import CLDService from '@/services/cld.service';
 import {FileParserService} from "@/services/fileParser.service.js";
 import ApiService from "@/services/api.service.js";
+import {FileExportService} from "@/services/fileExport.service.js";
 
 export function useCLDListViewModel() {
   const diagrams = ref([]);
@@ -9,6 +10,7 @@ export function useCLDListViewModel() {
   const error = ref(null);
   const successMessage = ref('');
   const isImporting = ref(false);
+  const selectedDiagrams = ref([]);
 
   const cldSchema = {
     xmlSelectors: {
@@ -179,6 +181,111 @@ export function useCLDListViewModel() {
     }
   };
 
+  const exportDiagram = async (diagramId, format) => {
+    loading.value = true;
+    try {
+        const fullDiagram = await CLDService.getCLDById(diagramId);
+        const filename = (fullDiagram.title || fullDiagram.name || 'Diagram').toLowerCase().replace(/\s/g, '_');
+
+        let globalVars = [];
+        try {
+            const varsResponse = await ApiService.get('variables');
+            globalVars = varsResponse.data || [];
+        } catch (e) {
+            console.warn('Não foi possível buscar as variáveis globais para o exportador');
+        }
+
+        const idToNameMap = {};
+        globalVars.forEach(v => { if (v.id) idToNameMap[v.id] = v.name; });
+
+        const rawNodes = fullDiagram.nodes || fullDiagram.variables || [];
+        rawNodes.forEach(n => { if (n.id) idToNameMap[n.id] = n.name; });
+
+        const formattedNodes = rawNodes.map(n => ({
+            name: n.name || idToNameMap[n.id] || 'Unknown',
+            description: n.description || ''
+        }));
+
+        const rawEdges = fullDiagram.edges || fullDiagram.relationships || [];
+        const formattedEdges = rawEdges.map(e => {
+            const sId = e.source || e.source_id;
+            const tId = e.target || e.target_id;
+
+            const sourceName = e.source_name || idToNameMap[sId] || sId;
+            const targetName = e.target_name || idToNameMap[tId] || tId;
+
+            const pol = String(e.polarity || e.type || 'positive').toLowerCase();
+            const cleanPol = (pol === '+' || pol === 'positive' || pol === '1') ? 'positive' : 'negative';
+
+            return {
+                source: sourceName,
+                target: targetName,
+                polarity: cleanPol
+            };
+        });
+
+        const exportData = {
+            diagram: {
+                title: fullDiagram.title || fullDiagram.name || 'Exported CLD',
+                description: fullDiagram.description || ''
+            },
+            nodes: formattedNodes,
+            edges: formattedEdges
+        };
+
+        if (format === 'json') FileExportService.exportToJSON(exportData, filename);
+        if (format === 'xmile') FileExportService.exportToXMILE(exportData, filename);
+        if (format === 'csv') {
+            FileExportService.exportToCSV(formattedEdges, filename);
+        }
+    } catch (err) {
+        error.value = 'Falha ao exportar diagrama.';
+        console.error(err);
+    } finally {
+        loading.value = false;
+    }
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedDiagrams.value.length === sortedDiagrams.value.length && sortedDiagrams.value.length > 0) {
+      selectedDiagrams.value = [];
+    } else {
+      selectedDiagrams.value = sortedDiagrams.value.map(d => d.id);
+    }
+  };
+
+  const deleteSelectedDiagrams = async () => {
+    if (selectedDiagrams.value.length === 0) return;
+    loading.value = true;
+    error.value = null;
+    let successCount = 0;
+    try {
+      for (const id of selectedDiagrams.value) {
+        await CLDService.deleteCLD(id);
+        successCount++;
+      }
+      successMessage.value = `Successfully deleted ${successCount} diagrams!`;
+    } catch (err) {
+      error.value = 'Failed to delete some diagrams';
+    } finally {
+      selectedDiagrams.value = [];
+      await fetchDiagrams();
+      loading.value = false;
+      setTimeout(() => { if (successMessage.value.includes('Successfully deleted')) successMessage.value = ''; }, 5000);
+    }
+  };
+
+  const exportSelectedDiagrams = async (format) => {
+    if (selectedDiagrams.value.length === 0) return;
+
+    for (const id of selectedDiagrams.value) {
+      await exportDiagram(id, format);
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+  };
+
+
+
   return {
     diagrams: sortedDiagrams,
     loading,
@@ -192,5 +299,10 @@ export function useCLDListViewModel() {
     successMessage,
     isImporting,
     importCLDFromFile,
+    selectedDiagrams,
+    toggleSelectAll,
+    deleteSelectedDiagrams,
+    exportSelectedDiagrams,
+    exportDiagram
   };
 } 

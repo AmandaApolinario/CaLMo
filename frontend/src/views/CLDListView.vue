@@ -4,26 +4,61 @@
     <div class="cld-content">
       <div class="header">
         <h1>Causal Loop Diagrams</h1>
-        <div class="header-actions">
-          <input
-            type="file"
-            ref="fileInput"
-            @change="handleFileUpload"
-            accept=".json,.xmile,.stmx"
-            style="display: none;"
-          />
-          <button @click="triggerFileInput" class="btn-import" :disabled="isImporting">
-            <i class="fas" :class="isImporting ? 'fa-spinner fa-spin' : 'fa-file-import'"></i>
-            {{ isImporting ? 'Importing...' : 'Import CLD' }}
-          </button>
-        </div>
-        <button @click="createNewCLD" class="btn-create">
-          <i class="fas fa-plus"></i> Create New CLD
-        </button>
       </div>
 
       <div v-if="successMessage" class="global-success">
         <i class="fas fa-check-circle"></i> {{ successMessage }}
+      </div>
+
+      <div class="clds-actions">
+
+        <div v-if="diagrams.length > 0" class="list-controls">
+          <label class="select-all-container">
+            <input
+              type="checkbox"
+              :checked="selectedDiagrams.length === diagrams.length && diagrams.length > 0"
+              @change="toggleSelectAll"
+            >
+            Select All
+            <span class="checkmark"></span>
+          </label>
+        </div>
+
+        <transition name="fade">
+            <div v-if="selectedDiagrams.length > 0" class="bulk-actions">
+              <span class="selected-count">{{ selectedDiagrams.length }} selected</span>
+              <div class="divider"></div>
+              <span class="export-label">Export as:</span>
+              <div class="export-group">
+                <button @click="exportSelectedDiagrams('json')" title="Export as JSON" class="btn-export-sm">JSON</button>
+                <button @click="exportSelectedDiagrams('csv')" title="Export as CSV" class="btn-export-sm">CSV</button>
+                <button @click="exportSelectedDiagrams('xmile')" title="Export as XMILE" class="btn-export-sm">XMILE</button>
+              </div>
+              <div class="divider"></div>
+              <button @click="confirmBulkDelete" class="btn-delete-bulk">
+                <i class="fas fa-trash-alt"></i> Delete Selected
+              </button>
+            </div>
+          </transition>
+
+        <div class="general-actions">
+          <div class="header-actions">
+            <input
+              type="file"
+              ref="fileInput"
+              @change="handleFileUpload"
+              accept=".json,.xmile,.stmx"
+              style="display: none;"
+            />
+            <button @click="triggerFileInput" class="btn-import" :disabled="isImporting">
+              <i class="fas" :class="isImporting ? 'fa-spinner fa-spin' : 'fa-file-import'"></i>
+              {{ isImporting ? 'Importing...' : 'Import CLD' }}
+            </button>
+          </div>
+          <button @click="createNewCLD" class="btn-create">
+            <i class="fas fa-plus"></i> Create New CLD
+          </button>
+        </div>
       </div>
 
       <div v-if="loading" class="loading">
@@ -37,9 +72,13 @@
         <p>No CLDs found. Create your first CLD!</p>
       </div>
       <div v-else class="cld-grid">
-        <div v-for="diagram in diagrams" :key="diagram.id" class="cld-card">
+        <div v-for="diagram in diagrams" :key="diagram.id" class="cld-card" :class="{ 'is-selected': selectedDiagrams.includes(diagram.id) }">
           <div class="cld-card-content">
             <div class="card-header">
+              <label class="card-checkbox-inline">
+                  <input type="checkbox" :value="diagram.id" v-model="selectedDiagrams">
+                  <span class="checkmark"></span>
+              </label>
               <h3>{{ diagram.title }}</h3>
               <div class="badge">{{ diagram.variable_count || 0 }} variables</div>
             </div>
@@ -51,6 +90,15 @@
               </span>
             </div>
           </div>
+          <div class="card-export-bar">
+            <span class="export-label">Export as:</span>
+            <div class="export-buttons">
+              <button @click.stop="exportDiagram(diagram.id, 'json')" title="JSON">JSON</button>
+              <button @click.stop="exportDiagram(diagram.id, 'csv')" title="CSV">CSV</button>
+              <button @click.stop="exportDiagram(diagram.id, 'xmile')" title="XMILE">XMILE</button>
+            </div>
+          </div>
+
           <div class="cld-actions">
             <button @click="viewDiagram(diagram.id)" class="btn-view">
               <i class="fas fa-eye"></i> View
@@ -91,7 +139,12 @@ const {
   deleteDiagram,
   isImporting,
   importCLDFromFile,
-  successMessage
+  successMessage,
+  exportDiagram,
+  selectedDiagrams,
+  toggleSelectAll,
+  deleteSelectedDiagrams,
+  exportSelectedDiagrams,
 } = useCLDListViewModel();
 
 // Navigation handlers for CLD operations
@@ -115,6 +168,11 @@ const canvasDiagram = (id) => {
 const confirmDeleteDiagram = async (id) => {
   if (!confirm('Are you sure you want to delete this CLD?')) return
   await deleteDiagram(id)
+}
+
+const confirmBulkDelete = async () => {
+  if (!confirm(`Are you sure you want to delete ${selectedDiagrams.value.length} diagrams? This action cannot be undone.`)) return
+  await deleteSelectedDiagrams()
 }
 
 const formatDate = (dateString) => {
@@ -412,5 +470,201 @@ h1 {
   font-weight: 500;
   font-size: 1.1rem;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.cld-card {
+  position: relative;
+  transition: all 0.3s ease;
+}
+.cld-card.is-selected {
+  border-color: #42b983;
+  background-color: #f8fdfa;
+  box-shadow: 0 0 0 2px rgba(66, 185, 131, 0.3);
+}
+
+.header-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex: 1;
+}
+
+.card-checkbox-inline, .select-all-container {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+.card-checkbox-inline input, .select-all-container input {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+.checkmark {
+  position: relative;
+  display: inline-block;
+  height: 22px;
+  width: 22px;
+  background-color: #fff;
+  border: 2px solid #cbd5e0;
+  border-radius: 6px;
+  transition: all 0.2s;
+  margin-right: 0.5rem;
+  margin-left: 0.5rem;
+}
+.card-checkbox-inline:hover input ~ .checkmark, .select-all-container:hover input ~ .checkmark {
+  background-color: #f1f5f9;
+  border-color: #a0aec0;
+}
+.card-checkbox-inline input:checked ~ .checkmark, .select-all-container input:checked ~ .checkmark {
+  background-color: #42b983;
+  border-color: #42b983;
+}
+.checkmark:after {
+  content: "";
+  position: absolute;
+  display: none;
+  left: 6px; top: 2px;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.card-checkbox-inline input:checked ~ .checkmark:after, .select-all-container input:checked ~ .checkmark:after {
+  display: block;
+}
+
+.card-export-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem 1.8rem;
+  background-color: transparent;
+  border-top: 1px dashed #e2e8f0;
+  margin-top: auto;
+}
+.export-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.export-buttons {
+  display: flex;
+  gap: 0.4rem;
+}
+.export-buttons button {
+  background-color: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.export-buttons button:hover {
+  background-color: #42b983;
+  color: white;
+  border-color: #42b983;
+}
+.list-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.8rem;
+  background-color: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 2rem;
+}
+.select-all-container {
+  font-weight: 600;
+  color: #4a5568;
+  font-size: 0.95rem;
+}
+
+.bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background-color: #ffffff;
+  padding: 0.5rem 1.2rem;
+  border-radius: 10px;
+  border: 1px solid #42b983;
+  box-shadow: 0 4px 12px rgba(66, 185, 131, 0.15);
+  color: #1a252f;
+  z-index: 10;
+}
+.selected-count {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #42b983;
+}
+
+.export-group {
+  display: flex;
+  gap: 0.4rem;
+}
+.btn-export-sm {
+  background-color: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-export-sm:hover {
+  background-color: #42b983;
+  color: white;
+  border-color: #42b983;
+}
+
+.divider {
+  width: 1px;
+  height: 24px;
+  background-color: #e2e8f0;
+}
+
+.btn-delete-bulk {
+  background-color: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+}
+.btn-delete-bulk:hover {
+  background-color: #dc2626;
+  color: white;
+  border-color: #dc2626; }
+
+.fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease, transform 0.3s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; transform: translateY(-10px); }
+
+.clds-actions {
+  display: flex;
+  align-items: flex-start;
+  padding: 1rem 1.8rem;
+  justify-content: space-between;
+}
+
+.general-actions {
+  display: flex;
+  gap: 2rem;
 }
 </style>

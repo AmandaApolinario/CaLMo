@@ -24,18 +24,22 @@ export const FileExportService = {
   },
 
   exportToXMILE(cldData, filename) {
-    const { title, description, nodes, edges } = cldData;
+    // Agora suporta tanto o formato antigo quanto o novo aninhado
+    const title = cldData.diagram?.title || cldData.title || 'Exported CLD';
+    const description = cldData.diagram?.description || cldData.description || '';
+    const nodes = cldData.nodes || [];
+    const edges = cldData.edges || [];
 
     let xml = `<?xml version="1.0" encoding="utf-8" ?>\n`;
     xml += `<xmile version="1.0" xmlns="http://docs.oasis-open.org/xmile/ns/XMILE/v1.0">\n`;
     xml += `    <header>\n`;
-    xml += `        <name>${title || 'Exported CLD'}</name>\n`;
-    xml += `        <doc>${description || ''}</doc>\n`;
+    xml += `        <name>${title}</name>\n`;
+    if (description) xml += `        <doc>${description}</doc>\n`;
     xml += `    </header>\n`;
     xml += `    <model>\n`;
 
     xml += `        <variables>\n`;
-    (nodes || []).forEach(node => {
+    nodes.forEach(node => {
       xml += `            <aux name="${node.name}">\n`;
       if (node.description) xml += `                <doc>${node.description}</doc>\n`;
       xml += `            </aux>\n`;
@@ -44,10 +48,14 @@ export const FileExportService = {
 
     xml += `        <views>\n`;
     xml += `            <view>\n`;
-    (edges || []).forEach(edge => {
-      const from = edge.source_name ? edge.source_name.replace(/\s/g, '_') : 'Unknown';
-      const to = edge.target_name ? edge.target_name.replace(/\s/g, '_') : 'Unknown';
-      const pol = edge.polarity === 'NEGATIVE' ? '-' : '+';
+    edges.forEach(edge => {
+      // Busca pelo 'source' (JSON atual) ou 'source_name' (legado)
+      const sourceName = edge.source || edge.source_name || 'Unknown';
+      const targetName = edge.target || edge.target_name || 'Unknown';
+
+      const from = sourceName.replace(/\s/g, '_');
+      const to = targetName.replace(/\s/g, '_');
+      const pol = (edge.polarity === 'NEGATIVE' || edge.polarity === 'negative' || edge.polarity === '-') ? '-' : '+';
 
       xml += `                <connector from="${from}" to="${to}" polarity="${pol}" />\n`;
     });
