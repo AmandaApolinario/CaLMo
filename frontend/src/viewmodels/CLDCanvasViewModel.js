@@ -42,6 +42,8 @@ export function useCLDCanvasViewModel() {
     const isLoadingHistory = ref(false);
     const pendingChanges = ref([]);
 
+    const isInfoModalOpen = ref(false);
+
 
     const newVariable = reactive({
         name: '',
@@ -279,7 +281,8 @@ export function useCLDCanvasViewModel() {
         if (!diagram.value) return false;
 
         if (nodes.value.some(n => n.id === variable.id)) {
-            console.warn('A variável já existe neste diagrama');
+            console.warn('The variable already exists in this diagram');
+            error.value = 'The variable already exists in this diagram'
             return false;
         }
 
@@ -308,7 +311,7 @@ export function useCLDCanvasViewModel() {
         publishDiagramEvent(diagram.value.id, 'NODE_ADDED', {
           node: newNode,
           clientId: getClientId()
-        }).catch(err => console.error('Erro ao enviar evento NODE_ADDED', err));
+        }).catch(err => console.error('Error sending NODE_ADDED event', err));
         await updateLoopsAndArchetypes();
         return true;
     };
@@ -316,15 +319,17 @@ export function useCLDCanvasViewModel() {
     const addConnection = async (sourceId, targetId, polarity = 'positive') => {
         if (!diagram.value) return null;
 
-        const hasConflict = edges.value.some(edge =>
+        const existingEdge = edges.value.find(edge =>
             edge.source === sourceId &&
-            edge.target === targetId &&
-            edge.polarity !== polarity
+            edge.target === targetId
         );
 
-        if (hasConflict) {
-            error.value = "Conflito: Não é possível ter relacionamentos positivos e negativos entre as mesmas variáveis na mesma direção.";
-            setTimeout(() => { error.value = null; }, 5000);
+        if (existingEdge) {
+            if (existingEdge.polarity !== polarity) {
+                error.value = "Conflicting relationship: Cannot have both positive and negative relationships between the same variables in the same direction";
+            } else {
+                error.value = "This relationship already exists in the diagram.";
+            }
             return null;
         }
 
@@ -356,7 +361,7 @@ export function useCLDCanvasViewModel() {
         publishDiagramEvent(diagram.value.id, 'EDGE_ADDED', {
             edge: newRelationship,
             clientId: clientId.value
-        }).catch(err => console.error('Erro ao enviar evento EDGE_ADDED', err));
+        }).catch(err => console.error(err));
 
         await updateLoopsAndArchetypes();
         return newRelationship;
@@ -409,8 +414,8 @@ export function useCLDCanvasViewModel() {
             return true;
 
         } catch (err) {
-            console.error('Erro ao salvar diagrama:', err);
-            error.value = 'Falha ao salvar o diagrama no servidor.';
+            console.error('Error saving diagram:', err);
+            error.value = 'Failed to save the diagram on the server.';
             return false;
         } finally {
             isLoadingDiagram.value = false;
@@ -489,7 +494,7 @@ export function useCLDCanvasViewModel() {
         }
 
         if (!edgeToRemove) {
-            console.warn('Aresta não encontrada para deletar:', edgeId);
+            console.warn('Edge not found for deletion:', edgeId);
             return;
         }
 
@@ -735,7 +740,7 @@ export function useCLDCanvasViewModel() {
           break;
 
         default:
-          console.warn('Undo não suportado para esta ação:', action);
+          console.warn('Undo is not supported for this action:', action);
           return;
       }
 
@@ -747,7 +752,7 @@ export function useCLDCanvasViewModel() {
       };
 
       publishDiagramEvent(diagram.value.id, inverseAction, inverseData)
-        .catch(err => console.error('Erro ao publicar undo:', err));
+        .catch(err => console.error('Error publishing undo:', err));
       await updateLoopsAndArchetypes();
     };
 
@@ -760,7 +765,7 @@ export function useCLDCanvasViewModel() {
             const token = await CLDService.generateShareToken(diagram.value.id);
             currentShareToken.value = token;
         } catch (err) {
-            error.value = 'Erro ao gerar link de compartilhamento';
+            error.value = 'Error generating share link';
         } finally {
             isGeneratingLink.value = false;
         }
@@ -777,7 +782,7 @@ export function useCLDCanvasViewModel() {
             await CLDService.revokeShareToken(diagram.value.id);
             currentShareToken.value = null;
         } catch (err) {
-            error.value = 'Erro ao revogar link';
+            error.value = 'Error revoking link';
         } finally {
             isGeneratingLink.value = false;
         }
@@ -904,7 +909,7 @@ export function useCLDCanvasViewModel() {
             }).catch(console.error);
 
         } catch (error) {
-            console.error('Erro ao atualizar o nome do diagrama:', error);
+            console.error('Error updating diagram name:', error);
         }
     };
 
@@ -918,7 +923,7 @@ export function useCLDCanvasViewModel() {
             const response = await ApiService.get(`cld/${diagram.value.id}/history`);
             historyList.value = response.data;
         } catch (error) {
-            console.error('Erro ao buscar o histórico:', error);
+            console.error('Error fetching history:', error);
         } finally {
             isLoadingHistory.value = false;
         }
@@ -990,7 +995,8 @@ export function useCLDCanvasViewModel() {
                 }).catch(console.error);
             }
         } catch (error) {
-            console.error('Erro ao reprocessar loops e arquétipos', error);
+            console.error('Error reprocessing loops and archetypes', error);
+            error.value = 'Error reprocessing loops and archetypes'
         }
     };
 
@@ -1006,6 +1012,13 @@ export function useCLDCanvasViewModel() {
             });
         }
     };
+
+    const clearError = () => {
+        error.value = null;
+    };
+
+    const openInfoModal = () => { isInfoModalOpen.value = true; };
+    const closeInfoModal = () => { isInfoModalOpen.value = false; };
 
 
 
@@ -1070,5 +1083,9 @@ export function useCLDCanvasViewModel() {
         historyList: computed(() => historyList.value),
         isLoadingHistory: computed(() => isLoadingHistory.value),
         formatHistoryText,
+        clearError,
+        isInfoModalOpen: computed(() => isInfoModalOpen.value),
+        openInfoModal,
+        closeInfoModal
     };
 }

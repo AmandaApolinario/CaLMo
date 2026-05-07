@@ -125,7 +125,7 @@ export function useCLDListViewModel() {
             });
             createdVarsCount++;
           } catch (e) {
-            console.warn(`Aviso: Falha ao criar variável auto-importada: ${name}`, e);
+            console.warn(`Warning: Failed to create auto-imported variable: ${name}`, e);
           }
         }
 
@@ -192,7 +192,7 @@ export function useCLDListViewModel() {
             const varsResponse = await ApiService.get('variables');
             globalVars = varsResponse.data || [];
         } catch (e) {
-            console.warn('Não foi possível buscar as variáveis globais para o exportador');
+            console.warn('Could not fetch global variables for the exporter');
         }
 
         const idToNameMap = {};
@@ -239,7 +239,7 @@ export function useCLDListViewModel() {
             FileExportService.exportToCSV(formattedEdges, filename);
         }
     } catch (err) {
-        error.value = 'Falha ao exportar diagrama.';
+        error.value = 'Failed to export diagram.';
         console.error(err);
     } finally {
         loading.value = false;

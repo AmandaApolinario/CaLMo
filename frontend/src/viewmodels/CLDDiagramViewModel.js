@@ -391,8 +391,7 @@ export function useCLDDiagramViewModel() {
       if (!diagram.feedback_loops || diagram.feedback_loops.length === 0) return;
 
       diagram.feedback_loops.forEach((loop, index) => {
-        const isReinforcing = String(loop.type).toUpperCase().includes('REINFORCING') ||
-                              String(loop.type).toUpperCase() === 'POSITIVE';
+        const isReinforcing = String(loop.type).toUpperCase().includes('REINFORCING');
 
         const prefix = isReinforcing ? 'R' : 'B';
         const labelText = `${prefix}${index + 1}`;
@@ -604,7 +603,7 @@ export function useCLDDiagramViewModel() {
       try {
         network.value.unselectAll();
       } catch (e) {
-        console.error('Erro ao limpar seleção do network:', e);
+        console.error('Error clearing network selection:', e);
       }
     }
 
@@ -861,7 +860,7 @@ export function useCLDDiagramViewModel() {
             network.value.moveNode(nodeObj.id, Number(nodeData.x), Number(nodeData.y));
         }
     } catch (e) {
-        console.warn('Node já existe ou erro ao adicionar:', e);
+        console.warn('Node already exists or there was an error adding it:', e);
     }
   }
 
@@ -903,7 +902,7 @@ export function useCLDDiagramViewModel() {
 
     const canvas = networkContainer.value.querySelector('canvas');
     if (!canvas) {
-      console.warn('Canvas não encontrado para exportação.');
+      console.warn('Canvas not found for export.');
       return;
     }
 
