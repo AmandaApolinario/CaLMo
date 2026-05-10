@@ -74,7 +74,7 @@
                   <i class="fas fa-search-minus"></i>
               </button>
               <button class="tool-btn" @click="fitView" title="Fit View">
-                  <i class="fas fa-compress"></i>
+                  <i class="fa fa-compress"></i>
               </button>
           </div>
 
@@ -473,14 +473,14 @@
                       <div class="controls-grid">
                           <div class="control-item"><i class="fas fa-hand-paper"></i> <span><strong class="toolbar-info">Pan:</strong> Move view.</span></div>
                           <div class="control-item"><i class="fas fa-plus-circle"></i> <span><strong class="toolbar-info">Add Var:</strong> New variable.</span></div>
-                          <div class="control-item"><i class="fas compress"></i> <span><strong class="toolbar-info">Fit:</strong> Center diagram.</span></div>
+                          <div class="control-item"><i class="fa fa-compress"></i> <span><strong class="toolbar-info">Fit:</strong> Center diagram.</span></div>
                           <div class="control-item">
                               <i class="fas fa-share-alt"></i>
                               <span><strong class="toolbar-info">Share:</strong> Creates a shareable link. Invited users can add new variables to this diagram.</span>
                           </div>
                           <div class="control-item">
                               <i class="fas fa-mouse-pointer"></i>
-                            <span><strong class="toolbar-info">Select:</strong> <span> Standard mode. Move the view or variables, and select items to delete. Double-click a variable to see its loops and archetypes.</span></span>
+                            <span><strong class="toolbar-info">Select:</strong> <span> Standard mode. Move view or variables, and select items. Double-click a variable to see its loops and archetypes.</span></span>
                           </div>
                           <div class="control-item">
                               <i class="fas fa-plus"></i>
