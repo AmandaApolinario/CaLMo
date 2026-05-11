@@ -205,7 +205,43 @@ export function useCLDCanvasViewModel() {
             // Populate nodes and edges
             diagramNameRef.value = diagram.value.name || diagram.value.title || 'Untitled';
             nodes.value = diagram.value?.nodes || [];
-            edges.value = diagram.value?.edges || [];
+            let rawEdges = diagram.value?.edges || [];
+            if (rawEdges.length === 0 && diagram.value?.relationships) {
+                rawEdges = diagram.value.relationships.map(r => ({
+                    id: r.id || `${Date.now()}-${Math.random()}`,
+                    source: r.source_id,
+                    target: r.target_id,
+                    type: r.type,
+                    polarity: String(r.type).toLowerCase() === 'positive' ? 'positive' : 'negative'
+                }));
+            }
+            const uniqueEdgesMap = new Map();
+            rawEdges.forEach(e => {
+                const isNegative = e.polarity === 'negative' || e.type === 'NEGATIVE';
+                const key = `${e.source}-${e.target}`; // Chave única por direção
+                uniqueEdgesMap.set(key, {
+                    ...e,
+                    polarity: isNegative ? 'negative' : 'positive',
+                    type: isNegative ? 'NEGATIVE' : 'POSITIVE'
+                });
+            });
+
+            edges.value = Array.from(uniqueEdgesMap.values());
+            diagram.value.edges = edges.value;
+
+            const getUniqueItems = (items) => {
+                const seen = new Set();
+                return (items || []).filter(item => {
+                    const vars = (item.variables || []).map(v => typeof v === 'object' ? v.id : v).sort().join('|');
+                    const sig = `${item.type}-${vars}`;
+                    if (seen.has(sig)) return false;
+                    seen.add(sig);
+                    return true;
+                });
+            };
+
+            diagram.value.feedback_loops = getUniqueItems(diagram.value.feedback_loops);
+            diagram.value.archetypes = getUniqueItems(diagram.value.archetypes);
 
         } catch (err) {
             error.value = 'Failed to load diagram';
@@ -960,6 +996,16 @@ export function useCLDCanvasViewModel() {
         if (!diagram.value?.id) return;
 
         try {
+            const uniqueEdgesMap = new Map();
+            edges.value.forEach(e => {
+                const isNeg = e.polarity === 'negative' || e.type === 'NEGATIVE';
+                uniqueEdgesMap.set(`${e.source}-${e.target}`, {
+                    ...e,
+                    polarity: isNeg ? 'negative' : 'positive',
+                    type: isNeg ? 'NEGATIVE' : 'POSITIVE'
+                });
+            });
+            edges.value = Array.from(uniqueEdgesMap.values());
             const liveAnalysis = await CLDService.generateLiveLoopsAndArchetypes(nodes.value, edges.value);
 
             if (liveAnalysis) {
