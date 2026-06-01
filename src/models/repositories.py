@@ -116,12 +116,13 @@ class CLDRepository:
 
 class RelationshipRepository:
     @staticmethod
-    def create_relationship(db: Session, cld_id: str, source_id: str, target_id: str, rel_type: RelationshipType):
+    def create_relationship(db: Session, cld_id: str, source_id: str, target_id: str, rel_type: RelationshipType, has_delay: bool):
         new_rel = Relationship(
             cld_id=cld_id,
             source_id=source_id,
             target_id=target_id,
-            type=rel_type
+            type=rel_type,
+            has_delay = has_delay
         )
         db.add(new_rel)
         db.commit()

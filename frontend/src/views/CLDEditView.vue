@@ -83,6 +83,12 @@
                   </option>
                 </select>
               </div>
+
+              <label class="delay-checkbox">
+                  <input type="checkbox" v-model="edge.has_delay">
+                  Delay
+                </label>
+
               <button 
                 type="button" 
                 @click="() => removeEdge(index)" 
@@ -555,5 +561,25 @@ label {
     stroke-dasharray: 90, 150;
     stroke-dashoffset: -124;
   }
+}
+
+.delay-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  white-space: nowrap;
+  padding: 0 0.5rem;
+}
+
+.delay-checkbox input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #6366f1;
 }
 </style>

@@ -255,16 +255,31 @@ export function useCLDDiagramViewModel() {
       (diagram.edges || []).map(edge => {
         const isPositive = edge.polarity === 'positive';
         const c = isPositive ? EDGE_COLORS.positive : EDGE_COLORS.negative;
-        return {
+        const edgeObj = {
           id: edge.id,
           from: edge.source,
           to: edge.target,
-          label: isPositive ? '+' : '-',
+          label: edge.has_delay ? '||' : '',
+          polarityLabel: isPositive ? '+' : '-',
           arrows: 'to',
-          font: { size: 22, color: c.base },
+          font: {
+              size: 22,
+              color: "black",
+              align: 'middle',
+              face: 'Arial',
+              background: 'transparent'
+          },
           width: 2,
           color: { color: c.base, highlight: c.highlight }
         };
+
+        if (edge.has_delay) {
+            const isDarkTheme = document.querySelector('.canvas-app') !== null;
+            edgeObj.font.background = isDarkTheme ? '#1e1e1e' : '#ffffff';
+        }
+
+        return edgeObj;
+
       })
     );
 
@@ -388,14 +403,13 @@ export function useCLDDiagramViewModel() {
     });
 
     network.value.on('afterDrawing', (ctx) => {
-      if (!diagram.feedback_loops || diagram.feedback_loops.length === 0) return;
 
       diagram.feedback_loops.forEach((loop, index) => {
         const isReinforcing = String(loop.type).toUpperCase().includes('REINFORCING');
 
         const prefix = isReinforcing ? 'R' : 'B';
         const labelText = `${prefix}${index + 1}`;
-        const color = isReinforcing ? LOOP_COLORS.REINFORCING: LOOP_COLORS.BALANCING;
+        const color = isReinforcing ? LOOP_COLORS.REINFORCING : LOOP_COLORS.BALANCING;
 
         const varIds = (loop.variables || []).map(v => typeof v === 'object' ? v.id : v);
         if (varIds.length === 0) return;
@@ -453,6 +467,46 @@ export function useCLDDiagramViewModel() {
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(labelText, centerX, centerY);
+        }
+      });
+
+      const allEdges = network.value.body.data.edges.get();
+
+      const isDarkTheme = !!networkContainer.value.closest('.canvas-app');
+      const bgStrokeColor = isDarkTheme ? '#1e1e1e' : '#ffffff';
+  
+      allEdges.forEach(edge => {
+        const visEdge = network.value.body.edges[edge.id];
+
+        if (visEdge && visEdge.edgeType && typeof visEdge.edgeType.getPoint === 'function') {
+          const pt = visEdge.edgeType.getPoint(0.75);
+          const prevPt = visEdge.edgeType.getPoint(0.74);
+
+          if (pt && prevPt && edge.polarityLabel) {
+            const angle = Math.atan2(pt.y - prevPt.y, pt.x - prevPt.x);
+
+            const offsetDistance = 18;
+
+            const offsetX = Math.cos(angle - Math.PI / 2) * offsetDistance;
+            const offsetY = Math.sin(angle - Math.PI / 2) * offsetDistance;
+
+            const drawX = pt.x + offsetX;
+            const drawY = pt.y + offsetY;
+
+            ctx.font = 'bold 24px Arial';
+
+            const isPositive = edge.polarityLabel === '+';
+            ctx.fillStyle = isPositive ? EDGE_COLORS.positive.base : EDGE_COLORS.negative.base;
+
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = bgStrokeColor;
+            ctx.strokeText(edge.polarityLabel, drawX, drawY);
+
+            ctx.fillText(edge.polarityLabel, drawX, drawY);
+          }
         }
       });
     });
@@ -779,16 +833,27 @@ export function useCLDDiagramViewModel() {
     const isPositive = edgeData.polarity === 'positive';
     const c = isPositive ? EDGE_COLORS.positive : EDGE_COLORS.negative;
 
-    network.value.body.data.edges.add({
+    const isDarkTheme = document.querySelector('.canvas-app') !== null;
+
+    const edgeObj = {
       id: edgeData.id,
       from: edgeData.source,
       to: edgeData.target,
-      label: isPositive ? '+' : '-',
+      label: edgeData.has_delay ? '||' : '',
+      polarityLabel: isPositive ? '+' : '-',
       arrows: 'to',
-      font: { size: 22, color: c.base },
+      font: {
+          size: 20,
+          color: c.base,
+          align: 'middle',
+          face: 'Arial',
+          background: edgeData.has_delay ? (isDarkTheme ? '#1e1e1e' : '#ffffff') : 'transparent'
+      },
       width: 2,
       color: { color: c.base, highlight: c.highlight }
-    });
+    };
+
+    network.value.body.data.edges.add(edgeObj);
   }
 
   function deleteSelectedElements(removeNodeCb, removeEdgeCb) {

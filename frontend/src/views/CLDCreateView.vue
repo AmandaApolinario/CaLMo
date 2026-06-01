@@ -96,6 +96,11 @@
                           {{ variable.name }}
                         </option>
                       </select>
+
+                      <label class="delay-checkbox">
+                        <input type="checkbox" v-model="edge.has_delay">
+                        Delay
+                      </label>
                       
                       <button type="button" @click="() => removeEdge(index)" class="btn-delete">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
@@ -603,4 +608,16 @@ button {
   opacity: 0.7;
   cursor: not-allowed;
 }
+
+.delay-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.delay-checkbox input { width: auto; margin: 0; cursor: pointer; }
 </style>

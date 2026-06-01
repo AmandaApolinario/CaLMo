@@ -42,7 +42,7 @@ def create_cld(user_id):
         data['date'],
         data['description'],
         data['variables'],
-        data['relationships']
+        data['relationships'],
     )
     
     if not result:

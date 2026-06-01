@@ -88,16 +88,18 @@ def create_app():
 
             db.session.execute(text("""
                 DO $$ BEGIN
-                    IF NOT EXISTS (
-                        SELECT 1 
-                        FROM information_schema.columns 
-                        WHERE table_name='clds' AND column_name='share_token'
+                    IF EXISTS (
+                        SELECT FROM information_schema.tables
+                        WHERE table_name = 'clds'
                     ) THEN
-                        -- Creates the column if it doesn't exist
-                        ALTER TABLE clds ADD COLUMN share_token VARCHAR(100) UNIQUE;
-                    ELSE
-                        -- Updates the length if the column already exists
-                        ALTER TABLE clds ALTER COLUMN share_token TYPE VARCHAR(100);
+
+                        IF NOT EXISTS (
+                            SELECT 1
+                            FROM information_schema.columns
+                            WHERE table_name='clds' AND column_name='share_token'
+                        ) THEN
+                            ALTER TABLE clds ADD COLUMN share_token VARCHAR(100) UNIQUE;
+                        END IF;
                     END IF;
                 END $$;
             """))
@@ -111,6 +113,21 @@ def create_app():
                     action_summary TEXT,
                     timestamp TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
+                END $$;
+            """))
+
+            db.session.execute(text("""
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1
+                        FROM information_schema.tables
+                        WHERE table_schema = 'public'
+                          AND table_name = 'relationships'
+                    ) THEN
+                        ALTER TABLE public.relationships
+                        ADD COLUMN IF NOT EXISTS has_delay BOOLEAN NOT NULL DEFAULT FALSE;
+                    END IF;
                 END $$;
             """))
 

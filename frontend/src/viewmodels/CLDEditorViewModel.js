@@ -98,12 +98,13 @@ export function useCLDEditorViewModel() {
         description: fetchedDiagram.description || '',
         createdAt: formattedDate,
         nodes: fetchedDiagram.nodes || fetchedDiagram.variables || [],
-        edges: fetchedDiagram.edges || (fetchedDiagram.relationships ? fetchedDiagram.relationships.map(r => ({
+        edges: (fetchedDiagram.relationships || []).map(r => ({
           source: r.source_id,
           target: r.target_id,
-          polarity: r.type?.toLowerCase() === 'positive' ? 'positive' : 'negative'
-        })) : [])
-      };
+          polarity: r.type?.toLowerCase() === 'positive' ? 'positive' : 'negative',
+          has_delay: !!r.has_delay
+        }))
+      };  
       
       console.log('Diagram fetched:', diagram.value);
       
@@ -146,7 +147,8 @@ export function useCLDEditorViewModel() {
         return {
           source_id: edge.source,
           target_id: edge.target,
-          type: edge.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE'
+          type: edge.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE',
+          has_delay: edge.has_delay,
         };
       });
 
@@ -202,7 +204,8 @@ export function useCLDEditorViewModel() {
         return {
           source_id: edge.source,
           target_id: edge.target,
-          type: edge.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE'
+          type: edge.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE',
+          has_delay: edge.has_delay,
         };
       });
 
@@ -242,7 +245,8 @@ export function useCLDEditorViewModel() {
     diagram.value.edges.push({
       source: '',
       target: '',
-      polarity: 'positive'
+      polarity: 'positive',
+      has_delay: false,
     });
     
     console.log('Edge added, edges now:', diagram.value.edges);

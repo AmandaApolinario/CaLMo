@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Enum as SqlEnum, Date, Text, Table, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, Enum as SqlEnum, Date, Text, Table, DateTime, Boolean
 from sqlalchemy.orm import relationship
 import enum
 from datetime import date, datetime
@@ -121,6 +121,7 @@ class Relationship(db.Model):
     target_id = Column(String, ForeignKey('variables.id', ondelete='RESTRICT'), nullable=False)
     type = Column(relationship_type_enum, nullable=False)
     cld_id = Column(String, ForeignKey('clds.id', ondelete='CASCADE'), nullable=False)
+    has_delay = Column(Boolean, default=False)
 
     cld = relationship('CLD', back_populates='relationships')
 

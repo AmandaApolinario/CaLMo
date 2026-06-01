@@ -212,7 +212,8 @@ export function useCLDCanvasViewModel() {
                     source: r.source_id,
                     target: r.target_id,
                     type: r.type,
-                    polarity: String(r.type).toLowerCase() === 'positive' ? 'positive' : 'negative'
+                    polarity: String(r.type).toLowerCase() === 'positive' ? 'positive' : 'negative',
+                    has_delay: r.has_delay,
                 }));
             }
             const uniqueEdgesMap = new Map();
@@ -222,7 +223,8 @@ export function useCLDCanvasViewModel() {
                 uniqueEdgesMap.set(key, {
                     ...e,
                     polarity: isNegative ? 'negative' : 'positive',
-                    type: isNegative ? 'NEGATIVE' : 'POSITIVE'
+                    type: isNegative ? 'NEGATIVE' : 'POSITIVE',
+                    has_delay: e.has_delay,
                 });
             });
 
@@ -341,7 +343,7 @@ export function useCLDCanvasViewModel() {
         return true;
     };
 
-    const addConnection = async (sourceId, targetId, polarity = 'positive') => {
+    const addConnection = async (sourceId, targetId, polarity = 'positive', has_delay = false) => {
         if (!diagram.value) return null;
 
         const existingEdge = edges.value.find(edge =>
@@ -362,7 +364,8 @@ export function useCLDCanvasViewModel() {
             id: generateId(),
             source: sourceId,
             target: targetId,
-            polarity: polarity
+            polarity: polarity,
+            has_delay: hasDelay
         };
 
         edges.value = [...edges.value, newRelationship];
@@ -870,7 +873,8 @@ export function useCLDCanvasViewModel() {
                     source: r.source_id,
                     target: r.target_id,
                     type: r.type,
-                    polarity: String(r.type).toLowerCase() === 'positive' ? 'positive' : 'negative'
+                    polarity: String(r.type).toLowerCase() === 'positive' ? 'positive' : 'negative',
+                    has_delay: r.has_delay,
                 }));
             }
 
@@ -881,7 +885,8 @@ export function useCLDCanvasViewModel() {
                 uniqueEdgesMap.set(key, {
                     ...e,
                     polarity: isNegative ? 'negative' : 'positive',
-                    type: isNegative ? 'NEGATIVE' : 'POSITIVE'
+                    type: isNegative ? 'NEGATIVE' : 'POSITIVE',
+                    has_delay: e.has_delay,
                 });
             });
 

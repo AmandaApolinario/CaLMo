@@ -66,7 +66,8 @@ class CLDViewModel:
                     cld_id=cld.id,
                     source_id=rel['source_id'],
                     target_id=rel['target_id'],
-                    rel_type=RelationshipType[rel['type'].upper()]
+                    rel_type=RelationshipType[rel['type'].upper()],
+                    has_delay=rel['has_delay']
                 )
             
             # Format CLD for response
@@ -120,7 +121,8 @@ class CLDViewModel:
                 'id': rel.id,
                 'source_id': rel.source_id,
                 'target_id': rel.target_id,
-                'type': rel.type.name
+                'type': rel.type.name,
+                'has_delay': rel.has_delay
             } 
             for rel in relationships
         ]
@@ -189,12 +191,14 @@ class CLDViewModel:
                     except KeyError:
                         self.db_session.rollback()
                         return None, f"Invalid relationship type. Must be one of: {[t.name for t in RelationshipType]}"
+
                     
                     relationship = Relationship(
                         cld_id=cld_id,
                         source_id=rel['source_id'],
                         target_id=rel['target_id'],
-                        type=rel_type
+                        type=rel_type,
+                        has_delay=rel['has_delay'],
                     )
                     self.db_session.add(relationship)
 
@@ -329,7 +333,8 @@ class CLDViewModel:
                     'id': rel.id,
                     'source_id': rel.source_id,
                     'target_id': rel.target_id,
-                    'type': rel.type.name
+                    'type': rel.type.name,
+                    'has_delay': rel.has_delay,
                 } 
                 for rel in relationships
             ],
@@ -472,7 +477,8 @@ class CLDViewModel:
                     id=str(uuid.uuid4()),
                     source_id=e.get('source'),
                     target_id=e.get('target'),
-                    type=rel_type
+                    type=rel_type,
+                    has_delay=e.get('has_delay'),
                 )
                 temp_cld.relationships.append(rel)
 
