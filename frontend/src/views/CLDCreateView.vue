@@ -58,7 +58,7 @@
                     <input type="file" ref="fileInput" @change="handleFileUpload" accept=".json,.csv,.xmile,.stmx" style="display: none;" />
                     <button type="button" class="btn-import-sm" @click="triggerFileInput" :disabled="isImporting">
                       <i class="fas fa-file-import"></i>
-                      {{ isImporting ? 'Importing...' : 'Import Data' }}
+                      {{ isImporting ? 'Importing...' : 'Import Relationships' }}
                     </button>
                   </div>
                 <div v-if="variables.length === 0" class="no-variables-message">

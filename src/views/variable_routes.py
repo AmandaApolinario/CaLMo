@@ -30,7 +30,7 @@ def create_new_variable(user_id):
         return jsonify({'message': 'Bad Request'}), 400
 
     target_user_id = user_id
-    share_token = data.get('share_token')
+    share_token = data.get('shareToken')
 
     if share_token:
         cld_viewmodel = CLDViewModel(db.session)

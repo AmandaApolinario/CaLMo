@@ -229,17 +229,6 @@ export function useCLDCanvasViewModel() {
             edges.value = Array.from(uniqueEdgesMap.values());
             diagram.value.edges = edges.value;
 
-            const getUniqueItems = (items) => {
-                const seen = new Set();
-                return (items || []).filter(item => {
-                    const vars = (item.variables || []).map(v => typeof v === 'object' ? v.id : v).sort().join('|');
-                    const sig = `${item.type}-${vars}`;
-                    if (seen.has(sig)) return false;
-                    seen.add(sig);
-                    return true;
-                });
-            };
-
             diagram.value.feedback_loops = getUniqueItems(diagram.value.feedback_loops);
             diagram.value.archetypes = getUniqueItems(diagram.value.archetypes);
 
@@ -690,7 +679,7 @@ export function useCLDCanvasViewModel() {
             }
         });
 
-        webSocketService.onStateSync(({ state }) => {
+        webSocketService.onStateSync(async ({state}) => {
             if (state) {
                 nodes.value = state.nodes || [];
                 edges.value = state.edges || [];
@@ -699,7 +688,8 @@ export function useCLDCanvasViewModel() {
                     applyStateCallback.value(state.positions);
                 }
 
-                diagram.value = { ...diagram.value, nodes: nodes.value, edges: edges.value };
+                diagram.value = {...diagram.value, nodes: nodes.value, edges: edges.value};
+                await updateLoopsAndArchetypes();
             }
         });
 
@@ -824,6 +814,17 @@ export function useCLDCanvasViewModel() {
         }
     };
 
+    const getUniqueItems = (items) => {
+        const seen = new Set();
+        return (items || []).filter(item => {
+            const vars = (item.variables || []).map(v => typeof v === 'object' ? v.id : v).sort().join('|');
+            const sig = `${item.type}-${vars}`;
+            if (seen.has(sig)) return false;
+            seen.add(sig);
+            return true;
+        });
+    };
+
     const getShareableUrl = computed(() => {
         if (!currentShareToken.value) return '';
         const baseUrl = window.location.origin;
@@ -862,7 +863,33 @@ export function useCLDCanvasViewModel() {
 
             diagramNameRef.value = diagram.value.name || diagram.value.title || 'Untitled';
             nodes.value = diagram.value?.nodes || [];
-            edges.value = diagram.value?.edges || [];
+            let rawEdges = diagram.value?.edges || [];
+            if (rawEdges.length === 0 && diagram.value?.relationships) {
+                rawEdges = diagram.value.relationships.map(r => ({
+                    id: r.id || `${Date.now()}-${Math.random()}`,
+                    source: r.source_id,
+                    target: r.target_id,
+                    type: r.type,
+                    polarity: String(r.type).toLowerCase() === 'positive' ? 'positive' : 'negative'
+                }));
+            }
+
+            const uniqueEdgesMap = new Map();
+            rawEdges.forEach(e => {
+                const isNegative = e.polarity === 'negative' || e.type === 'NEGATIVE';
+                const key = `${e.source}-${e.target}`;
+                uniqueEdgesMap.set(key, {
+                    ...e,
+                    polarity: isNegative ? 'negative' : 'positive',
+                    type: isNegative ? 'NEGATIVE' : 'POSITIVE'
+                });
+            });
+
+            edges.value = Array.from(uniqueEdgesMap.values());
+            diagram.value.edges = edges.value;
+
+            diagram.value.feedback_loops = getUniqueItems(diagram.value.feedback_loops);
+            diagram.value.archetypes = getUniqueItems(diagram.value.archetypes);
         } catch (err) {
             error.value = 'Failed to load shared diagram';
             console.error('Error fetching shared diagram:', err);

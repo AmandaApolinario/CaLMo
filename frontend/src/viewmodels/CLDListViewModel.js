@@ -233,12 +233,17 @@ export function useCLDListViewModel() {
             nodes: formattedNodes,
             edges: formattedEdges
         };
-
-        if (format === 'json') FileExportService.exportToJSON(exportData, filename);
-        if (format === 'xmile') FileExportService.exportToXMILE(exportData, filename);
-        if (format === 'csv') {
-            FileExportService.exportToCSV(formattedEdges, filename);
+        let fileContent = '';
+        if (format === 'json'){
+            fileContent = FileExportService.exportToJSON(exportData, filename);
         }
+        if (format === 'xmile'){
+            fileContent = FileExportService.exportToXMILE(exportData, filename);
+        }
+        if (format === 'csv') {
+            fileContent = FileExportService.exportToCSV(formattedEdges, filename);
+        }
+        FileExportService.downloadFile(fileContent, `${filename}.${format}`);
     } catch (err) {
         error.value = 'Failed to export diagram.';
         console.error(err);

@@ -22,73 +22,64 @@ export const FileExportService = {
   },
 
   exportToXMILE(cldData, filename) {
-    // Agora suporta tanto o formato antigo quanto o novo aninhado
     const title = cldData.diagram?.title || cldData.title || 'Exported CLD';
     const description = cldData.diagram?.description || cldData.description || '';
     const nodes = cldData.nodes || [];
     const edges = cldData.edges || [];
 
+    const escapeXml = (str) => {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+    };
+
     let xml = `<?xml version="1.0" encoding="utf-8" ?>\n`;
-    xml += `<xmile version="1.0" xmlns="http://docs.oasis-open.org/xmile/ns/XMILE/v1.0">\n`;
+    xml += `<xmile version="1.0" xmlns="http://docs.oasis-open.org/xmile/ns/XMILE/v1.0" xmlns:isee="http://iseesystems.com/XMILE">\n`;
     xml += `    <header>\n`;
-    xml += `        <name>${title}</name>\n`;
-    if (description) xml += `        <doc>${description}</doc>\n`;
+    xml += `        <name>${escapeXml(title)}</name>\n`;
+    if (description) xml += `        <doc>${escapeXml(description)}</doc>\n`;
     xml += `    </header>\n`;
     xml += `    <model>\n`;
-
     xml += `        <variables>\n`;
     nodes.forEach(node => {
-      xml += `            <aux name="${node.name}">\n`;
-      if (node.description) xml += `                <doc>${node.description}</doc>\n`;
+      xml += `            <aux name="${escapeXml(node.name)}">\n`;
+      if (node.description) xml += `                <doc>${escapeXml(node.description)}</doc>\n`;
       xml += `            </aux>\n`;
     });
     xml += `        </variables>\n`;
 
     xml += `        <views>\n`;
-    xml += `            <view>\n`;
-    edges.forEach(edge => {
-      // Busca pelo 'source' (JSON atual) ou 'source_name' (legado)
+    xml += `            <view type="stock_flow">\n`;
+
+    nodes.forEach(node => {
+      const x = node.x ? Math.round(node.x) : 100;
+      const y = node.y ? Math.round(node.y) : 100;
+      xml += `                <aux x="${x}" y="${y}" name="${escapeXml(node.name)}" />\n`;
+    });
+
+    edges.forEach((edge, index) => {
       const sourceName = edge.source || edge.source_name || 'Unknown';
       const targetName = edge.target || edge.target_name || 'Unknown';
 
-      const from = sourceName.replace(/\s/g, '_');
-      const to = targetName.replace(/\s/g, '_');
+      const from = escapeXml(sourceName);
+      const to = escapeXml(targetName);
       const pol = (edge.polarity === 'NEGATIVE' || edge.polarity === 'negative' || edge.polarity === '-') ? '-' : '+';
 
-      xml += `                <connector from="${from}" to="${to}" polarity="${pol}" />\n`;
+      xml += `                <connector uid="${index + 1}" polarity="${pol}">\n`;
+      xml += `                    <from>${from}</from>\n`;
+      xml += `                    <to>${to}</to>\n`;
+      xml += `                </connector>\n`;
     });
+
     xml += `            </view>\n`;
     xml += `        </views>\n`;
-
     xml += `    </model>\n`;
     xml += `</xmile>`;
 
     return xml;
   },
-
-  exportToXMILEVariables(variables, filename) {
-      let xml = `<?xml version="1.0" encoding="utf-8" ?>\n`;
-      xml += `<xmile version="1.0" xmlns="http://docs.oasis-open.org/xmile/ns/XMILE/v1.0">\n`;
-      xml += `    <header>\n`;
-      xml += `        <name>Exported Variables</name>\n`;
-      xml += `    </header>\n`;
-      xml += `    <model>\n`;
-      xml += `        <variables>\n`;
-
-      variables.forEach(v => {
-        const safeName = v.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        xml += `            <aux name="${safeName}">\n`;
-        if (v.description) {
-          const safeDesc = v.description.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          xml += `                <doc>${safeDesc}</doc>\n`;
-        }
-        xml += `            </aux>\n`;
-      });
-
-      xml += `        </variables>\n`;
-      xml += `    </model>\n`;
-      xml += `</xmile>`;
-
-      return xml;
-    }
 };

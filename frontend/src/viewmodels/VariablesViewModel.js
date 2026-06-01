@@ -181,17 +181,20 @@ export function useVariablesViewModel() {
     if (selectedVariables.value.length === 0) return;
 
     const varsToExport = variables.value.filter(v => selectedVariables.value.includes(v.id));
+    let fileContent = '';
 
     if (format === 'xmile') {
-      FileExportService.exportToXMILEVariables(varsToExport, filename);
+      fileContent = FileExportService.exportToXMILE(varsToExport, filename);
     } else {
       const dataToExport = varsToExport.map(v => ({
         name: v.name,
         description: v.description || ''
       }));
-      if (format === 'json') FileExportService.exportToJSON(dataToExport, filename);
-      if (format === 'csv') FileExportService.exportToCSV(dataToExport, filename);
+      if (format === 'json') fileContent = FileExportService.exportToJSON(dataToExport, filename);
+      if (format === 'csv') fileContent = FileExportService.exportToCSV(dataToExport, filename);
     }
+
+    FileExportService.downloadFile(fileContent, `${filename}.${format}`);
   };
 
   const deleteSelectedVariables = async () => {
