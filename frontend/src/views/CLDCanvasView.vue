@@ -265,31 +265,57 @@
             <div class="node-name">{{ selectedNodeInfo.nodeName }}</div>
           </div>
 
-            <div class="node-name-section">
+            <div class="node-name-section subsystem-display-section">
             <h4 class="section-title">
-              <i class="fas fa-circle"></i> Subsystem
+              <i class="fas fa-layer-group"></i> Subsystems
             </h4>
-              <div class="subsystem-selector" style="margin-top: 15px;">
-              <label style="font-size: 13px; color: #7f8c8d; font-weight: bold;">Belongs to :</label>
 
-              <div style="max-height: 120px; overflow-y: auto; background: #f8f9fa; border: 1px solid #ddd; padding: 8px; border-radius: 6px; margin-top: 5px;">
-                 <div v-if="availableSubsystems.length === 0" style="font-size: 12px; color: #999; font-style: italic;">
-                    No Subsystem Detected.
-                 </div>
+            <div class="loop-container" v-if="activeNodeSubsystems.length > 0">
+              <div v-for="sub in activeNodeSubsystems" :key="sub.id" class="loop-item" :style="{ borderLeftColor: sub.color }">
 
-                 <div v-for="sub in availableSubsystems" :key="sub.id" style="display: flex; align-items: center; margin-bottom: 6px;">
-                    <input
-                        type="checkbox"
-                        :id="'chk-' + sub.id"
-                        :value="sub.id"
-                        v-model="selectedNodeInfo.subsystemIds"
-                        @change="toggleVariableSubsystem"
-                        style="width: auto; margin-right: 8px; cursor: pointer;"
-                    />
-                    <label :for="'chk-' + sub.id" style="font-size: 13px; color: #333; cursor: pointer;">{{ sub.name }}</label>
-                 </div>
+                  <div class="loop-badge" :style="{ backgroundColor: tint(sub.color, 0.18), color: '#0F172A', borderColor: tint(sub.color, 0.35), border: '1px solid' }">
+                      {{ sub.hierarchy }}
+                  </div>
+
+                  <p class="subsystem-card-desc" v-if="sub.description" style="margin-top: 4px; margin-bottom: 8px; font-size: 0.9rem; color: #64748b;">
+                      {{ sub.description }}
+                  </p>
+
+                  <div class="loop-variables" v-if="sub.allVariables.length > 0">
+                      <span v-for="(vName, idx) in sub.allVariables" :key="idx" class="variable-tag" :style="{ backgroundColor: tint(sub.color, 0.12), color: '#0F172A', borderColor: tint(sub.color, 0.28) }">
+                          {{ vName }}
+                      </span>
+                  </div>
               </div>
-              <div style="font-size: 11px; color: #aaa; margin-top: 4px;">* If a .</div>
+            </div>
+
+            <div v-else class="empty-subsystems-msg">
+              <i class="fas fa-folder-open" style="margin-bottom: 8px; display: block; font-size: 1.5rem; opacity: 0.5;"></i>
+              This variable does not belong to any subsystem.
+            </div>
+
+            <div class="subsystem-edit-wrapper" style="margin-top: 15px;">
+                <details class="manage-subsystems-details">
+                    <summary>
+                        <i class="fas fa-edit"></i> Manage Subsystems
+                    </summary>
+                    <div class="custom-checkbox-list">
+                        <div v-if="availableSubsystems.length === 0" class="empty-list-msg">
+                            No subsystem detected.
+                        </div>
+
+                        <label v-for="sub in availableSubsystems" :key="sub.id" class="custom-checkbox-item">
+                            <input
+                                type="checkbox"
+                                :value="sub.id"
+                                v-model="selectedNodeInfo.subsystemIds"
+                                @change="toggleVariableSubsystem"
+                            />
+                            <span class="checkbox-box"></span>
+                            <span class="checkbox-label">{{ sub.name }}</span>
+                        </label>
+                    </div>
+                </details>
             </div>
           </div>
 
@@ -1034,6 +1060,50 @@ const availableSubsystems = computed(() => {
     return list;
 });
 
+const activeNodeSubsystems = computed(() => {
+    if (!selectedNodeInfo.value || !selectedNodeInfo.value.subsystemIds) return [];
+
+    const activeIds = selectedNodeInfo.value.subsystemIds;
+    const result = [];
+
+    const getPath = (targetId) => {
+        let path = [];
+        const search = (list, currentPath) => {
+            for (const l of list) {
+                if (l.id === targetId) {
+                    if (l.id !== 'global') path = [...currentPath, l.name];
+                    return true;
+                }
+                if (l.sublayers && search(l.sublayers, l.id !== 'global' ? [...currentPath, l.name] : currentPath)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        search(layers.value, []);
+        return path.join(' ▸ ');
+    };
+
+    activeIds.forEach(subId => {
+        const layer = findLayerDeep(layers.value, subId);
+        if (layer) {
+            const allVarNames = (layer.variableIds || []).map(id => {
+                const node = nodes.value.find(n => n.id === id);
+                return node ? node.name : 'Unknown';
+            });
+
+            result.push({
+                id: layer.id,
+                name: layer.name,
+                hierarchy: getPath(layer.id) || layer.name,
+                description: layer.description,
+                color: layer.color || '#3498db',
+                allVariables: allVarNames
+            });
+        }
+    });
+    return result;
+});
 const openCreateSubsystemModal = (parentId = null) => {
     newSubsystem.name = '';
     newSubsystem.description = '';
@@ -2590,6 +2660,112 @@ watch(() => error.value, (newVal) => {
     background-color: rgba(52, 152, 219, 0.2) !important;
     outline: 2px dashed #3498db;
     outline-offset: -2px;
+}
+
+.empty-subsystems-msg {
+    background: #f8fafc;
+    color: #64748b;
+    padding: 20px 12px;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 0.95rem;
+    border: 1px dashed #cbd5e1;
+    margin-top: 10px;
+}
+
+/* Redesigned Management Accordion */
+.manage-subsystems-details {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.manage-subsystems-details summary {
+    cursor: pointer;
+    font-size: 0.95rem;
+    color: #34495e;
+    font-weight: 600;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: #f8f9fa;
+    transition: background 0.2s;
+}
+
+.manage-subsystems-details summary::-webkit-details-marker { display: none; }
+.manage-subsystems-details summary:hover { background: #f1f5f9; }
+
+/* Custom Checkbox List */
+.custom-checkbox-list {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.custom-checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+
+.custom-checkbox-item:hover {
+    background: #f1f8fe;
+}
+
+.custom-checkbox-item input[type="checkbox"] {
+    display: none;
+}
+
+.checkbox-box {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #cbd5e1;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    background: #fff;
+    flex-shrink: 0;
+}
+
+.custom-checkbox-item input[type="checkbox"]:checked + .checkbox-box {
+    background: #3498db;
+    border-color: #3498db;
+}
+
+.custom-checkbox-item input[type="checkbox"]:checked + .checkbox-box::after {
+    content: '\f00c';
+    font-family: 'Font Awesome 5 Free';
+    font-weight: 900;
+    color: white;
+    font-size: 11px;
+}
+
+.checkbox-label {
+    font-size: 0.9rem;
+    color: #334155;
+    user-select: none;
+    font-weight: 500;
+}
+
+.empty-list-msg {
+    font-size: 13px;
+    color: #94a3b8;
+    font-style: italic;
+    text-align: center;
+    padding: 10px 0;
 }
 
 </style>
