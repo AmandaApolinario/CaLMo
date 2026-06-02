@@ -309,9 +309,9 @@ class CLDAnalyzer:
 
             Investment/capacity build-up (B3):
                 ILF -> Perceived Need to Invest (PNI) : (-)
-                Performance Standard (PS) -> PNI : (+)
+                Performance Standard (PS) -> PNI : (+) WITH DELAY
                 PNI -> Investment in Capacity (IC) : (+)
-                IC -> Capacity (C) : (+)
+                IC -> Capacity (C) : (+) WITH DELAY
                 Capacity (C) -> Impact of Limiting Factor (ILF) : (+)
         """
         rel_map = {(rel.source_id, rel.target_id): rel for rel in cld.relationships}
@@ -595,7 +595,7 @@ class CLDAnalyzer:
             Shared commons coupling:
                 A_Activity -> TotalActivity : (+)
                 B_Activity -> TotalActivity : (+)
-                TotalActivity -> GainPerIndividual : (−)
+                TotalActivity -> GainPerIndividual : (−) WITH DELAY
                 GainPerIndividual -> A_Activity : (−)
                 GainPerIndividual -> B_Activity : (−)
 
@@ -604,21 +604,24 @@ class CLDAnalyzer:
                 GainPerIndividual -> NetGains_B : (+)
                 ResourceLimit -> GainPerIndividual : (+)
         """
-        rel_map = {(rel.source_id, rel.target_id): rel.type for rel in cld.relationships}
+        rel_map = {(rel.source_id, rel.target_id): rel for rel in cld.relationships}
         created = set()
 
         # Step 1: choose Total and GainPer with the negative link Total -> GainPer
         for var_total in cld.variables:
             gain_candidates = [
                 v for v in cld.variables
-                if v.id != var_total.id and rel_map.get((var_total.id, v.id)) == RelationshipType.NEGATIVE
+                if (var_total.id, v.id) in rel_map
+                and v.id != var_total.id and rel_map.get((var_total.id, v.id)).type == RelationshipType.NEGATIVE
+                and rel_map.get((var_total.id, v.id)).has_delay
             ]
             for var_gain in gain_candidates:
                 # Resource limit must boost gain per individual
                 rl_candidates = [
                     v for v in cld.variables
                     if v.id not in {var_total.id, var_gain.id}
-                    and rel_map.get((v.id, var_gain.id)) == RelationshipType.POSITIVE
+                    and (v.id, var_gain.id) in rel_map
+                    and rel_map.get((v.id, var_gain.id)).type == RelationshipType.POSITIVE
                 ]
                 if not rl_candidates:
                     continue
@@ -627,17 +630,22 @@ class CLDAnalyzer:
                 a_act_candidates = [
                     v for v in cld.variables
                     if v.id not in {var_total.id, var_gain.id}
-                    and rel_map.get((var_gain.id, v.id)) == RelationshipType.NEGATIVE  # Gain -> A (−)
-                    and rel_map.get((v.id, var_total.id)) == RelationshipType.POSITIVE  # A -> Total (+)
+                    and (var_gain.id, v.id) in rel_map
+                    and rel_map.get((var_gain.id, v.id)).type == RelationshipType.NEGATIVE  # Gain -> A (−)
+                    and (v.id, var_total.id) in rel_map
+                    and rel_map.get((v.id, var_total.id)).type == RelationshipType.POSITIVE  # A -> Total (+)
                 ]
                 a_branch = []
                 for var_a_act in a_act_candidates:
                     a_ng_list = [
                         v for v in cld.variables
                         if v.id not in {var_total.id, var_gain.id, var_a_act.id}
-                        and rel_map.get((var_a_act.id, v.id)) == RelationshipType.POSITIVE   # A -> NG_A (+)
-                        and rel_map.get((v.id, var_a_act.id)) == RelationshipType.POSITIVE   # NG_A -> A (+)
-                        and rel_map.get((var_gain.id, v.id)) == RelationshipType.POSITIVE    # Gain -> NG_A (+)
+                        and (var_a_act.id, v.id) in rel_map
+                        and rel_map.get((var_a_act.id, v.id)).type == RelationshipType.POSITIVE   # A -> NG_A (+)
+                        and (v.id, var_a_act.id) in rel_map
+                        and rel_map.get((v.id, var_a_act.id)).type == RelationshipType.POSITIVE   # NG_A -> A (+)
+                        and (var_gain.id, v.id) in rel_map
+                        and rel_map.get((var_gain.id, v.id)).type == RelationshipType.POSITIVE    # Gain -> NG_A (+)
                     ]
                     for var_a_ng in a_ng_list:
                         a_branch.append((var_a_act, var_a_ng))
@@ -648,17 +656,22 @@ class CLDAnalyzer:
                 b_act_candidates = [
                     v for v in cld.variables
                     if v.id not in {var_total.id, var_gain.id}
-                    and rel_map.get((var_gain.id, v.id)) == RelationshipType.NEGATIVE  # Gain -> B (−)
-                    and rel_map.get((v.id, var_total.id)) == RelationshipType.POSITIVE  # B -> Total (+)
+                    and (var_gain.id, v.id) in rel_map
+                    and rel_map.get((var_gain.id, v.id)).type == RelationshipType.NEGATIVE  # Gain -> B (−)
+                    and (v.id, var_total.id) in rel_map
+                    and rel_map.get((v.id, var_total.id)).type == RelationshipType.POSITIVE  # B -> Total (+)
                 ]
                 b_branch = []
                 for var_b_act in b_act_candidates:
                     b_ng_list = [
                         v for v in cld.variables
                         if v.id not in {var_total.id, var_gain.id, var_b_act.id}
-                        and rel_map.get((var_b_act.id, v.id)) == RelationshipType.POSITIVE   # B -> NG_B (+)
-                        and rel_map.get((v.id, var_b_act.id)) == RelationshipType.POSITIVE   # NG_B -> B (+)
-                        and rel_map.get((var_gain.id, v.id)) == RelationshipType.POSITIVE    # Gain -> NG_B (+)
+                        and (var_b_act.id, v.id) in rel_map
+                        and rel_map.get((var_b_act.id, v.id)).type == RelationshipType.POSITIVE   # B -> NG_B (+)
+                        and (v.id, var_b_act.id) in rel_map
+                        and rel_map.get((v.id, var_b_act.id)).type == RelationshipType.POSITIVE   # NG_B -> B (+)
+                        and (var_gain.id, v.id) in rel_map
+                        and rel_map.get((var_gain.id, v.id)).type == RelationshipType.POSITIVE    # Gain -> NG_B (+)
                     ]
                     for var_b_ng in b_ng_list:
                         b_branch.append((var_b_act, var_b_ng))
