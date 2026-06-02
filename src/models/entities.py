@@ -68,6 +68,12 @@ archetype_variables = Table(
     Column('variable_id', String, ForeignKey('variables.id', ondelete='RESTRICT'), primary_key=True)
 )
 
+subsystem_variables = Table(
+    'subsystem_variables', db.metadata,
+    Column('subsystem_id', String, ForeignKey('subsystems.id', ondelete='CASCADE'), primary_key=True),
+    Column('variable_id', String, ForeignKey('variables.id', ondelete='CASCADE'), primary_key=True)
+)
+
 # Models
 class User(db.Model):
     __tablename__ = 'users'
@@ -112,6 +118,7 @@ class CLD(db.Model):
         back_populates='cld',
         cascade='all, delete-orphan'
     )
+    subsystems = relationship('Subsystem', back_populates='cld', cascade='all, delete-orphan')
 
 class Relationship(db.Model):
     __tablename__ = 'relationships'
@@ -154,3 +161,19 @@ class CLDHistory(db.Model):
     timestamp = Column(DateTime, default=datetime.timestamp(datetime.now()))
 
     user = relationship('User')
+
+
+class Subsystem(db.Model):
+    __tablename__ = 'subsystems'
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, nullable=False)
+    description = Column(Text)
+
+    cld_id = Column(String, ForeignKey('clds.id', ondelete='CASCADE'), nullable=False)
+    cld = relationship('CLD', backref=db.backref('subsystems_list', cascade='all, delete-orphan'))
+
+    parent_id = Column(String, ForeignKey('subsystems.id', ondelete='CASCADE'), nullable=True)
+    sublayers = relationship("Subsystem", backref=db.backref('parent', remote_side=[id]), cascade="all, delete-orphan")
+
+    variables = relationship('Variable', secondary=subsystem_variables)

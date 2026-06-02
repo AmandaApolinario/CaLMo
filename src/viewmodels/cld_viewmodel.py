@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from ..models.repositories import CLDRepository, RelationshipRepository, VariableRepository, CLDHistoryRepository
 from ..models.domain_logic import CLDAnalyzer
-from ..models.entities import RelationshipType, Variable, CLD, Relationship, CLDHistory
+from ..models.entities import RelationshipType, Variable, CLD, Relationship, CLDHistory, Subsystem
 import secrets
 
 class CLDViewModel:
@@ -130,7 +130,7 @@ class CLDViewModel:
         # Return empty array if no relationships found
         return relationships_data, "Relationships retrieved successfully"
     
-    def update_cld(self, cld_id, user_id, name=None, description=None, date_str=None, variables=None, relationships=None, share_token=None, changes_summary=None):
+    def update_cld(self, cld_id, user_id, name=None, description=None, date_str=None, variables=None, relationships=None, share_token=None, changes_summary=None, subsystems = None):
         """Update an existing CLD"""
         date = None
         if date_str:
@@ -201,6 +201,13 @@ class CLDViewModel:
                         has_delay=rel['has_delay'],
                     )
                     self.db_session.add(relationship)
+
+            if subsystems is not None:
+                self.db_session.query(Subsystem).filter_by(cld_id=cld_id).delete()
+                self.db_session.flush()
+                for sub_data in subsystems:
+                    self.insert_subsystem(sub_data, cld_id=cld_id)
+
 
             if changes_summary:
                 history_entry = CLDHistory(
@@ -353,7 +360,8 @@ class CLDViewModel:
                     'variables': [var.id for var in arch.variables]
                 } 
                 for arch in cld.archetypes
-            ]
+            ],
+            'subsystems': self.build_subsystem_tree(cld, parent_id=None)
         }
 
     def generate_share_token(self, cld_id, user_id):
@@ -536,3 +544,44 @@ class CLDViewModel:
             self.db_session.rollback()
             return None, f"Error creating CLD: {str(e)}"
 
+    def insert_subsystem(self, sub_data, parent_id=None, cld_id=None):
+        # Prevent inserting the dummy 'global' layer from frontend
+        if sub_data.get('id') == 'global':
+            return
+
+        sub_id = f"subsystem-{str(uuid.uuid4())[:8]}"
+
+        # Create the Subsystem record
+        sub_model = Subsystem(
+            id=sub_id,
+            name=sub_data.get('name', 'Unnamed'),
+            description=sub_data.get('description', ''),
+            cld_id=cld_id,
+            parent_id=parent_id
+        )
+        self.db_session.add(sub_model)
+
+        # Link existing variables (shapeIds) to this subsystem
+        var_ids = sub_data.get('variableIds', [])
+        if var_ids:
+            vars_to_link = self.db_session.query(Variable).filter(Variable.id.in_(var_ids)).all()
+            sub_model.variables.extend(vars_to_link)
+
+        # Recursively process children
+        for child_data in sub_data.get('sublayers', []):
+            self.insert_subsystem(child_data, parent_id=sub_id, cld_id=cld_id)
+
+    def build_subsystem_tree(self, cld, parent_id=None):
+        tree = []
+        # Find children for the current parent
+        children = [s for s in cld.subsystems if s.parent_id == parent_id]
+        for child in children:
+            node = {
+                'id': child.id,
+                'name': child.name,
+                'description': child.description,
+                'variableIds': [v.id for v in child.variables],  # Extract linked variable IDs
+                'sublayers': self.build_subsystem_tree(cld, child.id)  # Recurse
+            }
+            tree.append(node)
+        return tree

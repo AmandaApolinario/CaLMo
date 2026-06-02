@@ -10,17 +10,20 @@ import {
   ensureContrastWithBackground, LOOP_COLORS, // ensure instance color is not too close to node regular color
 } from '@/theme/colors';
 import { makePieEllipseDataUrl } from '@/theme/nodeImages';
+import {publishDiagramEvent} from "@/services/kafkaEvent.service.js";
 
 export function useCLDDiagramViewModel() {
   const networkContainer = ref(null);
   const network = shallowRef(null);
   const zoomLevel = ref(1);
   const selectedNode = ref(null);
-  const selectedNodeInfo = ref({ nodeName: '', loops: [], archetypes: [] });
+  const selectedNodeInfo = ref({ nodeName: '', subsystemIds: [], loops: [], archetypes: [] });
   const interactionMode = ref('select');
   const edgeAddedCallback = ref(null);
   const hasSelection = ref(false);
   const nodeDraggedCallback = ref(null);
+  const diagramLayers = ref([]);
+  const showSubsystemBorders = ref(false);
 
   // Persisted node positions by diagram id
   const diagramPositions = ref({});
@@ -394,11 +397,11 @@ export function useCLDDiagramViewModel() {
       }
       else if (params.nodes.length > 0) {
         selectedNode.value = params.nodes[0];
-        selectedNodeInfo.value = { nodeName: '', loops: [], archetypes: [] };
+        selectedNodeInfo.value = { nodeName: '', subsystemIds: [], loops: [], archetypes: [] };
       }
       else if (params.edges.length > 0) {
         selectedNode.value = null;
-        selectedNodeInfo.value = { nodeName: '', loops: [], archetypes: [] };
+        selectedNodeInfo.value = { nodeName: '', subsystemIds: [], loops: [], archetypes: [] };
       }
     });
     network.value.on('dragEnd', () => saveNodePositions(diagram.id));
@@ -420,6 +423,80 @@ export function useCLDDiagramViewModel() {
       }
     });
 
+    network.value.on('beforeDrawing', (ctx) => {
+        if (!showSubsystemBorders.value) return;
+        if (diagramLayers.value && diagramLayers.value.length > 0) {
+            const positions = network.value.getPositions();
+
+            const drawLayerBox = (layer, depth = 0) => {
+                if (!layer.visible || layer.id === 'global') return;
+
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                let hasValidNodes = false;
+
+                const collectNodes = (l) => {
+                    if (!l.visible) return [];
+                    let ns = [...l.variableIds];
+                    if (l.expanded && l.sublayers) {
+                        l.sublayers.forEach(sub => ns = ns.concat(collectNodes(sub)));
+                    }
+                    return ns;
+                };
+
+                const allNodesInSystem = collectNodes(layer);
+
+                allNodesInSystem.forEach(nodeId => {
+                    const pos = positions[nodeId];
+                    const visNode = network.value.body.nodes[nodeId];
+                    if (pos && visNode && !visNode.options.hidden) {
+                        hasValidNodes = true;
+                        minX = Math.min(minX, pos.x);
+                        minY = Math.min(minY, pos.y);
+                        maxX = Math.max(maxX, pos.x);
+                        maxY = Math.max(maxY, pos.y);
+                    }
+                });
+
+                if (hasValidNodes) {
+                    const padding = 50 + (depth * 20);
+                    const colorHex = layer.color;
+
+                    ctx.fillStyle = colorHex + '1A';
+                    ctx.strokeStyle = colorHex + '80';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([8, 6]);
+
+                    const x = minX - padding;
+                    const y = minY - padding;
+                    const w = (maxX - minX) + padding * 2;
+                    const h = (maxY - minY) + padding * 2;
+
+                    ctx.beginPath();
+                    if (ctx.roundRect) ctx.roundRect(x, y, w, h, 15);
+                    else ctx.rect(x, y, w, h);
+                    ctx.fill();
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    ctx.fillStyle = colorHex;
+                    ctx.font = 'bold 16px Arial';
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'bottom';
+                    ctx.fillText(layer.name, x + 10, y - 5);
+                }
+
+                if (layer.expanded && layer.sublayers) {
+                    layer.sublayers.forEach(sub => drawLayerBox(sub, depth + 1));
+                }
+            };
+
+            const globalLayer = diagramLayers.value.find(l => l.id === 'global');
+            if (globalLayer && globalLayer.sublayers && globalLayer.visible) {
+                globalLayer.sublayers.forEach(sublayer => drawLayerBox(sublayer, 0));
+            }
+        }
+    });
+
     network.value.on('afterDrawing', (ctx) => {
 
       diagram.feedback_loops.forEach((loop, index) => {
@@ -434,8 +511,12 @@ export function useCLDDiagramViewModel() {
 
         const positions = network.value.getPositions(varIds);
         let sumX = 0, sumY = 0, validNodes = 0;
+        let isLoopVisible = true;
 
         varIds.forEach(id => {
+          const visNode = network.value.body.nodes[id];
+          if (visNode && visNode.options.hidden) isLoopVisible = false;
+
           if (positions[id]) {
             sumX += positions[id].x;
             sumY += positions[id].y;
@@ -443,7 +524,7 @@ export function useCLDDiagramViewModel() {
           }
         });
 
-        if (validNodes > 0) {
+        if (validNodes > 0 && isLoopVisible) {
           const centerX = sumX / validNodes;
           const centerY = sumY / validNodes;
 
@@ -495,6 +576,12 @@ export function useCLDDiagramViewModel() {
   
       allEdges.forEach(edge => {
         const visEdge = network.value.body.edges[edge.id];
+        const fromNode = network.value.body.nodes[edge.from];
+        const toNode = network.value.body.nodes[edge.to];
+
+        if (visEdge && visEdge.options.hidden) return;
+        if (fromNode && fromNode.options.hidden) return;
+        if (toNode && toNode.options.hidden) return;
 
         if (visEdge && visEdge.edgeType && typeof visEdge.edgeType.getPoint === 'function') {
           const pt = visEdge.edgeType.getPoint(0.75);
@@ -637,8 +724,21 @@ export function useCLDDiagramViewModel() {
       return foundVar ? foundVar.name : varId;
     };
 
+    let currentSubsystemIds = [];
+    const checkNodeSubsystem = (l) => {
+        if (l.id !== 'global' && l.variableIds && l.variableIds.includes(nodeId)) {
+            currentSubsystemIds.push(l.id);
+        }
+        if (l.sublayers) l.sublayers.forEach(checkNodeSubsystem);
+    };
+    if (diagramLayers.value) {
+        diagramLayers.value.forEach(checkNodeSubsystem);
+    }
+
     selectedNodeInfo.value = {
+      nodeId: node.id,
       nodeName: node.name,
+      subsystemIds: currentSubsystemIds,
       loops: filteredLoops.map(loop => ({
         id: loop.id,
         type: loop.type,
@@ -1018,6 +1118,45 @@ export function useCLDDiagramViewModel() {
     document.body.removeChild(downloadLink);
   }
 
+  function updateVisibility() {
+    if (!network.value) return;
+    const allNodes = network.value.body.data.nodes.get();
+    const updates = [];
+
+    allNodes.forEach(node => {
+      let isVisible = false;
+      let belongsToAnySubsystem = false;
+
+      const checkLayer = (layer) => {
+        if (layer.id !== 'global' && layer.variableIds.includes(node.id)) {
+          belongsToAnySubsystem = true;
+          if (layer.visible) isVisible = true;
+        }
+        if (layer.sublayers) {
+          layer.sublayers.forEach(checkLayer);
+        }
+      };
+
+      diagramLayers.value.forEach(checkLayer);
+
+      if (!belongsToAnySubsystem) {
+        const globalLayer = diagramLayers.value.find(l => l.id === 'global');
+        isVisible = globalLayer ? globalLayer.visible : true;
+      }
+
+      updates.push({ id: node.id, hidden: !isVisible });
+    });
+
+    network.value.body.data.nodes.update(updates);
+  }
+
+  function toggleSubsystemBorders() {
+      showSubsystemBorders.value = !showSubsystemBorders.value;
+      if (network.value) {
+          network.value.redraw();
+      }
+  }
+
   return {
     networkContainer,
     network,
@@ -1045,6 +1184,10 @@ export function useCLDDiagramViewModel() {
     addNodeToCanvas,
     removeEdgeFromCanvas,
     removeNodeFromCanvas,
-    exportToPNG
+    exportToPNG,
+    diagramLayers,
+    updateVisibility,
+    showSubsystemBorders,
+    toggleSubsystemBorders
   };
 }

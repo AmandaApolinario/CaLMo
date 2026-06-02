@@ -76,6 +76,9 @@ class CLDService {
       if(cldData.share_token){
         dataToSend.share_token = cldData.share_token;
       }
+      if(cldData.subsystems){
+        dataToSend.subsystems = cldData.subsystems;
+      }
       
       console.log(`CLD Service - Updating CLD ${id} with data:`, dataToSend);
       const response = await ApiService.put(`cld/${id}`, dataToSend);

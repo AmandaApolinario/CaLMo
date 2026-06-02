@@ -169,110 +169,70 @@
                     </div>
                 </div>
             </div>
+            <div class="layers-panel" :class="{ collapsed: !layersPanelExpanded }">
+                <div class="panel-header" @click="layersPanelExpanded = !layersPanelExpanded">
+                    <span v-if="layersPanelExpanded">Subsystem</span>
+                    <i :class="layersPanelExpanded ? 'fas fa-chevron-down' : 'fas fa-chevron-up'"></i>
+                </div>
 
-<!--            <div class="layers-panel" :class="{ collapsed: !layersPanelExpanded }">-->
-<!--                <div class="panel-header" @click="layersPanelExpanded = !layersPanelExpanded">-->
-<!--                    <span v-if="layersPanelExpanded">Layers</span>-->
-<!--                    <i :class="layersPanelExpanded ? 'fas fa-chevron-down' : 'fas fa-chevron-up'"></i>-->
-<!--                </div>-->
+                <div v-if="layersPanelExpanded" class="panel-content">
+                    <div class="layers-header" :key="'border-btn-' + showSubsystemBorders">
+                        <button class="add-layer-btn"
+                                @click="toggleSubsystemBorders"
+                                :title="showSubsystemBorders ? 'Hide Visual Borders' : 'Show Visual Borders'"
+                                :style="{ backgroundColor: !showSubsystemBorders ? '#f1f5f9' : '#1177bb' }"
+                                style="margin-right: 8px;">
+                            <i :class="showSubsystemBorders ? 'fas fa-object-ungroup' : 'fas fa-object-group'"
+                               :style="{ color: showSubsystemBorders ? '#ffffff' : '#000000' }">
+                            </i>
+                        </button>
 
-<!--                <div v-if="layersPanelExpanded" class="panel-content">-->
-<!--                    <div class="layers-header">-->
-<!--                        <button class="add-layer-btn" @click="addLayer" title="Add Layer">-->
-<!--                            <i class="fas fa-plus"></i>-->
-<!--                        </button>-->
-<!--                    </div>-->
+                        <button class="add-layer-btn" @click="openCreateSubsystemModal(null)" title="Create Subsystem">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
 
-<!--                    <div class="layers-list">-->
-<!--                        <div-->
-<!--                            class="layer-item"-->
-<!--                            :class="{ active: selectedLayerId === 'global' }"-->
-<!--                            @click="selectLayer('global')"-->
-<!--                        >-->
-<!--                            <div class="layer-content">-->
-<!--                                <button class="layer-visibility-btn" @click.stop="toggleLayerVisibility('global')">-->
-<!--                                    <i :class="isLayerVisible('global') ? 'fas fa-eye' : 'fas fa-eye-slash'"></i>-->
-<!--                                </button>-->
-<!--                                <span class="layer-name">Global</span>-->
-<!--                                <span class="layer-shape-count">{{ getLayerShapeCount('global') }}</span>-->
-<!--                            </div>-->
-<!--                        </div>-->
+                    <div class="layers-list">
+                        <div v-for="{ layer, depth } in flattenedLayers" :key="layer.id + '_' + layer.visible">
 
-<!--                        <div v-for="layer in layers.filter(l => l.id !== 'global')" :key="layer.id">-->
-<!--                            <div-->
-<!--                                class="layer-item"-->
-<!--                                :class="{ active: selectedLayerId === layer.id }"-->
-<!--                            >-->
-<!--                                <div class="layer-content" @click="selectLayer(layer.id)">-->
-<!--                                    <button class="expand-btn" @click.stop="toggleLayerExpanded(layer.id)" v-if="layer.sublayers.length > 0">-->
-<!--                                        <i :class="layer.expanded ? 'fas fa-caret-down' : 'fas fa-caret-right'"></i>-->
-<!--                                    </button>-->
-<!--                                    <div v-else class="expand-placeholder"></div>-->
+                            <div class="layer-item"
+                                 :draggable="layer.id !== 'global'"
+                                 @dragstart="onLayerDragStart($event, layer.id)"
+                                 @dragover.prevent="onLayerDragOver($event, layer.id)"
+                                 @dragleave="onLayerDragLeave"
+                                 @drop.stop="onLayerDrop($event, layer.id)"
+                                 :class="{
+                                     active: selectedLayerId === layer.id,
+                                     'drop-before': dragOverLayerId === layer.id && dropAction === 'before',
+                                     'drop-after': dragOverLayerId === layer.id && dropAction === 'after',
+                                     'drop-inside': dragOverLayerId === layer.id && dropAction === 'inside'
+                                 }"
+                                 :style="{ marginLeft: (depth * 15) + 'px', borderLeft: layer.id !== 'global' ? `4px solid ${layer.color}` : 'none' }">
 
-<!--                                    <button class="layer-visibility-btn" @click.stop="toggleLayerVisibility(layer.id)">-->
-<!--                                        <i :class="layer.visible ? 'fas fa-eye' : 'fas fa-eye-slash'"></i>-->
-<!--                                    </button>-->
+                                <div class="layer-content" @click="selectLayer(layer.id)">
+                                    <button class="expand-btn" @click.stop="toggleLayerExpanded(layer.id)" v-if="layer.sublayers && layer.sublayers.length > 0">
+                                        <i :class="layer.expanded ? 'fas fa-caret-down' : 'fas fa-caret-right'"></i>
+                                    </button>
+                                    <div v-else class="expand-placeholder"></div>
 
-<!--                                    <input-->
-<!--                                        v-if="editingLayerId === layer.id"-->
-<!--                                        class="layer-name-input"-->
-<!--                                        v-model="layer.name"-->
-<!--                                        @blur="editingLayerId = null"-->
-<!--                                        @keyup.enter="editingLayerId = null"-->
-<!--                                        @click.stop-->
-<!--                                    />-->
-<!--                                    <span v-else class="layer-name" @dblclick.stop="editingLayerId = layer.id">-->
-<!--                                        {{ layer.name }}-->
-<!--                                    </span>-->
+                                    <button class="layer-visibility-btn" @click.stop="toggleLayerVisibility(layer.id)">
+                                        <i :class="{  fas: true,  'fa-eye': layer.visible,  'fa-eye-slash': !layer.visible}"></i>
+                                    </button>
 
-<!--                                    <span class="layer-shape-count">{{ getLayerShapeCount(layer.id) }}</span>-->
-<!--                                </div>-->
+                                    <input v-if="editingLayerId === layer.id" class="layer-name-input" v-model="layer.name" @blur="editingLayerId = null" @keyup.enter="editingLayerId = null" @click.stop />
+                                    <span v-else class="layer-name" @dblclick.stop="editingLayerId = layer.id">{{ layer.name }}</span>
+                                </div>
 
-<!--                                <div class="layer-controls">-->
-<!--                                    <button class="add-sublayer-btn" @click.stop="addSubLayer(layer.id)" title="Add Sublayer">-->
-<!--                                        <i class="fas fa-plus"></i>-->
-<!--                                    </button>-->
-<!--                                    <button class="delete-layer-btn" @click.stop="deleteLayer(layer.id)" title="Delete Layer">-->
-<!--                                        <i class="fas fa-times"></i>-->
-<!--                                    </button>-->
-<!--                                </div>-->
-<!--                            </div>-->
+                                <div class="layer-controls" v-if="layer.id !== 'global'">
+                                    <button class="add-sublayer-btn" @click.stop="openCreateSubsystemModal(layer.id)" title="Add Subsystem"><i class="fas fa-plus"></i></button>
+                                    <button class="delete-layer-btn" @click.stop="deleteLayerDeep(layers, layer.id); broadcastSubsystems(); updateVisibility();" title="Delete"><i class="fas fa-times"></i></button>
+                                </div>
+                            </div>
 
-<!--                            <div v-if="layer.expanded" v-for="sublayer in layer.sublayers" :key="sublayer.id">-->
-<!--                                <div-->
-<!--                                    class="sublayer-item"-->
-<!--                                    :class="{ active: selectedLayerId === sublayer.id }"-->
-<!--                                >-->
-<!--                                    <div class="sublayer-content" @click="selectLayer(sublayer.id)">-->
-<!--                                        <span class="sublayer-indent">└</span>-->
-<!--                                        <button class="layer-visibility-btn" @click.stop="toggleLayerVisibility(sublayer.id)">-->
-<!--                                            <i :class="sublayer.visible ? 'fas fa-eye' : 'fas fa-eye-slash'"></i>-->
-<!--                                        </button>-->
-
-<!--                                        <input-->
-<!--                                            v-if="editingLayerId === sublayer.id"-->
-<!--                                            class="layer-name-input"-->
-<!--                                            v-model="sublayer.name"-->
-<!--                                            @blur="editingLayerId = null"-->
-<!--                                            @keyup.enter="editingLayerId = null"-->
-<!--                                            @click.stop-->
-<!--                                        />-->
-<!--                                        <span v-else class="layer-name" @dblclick.stop="editingLayerId = sublayer.id">-->
-<!--                                            {{ sublayer.name }}-->
-<!--                                        </span>-->
-
-<!--                                        <span class="layer-shape-count">{{ getLayerShapeCount(sublayer.id) }}</span>-->
-<!--                                    </div>-->
-
-<!--                                    <button class="delete-layer-btn" @click.stop="deleteSubLayer(layer.id, sublayer.id)">-->
-<!--                                        <i class="fas fa-times"></i>-->
-<!--                                    </button>-->
-<!--                                </div>-->
-<!--                            </div>-->
-<!--                        </div>-->
-<!--                    </div>-->
-<!--                </div>-->
-<!--            </div>-->
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div
@@ -297,6 +257,42 @@
             </h4>
             <div class="node-name">{{ selectedNodeInfo.nodeName }}</div>
           </div>
+
+          <div class="node-name-section">
+            <h4 class="section-title">
+              <i class="fas fa-circle"></i> Variável
+            </h4>
+            <div class="node-name">{{ selectedNodeInfo.nodeName }}</div>
+          </div>
+
+            <div class="node-name-section">
+            <h4 class="section-title">
+              <i class="fas fa-circle"></i> Subsystem
+            </h4>
+              <div class="subsystem-selector" style="margin-top: 15px;">
+              <label style="font-size: 13px; color: #7f8c8d; font-weight: bold;">Belongs to :</label>
+
+              <div style="max-height: 120px; overflow-y: auto; background: #f8f9fa; border: 1px solid #ddd; padding: 8px; border-radius: 6px; margin-top: 5px;">
+                 <div v-if="availableSubsystems.length === 0" style="font-size: 12px; color: #999; font-style: italic;">
+                    No Subsystem Detected.
+                 </div>
+
+                 <div v-for="sub in availableSubsystems" :key="sub.id" style="display: flex; align-items: center; margin-bottom: 6px;">
+                    <input
+                        type="checkbox"
+                        :id="'chk-' + sub.id"
+                        :value="sub.id"
+                        v-model="selectedNodeInfo.subsystemIds"
+                        @change="toggleVariableSubsystem"
+                        style="width: auto; margin-right: 8px; cursor: pointer;"
+                    />
+                    <label :for="'chk-' + sub.id" style="font-size: 13px; color: #333; cursor: pointer;">{{ sub.name }}</label>
+                 </div>
+              </div>
+              <div style="font-size: 11px; color: #aaa; margin-top: 4px;">* If a .</div>
+            </div>
+          </div>
+
 
           <!-- Feedback Loops -->
           <div v-if="selectedNodeInfo.loops.length > 0" class="loop-section">
@@ -399,6 +395,26 @@
                         <button type="submit" :disabled="creatingVariable" class="btn-create">
                             {{ creatingVariable ? 'Creating...' : 'Create' }}
                         </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+      <div v-if="showSubsystemModal" class="modal-overlay" @click="showSubsystemModal = false">
+            <div class="modal-content" @click.stop>
+                <h3>Create Subsystem</h3>
+                <form @submit.prevent="confirmCreateSubsystem">
+                    <div class="form-group">
+                        <label>Subsystem Name:</label>
+                        <input v-model="newSubsystem.name" type="text" required placeholder="Ex: Marketing..." />
+                    </div>
+                    <div class="form-group">
+                        <label>Description:</label>
+                        <textarea v-model="newSubsystem.description" rows="3" placeholder="Description"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" @click="showSubsystemModal = false" class="btn-cancel">Cancel</button>
+                        <button type="submit" class="btn-create">Create</button>
                     </div>
                 </form>
             </div>
@@ -541,7 +557,7 @@
 </template>
 
 <script setup>
-import {onMounted, ref, nextTick, watch, onUnmounted, onBeforeUnmount, computed} from 'vue';
+import {onMounted, ref, nextTick, watch, onUnmounted, onBeforeUnmount, computed, reactive} from 'vue';
 import {useRouter, useRoute, onBeforeRouteLeave} from 'vue-router';
 import { useCLDCanvasViewModel } from '@/viewmodels/CLDCanvasViewModel';
 import { useCLDDiagramViewModel } from '@/viewmodels/CLDDiagramViewModel';
@@ -607,6 +623,7 @@ const {
     isInfoModalOpen,
     openInfoModal,
     closeInfoModal,
+    updateLayerCollab,
 } = useCLDCanvasViewModel();
 
 const {
@@ -635,7 +652,11 @@ const {
     addNodeToCanvas,
     removeNodeFromCanvas,
     removeEdgeFromCanvas,
-    exportToPNG
+    exportToPNG,
+    diagramLayers,
+    updateVisibility,
+    showSubsystemBorders,
+    toggleSubsystemBorders,
 } = useCLDDiagramViewModel();
 
 // UI State
@@ -643,6 +664,11 @@ const leftPanelExpanded = ref(true);
 const layersPanelExpanded = ref(true);
 const variablesPanelExpanded = ref(true);
 const isDelayEnabled = ref(false);
+const showSubsystemModal = ref(false);
+const newSubsystem = reactive({ name: '', description: '', parentId: null });
+
+const SUBSYSTEM_COLORS = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c'];
+
 
 provideStateCallback.value = getCurrentPositions;
 
@@ -674,7 +700,6 @@ remoteNodeRemovedCallback.value = removeNodeFromCanvas;
 remoteEdgeAddedCallback.value = addEdgeToCanvas;
 remoteEdgeRemovedCallback.value = removeEdgeFromCanvas;
 
-// Layers System
 const layers = ref([
     {
         id: 'global',
@@ -682,7 +707,7 @@ const layers = ref([
         visible: true,
         expanded: false,
         sublayers: [],
-        shapeIds: []
+        variableIds: []
     }
 ]);
 
@@ -690,11 +715,19 @@ const selectedLayerId = ref('global');
 const editingLayerId = ref(null);
 let layerCounter = 1;
 let sublayerCounter = {};
+diagramLayers.value = layers.value;
+
+const broadcastSubsystems = () => {
+    const globalLayer = layers.value.find(l => l.id === 'global');
+    const cleanLayers = JSON.parse(JSON.stringify(globalLayer && globalLayer.sublayers ? globalLayer.sublayers : []));
+    updateLayerCollab(cleanLayers);
+};
 
 // Layer Methods
 const selectLayer = (layerId) => {
     selectedLayerId.value = layerId;
 };
+
 
 const isLayerVisible = (layerId) => {
     const layer = layers.value.find(l => l.id === layerId);
@@ -708,39 +741,41 @@ const isLayerVisible = (layerId) => {
 };
 
 const addLayer = () => {
+    const color = SUBSYSTEM_COLORS[layerCounter % SUBSYSTEM_COLORS.length];
     const newLayer = {
-        id: `layer-${layerCounter}`,
-        name: `Layer ${layerCounter}`,
+        id: `subsystem-${layerCounter}`,
+        name: `Subsistema ${layerCounter}`,
+        color: color,
         visible: true,
         expanded: false,
         sublayers: [],
-        shapeIds: []
+        variableIds: []
     };
     layers.value.push(newLayer);
     sublayerCounter[newLayer.id] = 1;
     layerCounter++;
     selectLayer(newLayer.id);
+    updateVisibility();
 };
 
 const addSubLayer = (layerId) => {
     const layer = layers.value.find(l => l.id === layerId);
     if (!layer) return;
-
-    if (!sublayerCounter[layerId]) {
-        sublayerCounter[layerId] = 1;
-    }
+    if (!sublayerCounter[layerId]) sublayerCounter[layerId] = 1;
 
     const newSublayer = {
         id: `${layerId}-sub-${sublayerCounter[layerId]}`,
-        name: `Sublayer ${sublayerCounter[layerId]}`,
+        name: `Sub-subsistema ${sublayerCounter[layerId]}`,
+        color: layer.color,
         visible: true,
-        shapeIds: []
+        variableIds: []
     };
-
     layer.sublayers.push(newSublayer);
     sublayerCounter[layerId]++;
     selectLayer(newSublayer.id);
+    updateVisibility();
 };
+
 
 const deleteLayer = (layerId) => {
     if (layerId === 'global') return;
@@ -752,6 +787,7 @@ const deleteLayer = (layerId) => {
             selectLayer('global');
         }
     }
+    updateVisibility();
 };
 
 const deleteSubLayer = (layerId, sublayerId) => {
@@ -765,41 +801,7 @@ const deleteSubLayer = (layerId, sublayerId) => {
             selectLayer(layerId);
         }
     }
-};
-
-const toggleLayerExpanded = (layerId) => {
-    const layer = layers.value.find(l => l.id === layerId);
-    if (layer) {
-        layer.expanded = !layer.expanded;
-    }
-};
-
-const toggleLayerVisibility = (layerId) => {
-    const layer = layers.value.find(l => l.id === layerId);
-    if (layer) {
-        layer.visible = !layer.visible;
-        return;
-    }
-
-    for (const mainLayer of layers.value) {
-        const sublayer = mainLayer.sublayers?.find(s => s.id === layerId);
-        if (sublayer) {
-            sublayer.visible = !sublayer.visible;
-            return;
-        }
-    }
-};
-
-const getLayerShapeCount = (layerId) => {
-    const layer = layers.value.find(l => l.id === layerId);
-    if (layer) return layer.shapeIds.length;
-
-    for (const mainLayer of layers.value) {
-        const sublayer = mainLayer.sublayers?.find(s => s.id === layerId);
-        if (sublayer) return sublayer.shapeIds.length;
-    }
-
-    return 0;
+    updateVisibility();
 };
 
 // Drag and Drop
@@ -836,12 +838,12 @@ const onDrop = (event) => {
 
         const layer = layers.value.find(l => l.id === selectedLayerId.value);
         if (layer) {
-            layer.shapeIds.push(variable.id);
+            layer.variableIds.push(variable.id);
         } else {
             for (const mainLayer of layers.value) {
                 const sublayer = mainLayer.sublayers?.find(s => s.id === selectedLayerId.value);
                 if (sublayer) {
-                    sublayer.shapeIds.push(variable.id);
+                    sublayer.variableIds.push(variable.id);
                     break;
                 }
             }
@@ -853,16 +855,24 @@ const onDrop = (event) => {
 
 const saveDiagram = async () => {
     if (!network.value || !diagram.value) return;
-
     const positions = network.value.getPositions();
-
     saveNodePositions(diagram.value.id, positions);
 
-    const success = await persistDiagram(nodes.value, edges.value);
+    const globalLayer = layers.value.find(l => l.id === 'global');
+    const rawSubsystems = globalLayer ? globalLayer.sublayers : [];
+    diagram.value.subsystems = formatSubsystems(rawSubsystems);
 
-    if (success) {
-        console.log('Saved successfully');
-    }
+    const success = await persistDiagram(nodes.value, edges.value);
+    if (success) { console.log('Diagram Saved!'); }
+};
+
+const formatSubsystems = (layerList) => {
+    return layerList.map(layer => ({
+        name: layer.name,
+        description: layer.description || '',
+        variableIds: layer.variableIds || [],
+        sublayers: layer.sublayers ? formatSubsystems(layer.sublayers) : []
+    }));
 };
 
 const goBack = () => {
@@ -960,23 +970,298 @@ const isDelayActive = computed(() => {
     return isDelayEnabled.value;
 });
 
-const toggleDelay = async () => {
-    if (hasSelection.value && network.value) {
-        const selection = network.value.getSelection();
-        if (selection.edges.length > 0 && selection.nodes.length === 0) {
-            const edgeId = selection.edges[0];
-            const edge = edges.value.find(e => String(e.id) === String(edgeId));
-            if (edge) {
-                edge.has_delay = !edge.has_delay;
-                diagram.value = { ...diagram.value };
-                await saveDiagram();
-                return;
-            }
+const findLayerDeep = (layerList, id) => {
+    for (const l of layerList) {
+        if (l.id === id) return l;
+        if (l.sublayers) {
+            const found = findLayerDeep(l.sublayers, id);
+            if (found) return found;
         }
     }
-    isDelayEnabled.value = !isDelayEnabled.value;
+    return null;
 };
 
+const deleteLayerDeep = (layerList, id) => {
+    for (let i = 0; i < layerList.length; i++) {
+        if (layerList[i].id === id) {
+            layerList.splice(i, 1);
+            return true;
+        }
+        if (layerList[i].sublayers) {
+            if (deleteLayerDeep(layerList[i].sublayers, id)) return true;
+        }
+    }
+    return false;
+};
+
+
+const flattenedLayers = computed(() => {
+    const result = [];
+
+    const globalLayer = layers.value.find(l => l.id === 'global');
+    if (globalLayer) {
+        const _vis = globalLayer.visible;
+    }
+
+    const flatten = (layerList, depth) => {
+        layerList.forEach(l => {
+            const _trackVis = l.visible;
+            result.push({ layer: l, depth });
+            if (l.expanded && l.sublayers && l.sublayers.length > 0) {
+                flatten(l.sublayers, depth + 1);
+            }
+        });
+    };
+
+    flatten(layers.value, 0);
+    return result;
+});
+
+const availableSubsystems = computed(() => {
+    const list = [];
+    const traverse = (layerList, prefix) => {
+        layerList.forEach(l => {
+            if (l.id !== 'global') {
+                list.push({ id: l.id, name: `${prefix}${l.name}` });
+            }
+            if (l.sublayers) {
+                const newPrefix = l.id === 'global' ? '' : prefix + '↳ ';
+                traverse(l.sublayers, newPrefix);
+            }
+        });
+    };
+    traverse(layers.value, '');
+    return list;
+});
+
+const openCreateSubsystemModal = (parentId = null) => {
+    newSubsystem.name = '';
+    newSubsystem.description = '';
+    newSubsystem.parentId = parentId;
+    showSubsystemModal.value = true;
+};
+
+const toggleLayerExpanded = (layerId) => {
+    const layer = findLayerDeep(layers.value, layerId);
+    if (layer) layer.expanded = !layer.expanded;
+};
+
+const toggleLayerVisibility = (layerId) => {
+    const layer = findLayerDeep(layers.value, layerId);
+    if (!layer) return;
+
+    const newState = !layer.visible;
+
+    const toggleRecursively = (l, state) => {
+        l.visible = state;
+        if (l.sublayers) l.sublayers.forEach(sub => toggleRecursively(sub, state));
+    };
+
+    toggleRecursively(layer, newState);
+    updateVisibility();
+};
+
+const getLayerShapeCount = (layerId) => {
+    const layer = findLayerDeep(layers.value, layerId);
+    if (!layer) return 0;
+
+    let count = layer.variableIds ? layer.variableIds.length : 0;
+    const countSublayers = (subList) => {
+        subList.forEach(sub => {
+            if (sub.variableIds) count += sub.variableIds.length;
+            if (sub.sublayers) countSublayers(sub.sublayers);
+        });
+    };
+    if (layer.sublayers) countSublayers(layer.sublayers);
+    return count;
+};
+
+const confirmCreateSubsystem = () => {
+    if (!newSubsystem.name.trim()) return;
+
+    if (newSubsystem.parentId) {
+        const parent = findLayerDeep(layers.value, newSubsystem.parentId);
+        if (parent) {
+            const availableColors = SUBSYSTEM_COLORS.filter(c => c !== parent.color);
+            const randomColor = availableColors[Math.floor(Math.random() * availableColors.length)];
+
+            if (!sublayerCounter[parent.id]) sublayerCounter[parent.id] = 1;
+            if (!parent.sublayers) parent.sublayers = [];
+
+            parent.sublayers.push({
+                id: `${parent.id}-sub-${Date.now()}`,
+                name: newSubsystem.name,
+                description: newSubsystem.description,
+                color: randomColor,
+                visible: true,
+                expanded: true,
+                variableIds: [],
+                sublayers: []
+            });
+            parent.expanded = true;
+        }
+    } else {
+        const color = SUBSYSTEM_COLORS[layerCounter % SUBSYSTEM_COLORS.length];
+        const globalLayer = layers.value.find(l => l.id === 'global');
+        if (globalLayer) {
+            if (!globalLayer.sublayers) globalLayer.sublayers = [];
+            globalLayer.sublayers.push({
+                id: `subsystem-${Date.now()}`,
+                name: newSubsystem.name,
+                description: newSubsystem.description,
+                color: color,
+                visible: true,
+                expanded: false,
+                variableIds: [],
+                sublayers: []
+            });
+            globalLayer.expanded = true;
+        }
+        layerCounter++;
+    }
+    broadcastSubsystems();
+    showSubsystemModal.value = false;
+    updateVisibility();
+};
+
+const toggleVariableSubsystem = () => {
+    const nodeId = selectedNodeInfo.value.nodeId;
+    const selectedIds = selectedNodeInfo.value.subsystemIds || [];
+
+    const updateNodeInLayers = (layerList) => {
+        layerList.forEach(l => {
+            if (l.id !== 'global') {
+                const shouldBeInLayer = selectedIds.includes(l.id);
+                const isInLayer = l.variableIds.includes(nodeId);
+
+                if (shouldBeInLayer && !isInLayer) l.variableIds.push(nodeId);
+                if (!shouldBeInLayer && isInLayer) l.variableIds = l.variableIds.filter(id => id !== nodeId);
+            }
+            if (l.sublayers) updateNodeInLayers(l.sublayers);
+        });
+    };
+
+    updateNodeInLayers(layers.value);
+    updateLayerCollab(layers.value.filter(l => l.id !== 'global'));
+    updateVisibility();
+};
+
+const draggedLayerId = ref(null);
+const dragOverLayerId = ref(null);
+const dropAction = ref(null);
+
+const onLayerDragStart = (event, layerId) => {
+    if (layerId === 'global') {
+        event.preventDefault();
+        return;
+    }
+    draggedLayerId.value = layerId;
+    event.dataTransfer.effectAllowed = 'move';
+};
+
+const onLayerDragOver = (event, targetLayerId) => {
+    if (draggedLayerId.value === targetLayerId) {
+        clearDragState(false);
+        return;
+    }
+
+    if (targetLayerId === 'global') {
+        dragOverLayerId.value = targetLayerId;
+        dropAction.value = 'inside';
+        return;
+    }
+
+    const draggedLayer = findLayerDeep(layers.value, draggedLayerId.value);
+    if (draggedLayer && draggedLayer.sublayers && findLayerDeep(draggedLayer.sublayers, targetLayerId)) {
+        clearDragState(false);
+        return;
+    }
+
+    dragOverLayerId.value = targetLayerId;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const y = event.clientY - rect.top;
+    const height = rect.height;
+
+    if (y < height * 0.25) {
+        dropAction.value = 'before';
+    } else if (y > height * 0.75) {
+        dropAction.value = 'after';
+    } else {
+        dropAction.value = 'inside';
+    }
+};
+
+const onLayerDragLeave = () => {
+    dragOverLayerId.value = null;
+    dropAction.value = null;
+};
+
+const onLayerDrop = (event, targetLayerId) => {
+    if (!draggedLayerId.value || !dragOverLayerId.value || !dropAction.value) {
+        clearDragState(true);
+        return;
+    }
+
+    const sourceId = draggedLayerId.value;
+    const targetId = dragOverLayerId.value;
+    const action = dropAction.value;
+
+    clearDragState(true);
+
+    if (sourceId === targetId) return;
+
+    let draggedItem = null;
+    const extractLayer = (list) => {
+        for (let i = 0; i < list.length; i++) {
+            if (list[i].id === sourceId) {
+                return list.splice(i, 1)[0];
+            }
+            if (list[i].sublayers) {
+                const found = extractLayer(list[i].sublayers);
+                if (found) return found;
+            }
+        }
+        return null;
+    };
+    draggedItem = extractLayer(layers.value);
+
+    if (!draggedItem) return;
+
+    const insertLayer = (list) => {
+        for (let i = 0; i < list.length; i++) {
+            if (list[i].id === targetId) {
+                if (action === 'before') {
+                    list.splice(i, 0, draggedItem);
+                } else if (action === 'after') {
+                    list.splice(i + 1, 0, draggedItem);
+                } else if (action === 'inside') {
+                    if (!list[i].sublayers) list[i].sublayers = [];
+                    if (draggedItem.color === list[i].color) {
+                        const availableColors = SUBSYSTEM_COLORS.filter(c => c !== list[i].color);
+                        draggedItem.color = availableColors[Math.floor(Math.random() * availableColors.length)];
+                    }
+                    list[i].sublayers.push(draggedItem);
+                    list[i].expanded = true;
+                }
+                return true;
+            }
+            if (list[i].sublayers) {
+                if (insertLayer(list[i].sublayers)) return true;
+            }
+        }
+        return false;
+    };
+
+    insertLayer(layers.value);
+    broadcastSubsystems();
+    updateVisibility();
+};
+
+const clearDragState = (full = true) => {
+    if (full) draggedLayerId.value = null;
+    dragOverLayerId.value = null;
+    dropAction.value = null;
+};
 
 onBeforeUnmount(() => {
     window.removeEventListener('beforeunload', handleBeforeUnload);
@@ -998,6 +1283,41 @@ onBeforeRouteLeave((to, from, next) => {
     }
 });
 
+watch(() => diagram.value?.subsystems, (newSubsystems) => {
+    if (newSubsystems) {
+        let colorCounter = 0;
+
+        const mergeUIState = (incomingList, currentList) => {
+            return incomingList.map(incomingLayer => {
+                const existingLayer = findLayerDeep(currentList, incomingLayer.id);
+
+                const assignedColor = existingLayer?.color || incomingLayer.color || SUBSYSTEM_COLORS[colorCounter % SUBSYSTEM_COLORS.length];
+
+                if (!existingLayer && !incomingLayer.color) {
+                    colorCounter++;
+                }
+
+                return {
+                    ...incomingLayer,
+                    color: assignedColor,
+                    visible: existingLayer ? existingLayer.visible : true,
+                    expanded: existingLayer ? existingLayer.expanded : false,
+                    sublayers: incomingLayer.sublayers ? mergeUIState(incomingLayer.sublayers, currentList) : []
+                };
+            });
+        };
+
+        const existingGlobal = layers.value.find(l => l.id === 'global') || {
+            id: 'global', name: 'Global', visible: true, expanded: true, sublayers: [], variableIds: []
+        };
+
+        existingGlobal.sublayers = mergeUIState(newSubsystems, layers.value);
+
+        layers.value = [existingGlobal];
+        diagramLayers.value = layers.value;
+        updateVisibility();
+    }
+}, { deep: true, immediate: true });
 
 watch(() => diagram.value, (newDiagram) => {
     if (newDiagram && networkContainer.value) {
@@ -2136,7 +2456,7 @@ watch(() => error.value, (newVal) => {
 }
 
 .info-modal-card {
-    width: min(96vw, 750px) !important; /* Ligeiramente mais estreito que o de arquétipos */
+    width: min(96vw, 750px) !important;
 }
 
 .interaction-tips-list {
@@ -2256,6 +2576,20 @@ watch(() => error.value, (newVal) => {
 .toolbar-info {
   font-weight: 700;
   margin-left: 0.5rem;
+}
+
+.layer-item.drop-before {
+    border-top: 2px solid #3498db !important;
+}
+
+.layer-item.drop-after {
+    border-bottom: 2px solid #3498db !important;
+}
+
+.layer-item.drop-inside {
+    background-color: rgba(52, 152, 219, 0.2) !important;
+    outline: 2px dashed #3498db;
+    outline-offset: -2px;
 }
 
 </style>

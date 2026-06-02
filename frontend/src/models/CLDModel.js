@@ -51,6 +51,7 @@ export class CLDModel {
     this.userId = data.userId || data.user_id || null;
     this.createdAt = data.createdAt || new Date();
     this.updatedAt = data.updatedAt || data.date || new Date();
+    this.subsystems = data.subsystems || [];
     
     console.log('CLDModel constructed:', this);
   }

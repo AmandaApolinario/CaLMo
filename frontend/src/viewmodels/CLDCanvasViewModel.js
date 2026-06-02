@@ -16,7 +16,7 @@ export function useCLDCanvasViewModel() {
     const nodes = ref([]);
     const edges = ref([]);
     const selectedNode = ref(null);
-    const selectedNodeInfo = ref({ nodeName: '', loops: [], archetypes: [] });
+    const selectedNodeInfo = ref({ nodeName: '', subsystemIds: [], loops: [], archetypes: [] });
     const selectedEdge = ref(null);
     const isLoadingDiagram = ref(false);
     const clientId = ref(crypto.randomUUID());
@@ -233,6 +233,7 @@ export function useCLDCanvasViewModel() {
 
             diagram.value.feedback_loops = getUniqueItems(diagram.value.feedback_loops);
             diagram.value.archetypes = getUniqueItems(diagram.value.archetypes);
+            diagram.value.subsystems = diagram.value.subsystems || [];
 
         } catch (err) {
             error.value = 'Failed to load diagram';
@@ -247,13 +248,13 @@ export function useCLDCanvasViewModel() {
         selectedNode.value = nodeId;
 
         if (!diagram.value || !nodeId) {
-            selectedNodeInfo.value = { nodeName: '', loops: [], archetypes: [] };
+            selectedNodeInfo.value = { nodeName: '', subsystemIds: [], loops: [], archetypes: [] };
             return;
         }
 
         const node = nodes.value.find(n => n.id === nodeId);
         if (!node) {
-            selectedNodeInfo.value = { nodeName: '', loops: [], archetypes: [] };
+            selectedNodeInfo.value = { nodeName: '', subsystemIds: [], loops: [], archetypes: [] };
             return;
         }
 
@@ -267,6 +268,11 @@ export function useCLDCanvasViewModel() {
         const archetypes = (diagram.value.archetypes || []).filter(arch =>
             Array.isArray(arch.variables) &&
             arch.variables.some(v => (typeof v === 'object' ? v.id === nodeId : v === nodeId))
+        );
+
+        const subsystem = (diagram.value.subsystems || []).filter(sub =>
+            Array.isArray(sub.id) &&
+            sub.id.some(v => v === nodeId)
         );
 
         const getVariableName = (varId) => {
@@ -295,13 +301,14 @@ export function useCLDCanvasViewModel() {
                         return { id, name: getVariableName(id) };
                     })
                     : []
-            }))
+            })),
+            subsystemIds: subsystem,
         };
     };
 
     const clearNodeSelection = () => {
         selectedNode.value = null;
-        selectedNodeInfo.value = { nodeName: '', loops: [], archetypes: [] };
+        selectedNodeInfo.value = { nodeName: '', subsystemIds: [], loops: [], archetypes: [] };
     };
 
     const addNodeToCLD = async (variable, x, y) => {
@@ -421,6 +428,7 @@ export function useCLDCanvasViewModel() {
                 date: diagram.value.date || new Date().toISOString().split('T')[0],
                 variables: variableIds,
                 relationships: relationships,
+                subsystems: diagram.value.subsystems || [],
                 changes_summary: getChangesSummary()
             }
             const path = window.location.pathname;
@@ -662,6 +670,16 @@ export function useCLDCanvasViewModel() {
                     };
                 }
                 break;
+            case 'SUBSYSTEM_UPDATED':
+                if (data.clientId !== clientId.value) {
+                    if (diagram.value) {
+                        diagram.value = {
+                            ...diagram.value,
+                            subsystems: data.subsystems
+                        };
+                    }
+                }
+                break;
         }
     };
 
@@ -677,7 +695,8 @@ export function useCLDCanvasViewModel() {
                 const currentState = {
                     nodes: JSON.parse(JSON.stringify(nodes.value)),
                     edges: JSON.parse(JSON.stringify(edges.value)),
-                    positions: JSON.parse(JSON.stringify(positions))
+                    positions: JSON.parse(JSON.stringify(positions)),
+                    subsystems: diagram.value.subsystems
                 };
 
                 webSocketService.pushStateTo(diagram_id, currentState, requester_sid);
@@ -1100,6 +1119,14 @@ export function useCLDCanvasViewModel() {
     const openInfoModal = () => { isInfoModalOpen.value = true; };
     const closeInfoModal = () => { isInfoModalOpen.value = false; };
 
+    const updateLayerCollab = (cleanLayers) => {
+        if (!diagram.value?.id) return;
+        publishDiagramEvent(diagram.value.id, "SUBSYSTEM_UPDATED", {
+            subsystems: cleanLayers,
+            clientId: clientId.value
+        }).catch(err => console.error(`Error broadcasting SUBSYSTEM_UPDATED:`, err));
+    }
+
 
 
     return {
@@ -1166,6 +1193,7 @@ export function useCLDCanvasViewModel() {
         clearError,
         isInfoModalOpen: computed(() => isInfoModalOpen.value),
         openInfoModal,
-        closeInfoModal
+        closeInfoModal,
+        updateLayerCollab
     };
 }

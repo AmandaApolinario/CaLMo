@@ -119,14 +119,40 @@ def create_app():
             db.session.execute(text("""
                 DO $$
                 BEGIN
-                    IF EXISTS (
+                    IF NOT EXISTS (
                         SELECT 1
                         FROM information_schema.tables
                         WHERE table_schema = 'public'
-                          AND table_name = 'relationships'
+                          AND table_name = 'subsystems'
                     ) THEN
-                        ALTER TABLE public.relationships
-                        ADD COLUMN IF NOT EXISTS has_delay BOOLEAN NOT NULL DEFAULT FALSE;
+                        CREATE TABLE public.subsystems (
+                            id VARCHAR PRIMARY KEY,
+                            name VARCHAR NOT NULL,
+                            description TEXT,
+                            cld_id VARCHAR NOT NULL,
+                            parent_id VARCHAR,
+                            CONSTRAINT fk_subsystems_cld 
+                                FOREIGN KEY (cld_id) REFERENCES public.clds(id) ON DELETE CASCADE,
+                            CONSTRAINT fk_subsystems_parent 
+                                FOREIGN KEY (parent_id) REFERENCES public.subsystems(id) ON DELETE CASCADE
+                        );
+                    END IF;
+
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM information_schema.tables
+                        WHERE table_schema = 'public'
+                          AND table_name = 'subsystem_variables'
+                    ) THEN
+                        CREATE TABLE public.subsystem_variables (
+                            subsystem_id VARCHAR NOT NULL,
+                            variable_id VARCHAR NOT NULL,
+                            PRIMARY KEY (subsystem_id, variable_id),
+                            CONSTRAINT fk_subsystem_vars_subsystem 
+                                FOREIGN KEY (subsystem_id) REFERENCES public.subsystems(id) ON DELETE CASCADE,
+                            CONSTRAINT fk_subsystem_vars_variable 
+                                FOREIGN KEY (variable_id) REFERENCES public.variables(id) ON DELETE CASCADE
+                        );
                     END IF;
                 END $$;
             """))
@@ -136,7 +162,6 @@ def create_app():
 
             db.session.commit()
 
-            # Cria as tabelas (só se não existirem)
             db.create_all()
             print("✅ Database tables checked/created (no drop).")
 

@@ -103,6 +103,7 @@ def update_cld_route(user_id, cld_id):
     date = data.get('date')
     variables = data.get('variables')
     relationships = data.get('relationships')
+    subsystems = data.get('subsystems')
 
     share_token = data.get('share_token')
     changes_summary = data.get('changes_summary')
@@ -125,6 +126,7 @@ def update_cld_route(user_id, cld_id):
         date,
         variables,
         relationships,
+        subsystems=subsystems,
         share_token=share_token,
         changes_summary=changes_summary
     )
