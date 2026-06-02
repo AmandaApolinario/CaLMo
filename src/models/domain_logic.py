@@ -232,21 +232,23 @@ class CLDAnalyzer:
         - [B1] A (-) -> Gap (+) -> CA (+) -> A
         - [B2] G (+) -> Gap (+) -> PLG (-) -> G
         """
-        rel_map = {(rel.source_id, rel.target_id): rel.type for rel in cld.relationships}
+        rel_map = {(rel.source_id, rel.target_id): rel for rel in cld.relationships}
         created = set()
 
         for var_g in cld.variables:
             # Step 1a: choose a Gap variable influenced by Goal (+)
             gap_candidates = [
                 v for v in cld.variables
-                if v.id != var_g.id and rel_map.get((var_g.id, v.id)) == RelationshipType.POSITIVE
+                if (var_g.id, v.id) in rel_map
+                and v.id != var_g.id and rel_map.get((var_g.id, v.id)).type == RelationshipType.POSITIVE
             ]
             for var_gap in gap_candidates:
                 # Step 1b: find Actual with A -> Gap (-)
                 a_candidates = [
                     v for v in cld.variables
                     if v.id not in {var_g.id, var_gap.id}
-                    and rel_map.get((v.id, var_gap.id)) == RelationshipType.NEGATIVE
+                    and (v.id, var_gap.id) in rel_map
+                    and rel_map.get((v.id, var_gap.id)).type == RelationshipType.NEGATIVE
                 ]
                 if not a_candidates:
                     continue
@@ -255,8 +257,10 @@ class CLDAnalyzer:
                 plg_candidates = [
                     v for v in cld.variables
                     if v.id not in {var_g.id, var_gap.id}
-                    and rel_map.get((var_gap.id, v.id)) == RelationshipType.POSITIVE   # Gap -> PLG (+)
-                    and rel_map.get((v.id, var_g.id)) == RelationshipType.NEGATIVE     # PLG -> Goal (-)
+                    and (var_gap.id, v.id) in rel_map
+                    and rel_map.get((var_gap.id, v.id)).type == RelationshipType.POSITIVE   # Gap -> PLG (+)
+                    and (v.id, var_g.id) in rel_map
+                    and rel_map.get((v.id, var_g.id)).type == RelationshipType.NEGATIVE     # PLG -> Goal (-)
                 ]
                 if not plg_candidates:
                     continue
@@ -266,8 +270,11 @@ class CLDAnalyzer:
                     ca_candidates = [
                         v for v in cld.variables
                         if v.id not in {var_g.id, var_gap.id, var_a.id}
-                        and rel_map.get((var_gap.id, v.id)) == RelationshipType.POSITIVE  # Gap -> CA (+)
-                        and rel_map.get((v.id, var_a.id)) == RelationshipType.POSITIVE    # CA -> A (+)
+                        and (var_gap.id, v.id) in rel_map
+                        and rel_map.get((var_gap.id, v.id)).type == RelationshipType.POSITIVE  # Gap -> CA (+)
+                        and (v.id, var_a.id) in rel_map
+                        and rel_map.get((v.id, var_a.id)).type == RelationshipType.POSITIVE    # CA -> A (+)
+                        and rel_map.get((v.id, var_a.id)).has_delay
                     ]
                     if not ca_candidates:
                         continue
