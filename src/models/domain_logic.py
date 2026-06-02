@@ -128,7 +128,7 @@ class CLDAnalyzer:
             Fix (F) -> Unintended Consequence (UC) : (+)
             Unintended Consequence (UC) -> Problem Symptom (PS) : (+)  [reinforcing drift back]
         """
-        rel_map = {(rel.source_id, rel.target_id): rel.type for rel in cld.relationships}
+        rel_map = {(rel.source_id, rel.target_id): rel for rel in cld.relationships}
         created = set()  # avoid duplicates for the same trio
 
         for var_ps in cld.variables:
@@ -136,8 +136,10 @@ class CLDAnalyzer:
             f_candidates = [
                 v for v in cld.variables
                 if v.id != var_ps.id
-                and rel_map.get((var_ps.id, v.id)) == RelationshipType.POSITIVE
-                and rel_map.get((v.id, var_ps.id)) == RelationshipType.NEGATIVE
+                and (var_ps.id, v.id) in rel_map
+                and rel_map.get((var_ps.id, v.id)).type == RelationshipType.POSITIVE
+                and (v.id, var_ps.id) in rel_map
+                and rel_map.get((v.id, var_ps.id)).type == RelationshipType.NEGATIVE
             ]
 
             for var_f in f_candidates:
@@ -145,8 +147,11 @@ class CLDAnalyzer:
                 uc_candidates = [
                     v for v in cld.variables
                     if v.id not in {var_ps.id, var_f.id}
-                    and rel_map.get((var_f.id, v.id)) == RelationshipType.POSITIVE
-                    and rel_map.get((v.id, var_ps.id)) == RelationshipType.POSITIVE
+                       and (var_f.id, v.id) in rel_map
+                       and rel_map.get((var_f.id, v.id)).type == RelationshipType.POSITIVE
+                       and rel_map.get((var_f.id, v.id)).has_delay
+                       and (v.id, var_ps.id) in rel_map
+                       and rel_map.get((v.id, var_ps.id)).type == RelationshipType.POSITIVE
                 ]
 
                 for var_uc in uc_candidates:
