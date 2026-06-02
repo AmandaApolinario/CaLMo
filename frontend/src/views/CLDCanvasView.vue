@@ -54,10 +54,21 @@
 
               <button
                   class="tool-btn"
+                  :class="{ 'active': isDelayActive }"
+                  @click="toggleDelay"
+                  title="Toggle Delay"
+              >
+                  <strong>||</strong>
+              </button>
+
+              <div class="toolbar-divider"></div>
+
+              <button
+                  class="tool-btn"
                   :disabled="!hasSelection"
                   :style="{ opacity: hasSelection ? '1' : '0.4', color: hasSelection ? '#f48771' : '' }"
                   @click="handleDelete"
-                  title="Excluir Selecionado (Del)"
+                  title="Delete Selected (Del)"
               >
                   <i class="fas fa-trash"></i>
               </button>
@@ -343,12 +354,10 @@
                 class="archetype-item"
                 :style="{ borderLeftColor: arch.color }"
               >
-                <!-- coluna fixa só para o dot (não encolhe) -->
                 <div class="arch-col">
                   <span class="arch-dot" :style="{ backgroundColor: arch.color }"></span>
                 </div>
 
-                <!-- conteúdo flexível -->
                 <div class="arch-content">
                   <div class="archetype-header">
                     <i class="fas" :class="getArchetypeIcon(arch.type)"></i>
@@ -532,7 +541,7 @@
 </template>
 
 <script setup>
-import {onMounted, ref, nextTick, watch, onUnmounted, onBeforeUnmount} from 'vue';
+import {onMounted, ref, nextTick, watch, onUnmounted, onBeforeUnmount, computed} from 'vue';
 import {useRouter, useRoute, onBeforeRouteLeave} from 'vue-router';
 import { useCLDCanvasViewModel } from '@/viewmodels/CLDCanvasViewModel';
 import { useCLDDiagramViewModel } from '@/viewmodels/CLDDiagramViewModel';
@@ -633,6 +642,7 @@ const {
 const leftPanelExpanded = ref(true);
 const layersPanelExpanded = ref(true);
 const variablesPanelExpanded = ref(true);
+const isDelayEnabled = ref(false);
 
 provideStateCallback.value = getCurrentPositions;
 
@@ -851,7 +861,7 @@ const saveDiagram = async () => {
     const success = await persistDiagram(nodes.value, edges.value);
 
     if (success) {
-        console.log('Diagrama salvo com sucesso!');
+        console.log('Saved successfully');
     }
 };
 
@@ -892,8 +902,8 @@ const handleKeyDown = (e) => {
 onMounted(async () => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('beforeunload', handleBeforeUnload);
-    edgeAddedCallback.value = (source, target, polarity) => {
-        const newEdge = addConnection(source, target, polarity);
+    edgeAddedCallback.value = async (source, target, polarity) => {
+        const newEdge = await addConnection(source, target, polarity, isDelayEnabled.value);
         if (newEdge) {
             addEdgeToCanvas(newEdge);
         }
@@ -934,10 +944,38 @@ const handleBeforeUnload = (event) => {
 };
 
 const handleExportPNG = () => {
-    const fileName = diagramNameRef.value ? `${diagramNameRef.value}.png` : 'diagrama_cld.png';
+    const fileName = diagramNameRef.value ? `${diagramNameRef.value}.png` : 'diagram_cld.png';
     exportToPNG(fileName);
 };
 
+const isDelayActive = computed(() => {
+    if (hasSelection.value && network.value) {
+        const selection = network.value.getSelection();
+        if (selection.edges.length > 0 && selection.nodes.length === 0) {
+            const edgeId = selection.edges[0];
+            const edge = edges.value.find(e => String(e.id) === String(edgeId));
+            return edge ? !!edge.has_delay : false;
+        }
+    }
+    return isDelayEnabled.value;
+});
+
+const toggleDelay = async () => {
+    if (hasSelection.value && network.value) {
+        const selection = network.value.getSelection();
+        if (selection.edges.length > 0 && selection.nodes.length === 0) {
+            const edgeId = selection.edges[0];
+            const edge = edges.value.find(e => String(e.id) === String(edgeId));
+            if (edge) {
+                edge.has_delay = !edge.has_delay;
+                diagram.value = { ...diagram.value };
+                await saveDiagram();
+                return;
+            }
+        }
+    }
+    isDelayEnabled.value = !isDelayEnabled.value;
+};
 
 
 onBeforeUnmount(() => {

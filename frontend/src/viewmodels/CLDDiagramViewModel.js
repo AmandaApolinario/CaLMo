@@ -250,17 +250,35 @@ export function useCLDDiagramViewModel() {
       })
     );
 
+    const rawEdges = diagram.edges || diagram.relationships || [];
+
+    function getSmartSmooth(sourceId, targetId) {
+      const hasReciprocal = rawEdges.some(e =>
+          (e.source === targetId && e.target === sourceId) ||
+          (e.source_id === targetId && e.target_id === sourceId)
+      );
+
+      if (hasReciprocal) {
+          return { type: 'curvedCW', roundness: 0.2 };
+      }
+
+      return { type: 'continuous', roundness: 0.2 };
+    }
+
     // ---- Edges ----
     const edges = new DataSet(
       (diagram.edges || []).map(edge => {
         const isPositive = edge.polarity === 'positive';
         const c = isPositive ? EDGE_COLORS.positive : EDGE_COLORS.negative;
+        const sourceId = edge.source || edge.source_id;
+        const targetId = edge.target || edge.target_id;
         const edgeObj = {
           id: edge.id,
           from: edge.source,
           to: edge.target,
           label: edge.has_delay ? '||' : '',
           polarityLabel: isPositive ? '+' : '-',
+          smooth: getSmartSmooth(sourceId, targetId),
           arrows: 'to',
           font: {
               size: 22,
@@ -300,7 +318,7 @@ export function useCLDDiagramViewModel() {
           useBorderWithImage: false
         }
       },
-      edges: { smooth: { type: 'curvedCW', roundness: 0.2 },
+      edges: { smooth: { type: 'cubicBezier', roundness: 0.2 },
         width: 2
       },
       interaction: {
@@ -536,7 +554,7 @@ export function useCLDDiagramViewModel() {
       }, 100);
     }
 
-    if (interactionMode.value === 'addEdge') {
+    if (interactionMode.value === 'addPositiveEdge' || interactionMode.value === 'addNegativeEdge') {
       network.value.addEdgeMode();
     }
   }
@@ -835,6 +853,23 @@ export function useCLDDiagramViewModel() {
 
     const isDarkTheme = document.querySelector('.canvas-app') !== null;
 
+    const allEdges = network.value.body.data.edges.get();
+    const hasReciprocal = allEdges.some(e => e.from === edgeData.target && e.to === edgeData.source);
+
+    if (hasReciprocal) {
+        const reciprocalEdge = allEdges.find(e => e.from === edgeData.target && e.to === edgeData.source);
+        if (reciprocalEdge) {
+            network.value.body.data.edges.update({
+                id: reciprocalEdge.id,
+                smooth: { type: 'curvedCW', roundness: 0.2 }
+            });
+        }
+    }
+
+    const smartSmooth = hasReciprocal
+        ? { type: 'curvedCW', roundness: 0.2 }
+        : { type: 'continuous', roundness: 0.2 };
+
     const edgeObj = {
       id: edgeData.id,
       from: edgeData.source,
@@ -842,6 +877,7 @@ export function useCLDDiagramViewModel() {
       label: edgeData.has_delay ? '||' : '',
       polarityLabel: isPositive ? '+' : '-',
       arrows: 'to',
+      smooth: smartSmooth,
       font: {
           size: 20,
           color: c.base,

@@ -77,7 +77,7 @@ class CLDAnalyzer:
         Identify the 'Shifting the Burden' archetype.
         Canonical pattern:
             Problem Symptom (PS) <-> Symptomatic Solution (SS) : PS->SS (+), SS->PS (−)
-            Problem Symptom (PS) <-> Fundamental Solution (FS) : PS->FS (+), FS->PS (−) with delay
+            Problem Symptom (PS) <-> Fundamental Solution (FS) : PS->FS (+), FS->PS (−) WITH DELAY
             Side-effect (SE): SS->SE (+), SE->FS (−)
         This implementation searches for the qualitative wiring consistent with the pattern.
         """
@@ -229,7 +229,7 @@ class CLDAnalyzer:
         Identify the 'Drifting Goals' (Eroding Goals) archetype.
         Wiring (Gap central to both loops):
         - G -> Gap (+), A -> Gap (-)
-        - [B1] A (-) -> Gap (+) -> CA (+) -> A
+        - [B1] A (-) -> Gap (+) -> CA (+) -> A WITH DELAY
         - [B2] G (+) -> Gap (+) -> PLG (-) -> G
         """
         rel_map = {(rel.source_id, rel.target_id): rel for rel in cld.relationships}
