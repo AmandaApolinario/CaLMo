@@ -343,7 +343,7 @@ export function useCLDCanvasViewModel() {
         return true;
     };
 
-    const addConnection = async (sourceId, targetId, polarity = 'positive', has_delay = false) => {
+    const addConnection = async (sourceId, targetId, polarity = 'positive', hasDelay = false) => {
         if (!diagram.value) return null;
 
         const existingEdge = edges.value.find(edge =>
@@ -376,7 +376,8 @@ export function useCLDCanvasViewModel() {
             relationships: edges.value.map(e => ({
                 source_id: e.source,
                 target_id: e.target,
-                type: e.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE'
+                type: e.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE',
+                has_delay: hasDelay
             }))
         };
 
@@ -410,7 +411,8 @@ export function useCLDCanvasViewModel() {
                 return {
                     source_id: edge.source,
                     target_id: edge.target,
-                    type: edge.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE'
+                    type: edge.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE',
+                    has_delay: edge.has_delay || false
                 };
             });
             const payload= {
