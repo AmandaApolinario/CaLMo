@@ -1,5 +1,6 @@
 import networkx as nx
-from .entities import RelationshipType, LoopType, ArchetypeType, FeedbackLoop, Archetype
+from .entities import RelationshipType, LoopType, ArchetypeType, FeedbackLoop, Archetype, Relationship
+
 
 class CLDAnalyzer:
     """Contains logic for analyzing Causal Loop Diagrams"""
@@ -76,30 +77,37 @@ class CLDAnalyzer:
         Identify the 'Shifting the Burden' archetype.
         Canonical pattern:
             Problem Symptom (PS) <-> Symptomatic Solution (SS) : PS->SS (+), SS->PS (−)
-            Problem Symptom (PS) <-> Fundamental Solution (FS) : PS->FS (+), FS->PS (−)
+            Problem Symptom (PS) <-> Fundamental Solution (FS) : PS->FS (+), FS->PS (−) with delay
             Side-effect (SE): SS->SE (+), SE->FS (−)
         This implementation searches for the qualitative wiring consistent with the pattern.
         """
-        rel_map = {(rel.source_id, rel.target_id): rel.type for rel in cld.relationships}
+        rel_map = {(rel.source_id, rel.target_id): rel for rel in cld.relationships}
 
         for var_ps in cld.variables:
             var_ss_candidates = [
-                var for var in cld.variables 
-                if rel_map.get((var.id, var_ps.id)) == RelationshipType.NEGATIVE 
-                and rel_map.get((var_ps.id, var.id)) == RelationshipType.POSITIVE
+                var for var in cld.variables
+                if (var.id, var_ps.id) in rel_map
+                and rel_map.get((var.id, var_ps.id)).type == RelationshipType.NEGATIVE
+                and (var_ps.id, var.id) in rel_map
+                and rel_map.get((var_ps.id, var.id)).type  == RelationshipType.POSITIVE
             ]
             var_fs_candidates = [
-                var for var in cld.variables 
-                if rel_map.get((var.id, var_ps.id)) == RelationshipType.NEGATIVE 
-                and rel_map.get((var_ps.id, var.id)) == RelationshipType.POSITIVE
+                var for var in cld.variables
+                if (var.id, var_ps.id) in rel_map
+                and rel_map.get((var.id, var_ps.id)).type  == RelationshipType.NEGATIVE
+                and rel_map[(var.id, var_ps.id)].has_delay
+                and (var_ps.id, var.id) in rel_map
+                and rel_map.get((var_ps.id, var.id)).type  == RelationshipType.POSITIVE
             ]
 
             for var_ss in var_ss_candidates:
                 for var_fs in var_fs_candidates:
                     var_se_candidates = [
-                        var for var in cld.variables 
-                        if rel_map.get((var_ss.id, var.id)) == RelationshipType.POSITIVE 
-                        and rel_map.get((var.id, var_fs.id)) == RelationshipType.NEGATIVE
+                        var for var in cld.variables
+                        if (var_ss.id, var.id) in rel_map
+                        and rel_map.get((var_ss.id, var.id)).type  == RelationshipType.POSITIVE
+                        and (var.id, var_fs.id) in rel_map
+                        and rel_map.get((var.id, var_fs.id)).type  == RelationshipType.NEGATIVE
                     ]
 
                     for var_se in var_se_candidates:
