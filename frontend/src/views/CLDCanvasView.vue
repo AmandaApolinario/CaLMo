@@ -2487,7 +2487,6 @@ watch(() => error.value, (newVal) => {
     font-size: 1.1em;
 }
 
-/* Seta Vermelha */
 .text-negative {
     color: #ef4444;
     margin: 0 8px;

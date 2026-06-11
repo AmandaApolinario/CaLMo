@@ -1135,10 +1135,15 @@ export function useCLDCanvasViewModel() {
         }).catch(err => console.error(`Error broadcasting SUBSYSTEM_UPDATED:`, err));
     }
 
+    const availableVariables = computed(() => {
+        const deployedNodeIds = new Set(nodes.value.map(node => String(node.id)));
+        return variables.value.filter(variable => !deployedNodeIds.has(String(variable.id)));
+    });
+
 
 
     return {
-        variables: computed(() => variables.value),
+        variables: availableVariables,
         shapes: computed(() => shapes.value),
         loading: computed(() => loading.value),
         error: computed(() => error.value),
