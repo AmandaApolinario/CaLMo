@@ -40,7 +40,6 @@ export function useCLDCanvasViewModel() {
     const historyList = ref([]);
     const isHistoryModalOpen = ref(false);
     const isLoadingHistory = ref(false);
-    const pendingChanges = ref([]);
 
     const isInfoModalOpen = ref(false);
 
@@ -429,7 +428,6 @@ export function useCLDCanvasViewModel() {
                 variables: variableIds,
                 relationships: relationships,
                 subsystems: diagram.value.subsystems || [],
-                changes_summary: getChangesSummary()
             }
             const path = window.location.pathname;
             let shareToken = null;
@@ -580,9 +578,6 @@ export function useCLDCanvasViewModel() {
         const { action, data, clientId: eventClientId } = event;
         console.log(`Received Kafka event: ${action} from client ${eventClientId}`, data);
 
-        if (action !== 'NODE_MOVED' && action !== 'DIAGRAM_SAVED') {
-            pendingChanges.value.push({ action: action, data: data });
-        }
         if (eventClientId && eventClientId === clientId.value) return;
         switch (action) {
             case 'NODE_ADDED':
@@ -984,7 +979,6 @@ export function useCLDCanvasViewModel() {
         try {
             const payload = {
                 name: diagramNameRef.value,
-                changes_summary: `Changed CLD name to "${diagramNameRef.value}"`
             };
 
             const path = window.location.pathname;

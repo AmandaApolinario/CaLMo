@@ -106,7 +106,6 @@ def update_cld_route(user_id, cld_id):
     subsystems = data.get('subsystems')
 
     share_token = data.get('share_token')
-    changes_summary = data.get('changes_summary')
     
     # Validate that at least one field to update is provided
     if not any([name, description, date, variables, relationships]):
@@ -128,11 +127,17 @@ def update_cld_route(user_id, cld_id):
         relationships,
         subsystems=subsystems,
         share_token=share_token,
-        changes_summary=changes_summary
     )
     
     if not cld:
         return jsonify({'message': message}), 404
+
+    kafka_producer.publish_event(
+        diagram_id=cld_id,
+        user_id=str(user_id),
+        action_type='DIAGRAM_SAVED',
+        payload={}
+    )
     
     # Debug output to see what's being returned
     print(f"Update successful: {message}")

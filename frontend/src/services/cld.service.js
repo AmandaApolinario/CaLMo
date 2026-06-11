@@ -69,10 +69,6 @@ class CLDService {
         dataToSend.relationships = cldData.relationships;
       }
 
-      if(cldData.changes_summary) {
-        dataToSend.changes_summary = cldData.changes_summary;
-      }
-
       if(cldData.share_token){
         dataToSend.share_token = cldData.share_token;
       }

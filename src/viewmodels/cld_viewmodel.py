@@ -130,7 +130,7 @@ class CLDViewModel:
         # Return empty array if no relationships found
         return relationships_data, "Relationships retrieved successfully"
     
-    def update_cld(self, cld_id, user_id, name=None, description=None, date_str=None, variables=None, relationships=None, share_token=None, changes_summary=None, subsystems = None):
+    def update_cld(self, cld_id, user_id, name=None, description=None, date_str=None, variables=None, relationships=None, share_token=None, subsystems = None):
         """Update an existing CLD"""
         date = None
         if date_str:
@@ -207,17 +207,6 @@ class CLDViewModel:
                 self.db_session.flush()
                 for sub_data in subsystems:
                     self.insert_subsystem(sub_data, cld_id=cld_id)
-
-
-            if changes_summary:
-                history_entry = CLDHistory(
-                    id=str(uuid.uuid4()),
-                    cld_id=cld.id,
-                    user_id=user_id,
-                    action_summary=changes_summary,
-                    timestamp=datetime.utcnow()
-                )
-                self.db_session.add(history_entry)
                 
             # Commit the changes directly
             self.db_session.commit()
