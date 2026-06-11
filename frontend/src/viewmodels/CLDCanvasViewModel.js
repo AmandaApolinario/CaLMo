@@ -219,7 +219,7 @@ export function useCLDCanvasViewModel() {
             const uniqueEdgesMap = new Map();
             rawEdges.forEach(e => {
                 const isNegative = e.polarity === 'negative' || e.type === 'NEGATIVE';
-                const key = `${e.source}-${e.target}`; // Chave única por direção
+                const key = `${e.source}-${e.target}`; // Unique key per direction
                 uniqueEdgesMap.set(key, {
                     ...e,
                     polarity: isNegative ? 'negative' : 'positive',

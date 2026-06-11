@@ -362,9 +362,9 @@ export function useCLDDiagramViewModel() {
             callback(null);
             setTimeout(() => {
               if (network.value && (interactionMode.value === 'addPositiveEdge' || interactionMode.value === 'addNegativeEdge')) {
-                network.value.addEdgeMode();
+                setInteractionMode(interactionMode.value);
               }
-            }, 10);
+            }, 50);
             return;
           }
 
@@ -379,9 +379,9 @@ export function useCLDDiagramViewModel() {
           callback(null);
           setTimeout(() => {
             if (network.value && (interactionMode.value === 'addPositiveEdge' || interactionMode.value === 'addNegativeEdge')) {
-              network.value.addEdgeMode();
+              setInteractionMode(interactionMode.value);
             }
-          }, 10);
+          }, 50);
         }
       },
     };
@@ -642,7 +642,7 @@ export function useCLDDiagramViewModel() {
     }
 
     if (interactionMode.value === 'addPositiveEdge' || interactionMode.value === 'addNegativeEdge') {
-      network.value.addEdgeMode();
+      setInteractionMode(interactionMode.value);
     }
   }
 
@@ -908,7 +908,8 @@ export function useCLDDiagramViewModel() {
     if (mode === 'pan') {
 
       network.value.setOptions({
-        interaction: { dragNodes: false, selectable: false }
+        interaction: { dragNodes: false, selectable: false },
+        edges: { color: { inherit: false }, arrows: 'to' }
       });
       clearNodeSelection();
     } else if (mode === 'addPositiveEdge' || mode === 'addNegativeEdge') {
@@ -922,7 +923,7 @@ export function useCLDDiagramViewModel() {
             inherit: false,
             color: c.base,
             highlight: c.base,
-            hover: c.base
+            hover: c.base,
           }
         },
         manipulation: {
@@ -941,7 +942,8 @@ export function useCLDDiagramViewModel() {
       network.value.addEdgeMode();
     } else {
       network.value.setOptions({
-        interaction: { dragNodes: true, selectable: true }
+        interaction: { dragNodes: true, selectable: true },
+        edges: { color: { inherit: false }, arrows: 'to' }
       });
     }
   }
@@ -989,7 +991,6 @@ export function useCLDDiagramViewModel() {
       color: { color: c.base, highlight: c.highlight }
     };
 
-    network.value.body.data.edges.add(edgeObj);
   }
 
   function deleteSelectedElements(removeNodeCb, removeEdgeCb) {

@@ -171,7 +171,7 @@
             </div>
             <div class="layers-panel" :class="{ collapsed: !layersPanelExpanded }">
                 <div class="panel-header" @click="layersPanelExpanded = !layersPanelExpanded">
-                    <span v-if="layersPanelExpanded">Subsystem</span>
+                    <span>Subsystem</span>
                     <i :class="layersPanelExpanded ? 'fas fa-chevron-down' : 'fas fa-chevron-up'"></i>
                 </div>
 
