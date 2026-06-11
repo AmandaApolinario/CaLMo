@@ -111,6 +111,15 @@ class WebSocketService {
             this.socket = null;
         }
     }
+
+    emitDiagramEvent(diagramId, action, data) {
+        if (!this.socket) return;
+        this.socket.emit("diagram_event", {
+            diagram_id: diagramId,
+            action: action,
+            data: data
+        });
+    }
 }
 
 export const webSocketService = new WebSocketService();

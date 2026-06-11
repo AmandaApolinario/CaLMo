@@ -230,21 +230,6 @@ def identify_archetypes(user_id, cld_id):
         print(f"Exception in archetypes endpoint: {str(e)}")
         return jsonify({'message': f"Server error: {str(e)}"}), 500
 
-@cld_routes.route('/cld/<string:cld_id>/emit-event', methods=['POST'])
-@token_required
-def emit_update_diagram_event(user_id, cld_id):
-    data = request.get_json()
-
-    kafka_producer.publish_event(
-        diagram_id=cld_id,
-        user_id=user_id,
-        action_type=data['action'],
-        payload=data['data']
-    )
-
-    return jsonify({"status": "broadcast_sent"}), 200
-
-
 @cld_routes.route('/cld/<string:cld_id>/share', methods=['POST'])
 @token_required
 def generate_share_link(user_id, cld_id):

@@ -1,8 +1,6 @@
-import ApiService from '@/services/api.service';
+import { webSocketService } from '@/services/websocket.service';
 
 export const publishDiagramEvent = (diagramId, action, data) => {
-  return ApiService.post(`cld/${diagramId}/emit-event`, {
-    action,
-    data
-  });
+    webSocketService.emitDiagramEvent(diagramId, action, data);
+    return Promise.resolve({ status: "broadcast_sent_via_ws" });
 };

@@ -1,6 +1,7 @@
 from . import socketio
 from flask_socketio import join_room, emit, leave_room
 from flask import request
+from .services.kafka_producer import kafka_producer
 
 
 room_occupancy = {}
@@ -50,3 +51,19 @@ def handle_disconnect():
                 print(f"🧹 A sala {diagram_id} ficou vazia! Limpando conexões do Kafka...")
                 del room_occupancy[diagram_id]
         del user_current_room[request.sid]
+
+@socketio.on('diagram_event')
+def handle_diagram_event(payload):
+    diagram_id = payload.get('diagram_id')
+    action = payload.get('action')
+    data = payload.get('data')
+
+    if diagram_id:
+        emit('diagram_event', payload, room=diagram_id, include_self=False)
+
+        kafka_producer.publish_event(
+            diagram_id=diagram_id,
+            user_id=data.get('clientId', 'unknown'),
+            action_type=action,
+            payload=data
+        )

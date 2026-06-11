@@ -273,7 +273,7 @@
             <div class="loop-container" v-if="activeNodeSubsystems.length > 0">
               <div v-for="sub in activeNodeSubsystems" :key="sub.id" class="loop-item" :style="{ borderLeftColor: sub.color }">
 
-                  <div class="loop-badge" :style="{ backgroundColor: tint(sub.color, 0.18), color: '#0F172A', borderColor: tint(sub.color, 0.35), border: '1px solid' }">
+                  <div class="loop-badge" :style="{ backgroundColor: tint(sub.color, 0.18), color: '#0F172A', borderColor: tint(sub.color, 0.35) }">
                       {{ sub.hierarchy }}
                   </div>
 
@@ -995,6 +995,24 @@ const isDelayActive = computed(() => {
     }
     return isDelayEnabled.value;
 });
+
+const toggleDelay = async () => {
+    if (hasSelection.value && network.value) {
+        const selection = network.value.getSelection();
+        if (selection.edges.length > 0 && selection.nodes.length === 0) {
+            const edgeId = selection.edges[0];
+            const edge = edges.value.find(e => String(e.id) === String(edgeId));
+            if (edge) {
+                edge.has_delay = !edge.has_delay;
+                diagram.value = { ...diagram.value };
+                await saveDiagram();
+                return;
+            }
+        }
+    }
+    isDelayEnabled.value = !isDelayEnabled.value;
+};
+
 
 const findLayerDeep = (layerList, id) => {
     for (const l of layerList) {
