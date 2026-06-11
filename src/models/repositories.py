@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select
 from .entities import User, Variable, CLD, Relationship, RelationshipType, CLDHistory
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -132,6 +132,14 @@ class RelationshipRepository:
     @staticmethod
     def get_relationships_by_cld(db: Session, cld_id):
         return db.query(Relationship).filter_by(cld_id=cld_id).all()
+
+    @staticmethod
+    def get_relationships_by_user_clds(db: Session, user_id, exclude_cld_id=None):
+        query = db.query(Relationship, CLD.name).join(CLD, Relationship.cld_id == CLD.id).filter(CLD.user_id == user_id)
+        if exclude_cld_id:
+            query = query.filter(Relationship.cld_id != exclude_cld_id)
+        rows = query.all()
+        return [(rel, cld_name) for rel, cld_name in rows]
 
 class CLDHistoryRepository:
     @staticmethod

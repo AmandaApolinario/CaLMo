@@ -129,6 +129,25 @@ class CLDViewModel:
         
         # Return empty array if no relationships found
         return relationships_data, "Relationships retrieved successfully"
+
+    def get_reusable_relationships(self, user_id, exclude_cld_id=None):
+        """Get relationships from all user CLDs, optionally excluding a specific CLD"""
+        rows = self.rel_repo.get_relationships_by_user_clds(self.db_session, user_id, exclude_cld_id)
+
+        rels_data = [
+            {
+                'id': rel.id,
+                'cld_id': rel.cld_id,
+                'cld_name': cld_name,
+                'source_id': rel.source_id,
+                'target_id': rel.target_id,
+                'type': rel.type.name,
+                'has_delay': rel.has_delay
+            }
+            for rel, cld_name in rows
+        ]
+
+        return rels_data, "Reusable relationships retrieved successfully"
     
     def update_cld(self, cld_id, user_id, name=None, description=None, date_str=None, variables=None, relationships=None, share_token=None, subsystems = None):
         """Update an existing CLD"""

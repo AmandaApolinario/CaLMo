@@ -149,6 +149,57 @@
                             </div>
                         </div>
                     </transition>
+
+                    <div class="relationships-toggle-header" @click="relationshipsPanelExpanded = !relationshipsPanelExpanded" style="cursor:pointer;display:flex;align-items:center;gap:8px;margin:8px 0;">
+                        <span :key="relationshipsPanelExpanded ? 'open' : 'closed'">
+                            <i :class="relationshipsPanelExpanded ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
+                        </span>
+                        <span style="font-weight:600;">Relationships from other CLDs</span>
+                    </div>
+
+                    <transition name="fade">
+                        <div v-show="relationshipsPanelExpanded">
+                            <div v-if="loadingRelationships" class="loading-spinner">Loading relationships...</div>
+                            <div v-else-if="relationshipsByCLD.length === 0" class="empty-relationships-msg">
+                                No reusable relationships found.
+                            </div>
+                            <div v-else class="variables-list-container">
+                                <div v-for="group in relationshipsByCLD" :key="group.cld_id" class="relationship-group">
+                                    <div class="relationship-group-header" @click="toggleCLDGroup(group.cld_id)">
+                                        <span>
+                                            <i :class="getCLDGroupExpanded(group.cld_id) ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+                                        </span>
+                                        <i class="fas fa-diagram-project"></i>
+                                        {{ group.cld_name }}
+                                        <span class="relationship-group-count">{{ group.relationships.length }}</span>
+                                    </div>
+                                    <template v-if="getCLDGroupExpanded(group.cld_id)">
+                                        <div
+                                            v-for="rel in group.relationships"
+                                            :key="rel.id"
+                                            class="draggable-item relationship-item"
+                                            draggable="true"
+                                            @dragstart="dragStartRelationship($event, rel)"
+                                            @dragend="dragEnd"
+                                        >
+                                            <i class="fas fa-code-branch relationship-arrow-icon"></i>
+                                            <span
+                                                :class="['relationship-source-name', { 'on-canvas': isNodeOnCanvas(rel.source_id) }]"
+                                            >{{ getVariableNameById(rel.source_id) }}</span>
+                                            <i class="fas fa-long-arrow-alt-right relationship-connector"></i>
+                                            <span
+                                                :class="['relationship-target-name', { 'on-canvas': isNodeOnCanvas(rel.target_id) }]"
+                                            >{{ getVariableNameById(rel.target_id) }}</span>
+                                            <span :class="['relationship-polarity', rel.type === 'NEGATIVE' ? 'negative' : 'positive']">
+                                                {{ rel.type === 'NEGATIVE' ? '-' : '+' }}
+                                            </span>
+                                            <span v-if="rel.has_delay" class="relationship-delay" title="Has delay">||</span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </transition>
                 </div>
             </div>
 
@@ -650,6 +701,11 @@ const {
     openInfoModal,
     closeInfoModal,
     updateLayerCollab,
+    reusableRelationships,
+    relationshipsByCLD,
+    loadingRelationships,
+    fetchReusableRelationships,
+    addReusableRelationship,
 } = useCLDCanvasViewModel();
 
 const {
@@ -689,6 +745,19 @@ const {
 const leftPanelExpanded = ref(true);
 const layersPanelExpanded = ref(true);
 const variablesPanelExpanded = ref(true);
+const relationshipsPanelExpanded = ref(true);
+const cldGroupExpanded = reactive({});
+
+const toggleCLDGroup = (cldId) => {
+    cldGroupExpanded[cldId] = !getCLDGroupExpanded(cldId);
+};
+
+const getCLDGroupExpanded = (cldId) => {
+    if (cldGroupExpanded[cldId] === undefined) {
+        cldGroupExpanded[cldId] = true;
+    }
+    return cldGroupExpanded[cldId];
+};
 const isDelayEnabled = ref(false);
 const showSubsystemModal = ref(false);
 const newSubsystem = reactive({ name: '', description: '', parentId: null });
@@ -836,25 +905,56 @@ const dragStart = (event, variable) => {
     event.dataTransfer.effectAllowed = 'copy';
 };
 
+const dragStartRelationship = (event, rel) => {
+    event.dataTransfer.setData('application/json', JSON.stringify({ _type: 'relationship', ...rel }));
+    event.dataTransfer.effectAllowed = 'copy';
+};
+
+const getVariableNameById = (id) => {
+    let found = variables.value.find(v => String(v.id) === String(id));
+    if (!found) found = nodes.value.find(n => String(n.id) === String(id));
+    return found ? found.name : id;
+};
+
+const isNodeOnCanvas = (id) => {
+    return nodes.value.some(n => String(n.id) === String(id));
+};
+
 const dragEnd = () => {};
 
 const onDrop = (event) => {
     event.preventDefault();
-    const variableJson = event.dataTransfer.getData('application/json');
-    if (!variableJson || !network.value) return;
+    const jsonData = event.dataTransfer.getData('application/json');
+    if (!jsonData || !network.value) return;
 
     try {
-        const variable = JSON.parse(variableJson);
+        const data = JSON.parse(jsonData);
         const container = networkContainer.value;
-
         const rect = container.getBoundingClientRect();
         const domPosition = {
             x: event.clientX - rect.left,
             y: event.clientY - rect.top
         };
-
         const canvasPosition = network.value.DOMtoCanvas(domPosition);
 
+        if (data._type === 'relationship') {
+            const sourcePos = { x: canvasPosition.x - 80, y: canvasPosition.y - 30 };
+            const targetPos = { x: canvasPosition.x + 80, y: canvasPosition.y + 30 };
+
+            const sourceVarName = getVariableNameById(data.source_id);
+            const targetVarName = getVariableNameById(data.target_id);
+
+            addReusableRelationship(
+                data,
+                sourcePos,
+                targetPos,
+                sourceVarName,
+                targetVarName
+            );
+            return;
+        }
+
+        const variable = data;
         const currentDiagramId = diagram.value?.id || `new-temp`;
         saveNodePositions(currentDiagramId, {
             [variable.id]: { x: canvasPosition.x, y: canvasPosition.y }
@@ -969,6 +1069,12 @@ onMounted(async () => {
     await nextTick();
     if (diagram.value && networkContainer.value) {
         createDiagram(diagram.value, networkContainer.value);
+    }
+
+    if (diagram.value?.id) {
+        await fetchReusableRelationships(diagram.value.id, token || null);
+    } else {
+        await fetchReusableRelationships(null, token || null);
     }
 });
 
@@ -2783,6 +2889,113 @@ watch(() => error.value, (newVal) => {
     font-style: italic;
     text-align: center;
     padding: 10px 0;
+}
+
+.relationship-item {
+    border-left: 3px solid #6b7280;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.relationship-arrow-icon {
+    color: #6b7280;
+    font-size: 11px;
+}
+
+.relationship-source-name,
+.relationship-target-name {
+    font-size: 12px;
+    color: #e5e7eb;
+    font-weight: 500;
+}
+
+.relationship-source-name.on-canvas,
+.relationship-target-name.on-canvas {
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.relationship-connector {
+    color: #9ca3af;
+    font-size: 12px;
+}
+
+.relationship-polarity {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: auto;
+}
+
+.relationship-polarity.positive {
+    color: #10b981;
+    background-color: rgba(16, 185, 129, 0.15);
+}
+
+.relationship-polarity.negative {
+    color: #ef4444;
+    background-color: rgba(239, 68, 68, 0.15);
+}
+
+.relationship-group {
+    margin-bottom: 8px;
+}
+
+.relationship-group-header {
+    font-size: 12px;
+    font-weight: 700;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 4px 8px;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.relationship-group-header i {
+    font-size: 11px;
+    color: #6b7280;
+}
+
+.relationship-group-count {
+    margin-left: auto;
+    font-size: 11px;
+    color: #6b7280;
+    background-color: #2d2d2d;
+    padding: 0 6px;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+.relationship-delay {
+    font-weight: 700;
+    font-size: 11px;
+    color: #f59e0b;
+    background-color: rgba(245, 158, 11, 0.15);
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin-left: 2px;
+}
+
+.empty-relationships-msg {
+    padding: 12px;
+    text-align: center;
+    font-size: 13px;
+    color: #6b7280;
+    font-style: italic;
+}
+
+.relationships-toggle-header {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0;
 }
 
 </style>

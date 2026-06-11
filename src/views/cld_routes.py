@@ -274,6 +274,27 @@ def get_shared_cld(user_id, token):
     return jsonify(cld), 200
 
 
+@cld_routes.route('/cld/shared/ownerRelationships', methods=['GET'])
+@token_required
+def get_shared_cld_owner_relationships(user_id):
+    view_model = CLDViewModel(db.session)
+    token = request.args.get('token')
+    exclude_cld_id = request.args.get('exclude_cld_id')
+    if not token:
+        return jsonify({'message': 'Token missing'}), 400
+
+    owner_id = view_model.get_owner_id(token)
+    if owner_id is None:
+        return jsonify({'message': 'Invalid or revoked share token'}), 404
+
+    relationships, message = view_model.get_reusable_relationships(owner_id, exclude_cld_id)
+
+    return jsonify({
+        'relationships': relationships,
+        'message': message
+    }), 200
+
+
 @cld_routes.route('/cld/shared/ownerVariables', methods=['GET'])
 @token_required
 def get_shared_cld_owner_variables(user_id):
@@ -327,6 +348,18 @@ def analyze_live_diagram(user_id):
         return jsonify(result), 200
     else:
         return jsonify({"error": message}), 500
+
+@cld_routes.route('/cld/reusable-relationships', methods=['GET'])
+@token_required
+def get_reusable_relationships(user_id):
+    exclude_cld_id = request.args.get('exclude_cld_id')
+    view_model = CLDViewModel(db.session)
+    relationships, message = view_model.get_reusable_relationships(user_id, exclude_cld_id)
+    return jsonify({
+        'relationships': relationships,
+        'message': message
+    }), 200
+
 
 @cld_routes.route('/cld/create-empty', methods=['POST'])
 @token_required

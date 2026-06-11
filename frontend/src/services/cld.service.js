@@ -176,6 +176,29 @@ class CLDService {
     }
   }
 
+  async getReusableRelationships(excludeCldId = null) {
+    try {
+      const params = excludeCldId ? `?exclude_cld_id=${excludeCldId}` : '';
+      const response = await ApiService.get(`cld/reusable-relationships${params}`);
+      return response.data.relationships || [];
+    } catch (error) {
+      console.error('Error fetching reusable relationships:', error);
+      return [];
+    }
+  }
+
+  async getOwnerReusableRelationships(token, excludeCldId = null) {
+    try {
+      let params = `?token=${token}`;
+      if (excludeCldId) params += `&exclude_cld_id=${excludeCldId}`;
+      const response = await ApiService.get(`cld/shared/ownerRelationships${params}`);
+      return response.data.relationships || [];
+    } catch (error) {
+      console.error('Error fetching owner reusable relationships:', error);
+      return [];
+    }
+  }
+
   async createEmptyCLD(cldData) {
     try{
       console.log('CLD Service - Creating CLD with data:', cldData);

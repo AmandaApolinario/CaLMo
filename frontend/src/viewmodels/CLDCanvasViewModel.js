@@ -1129,6 +1129,81 @@ export function useCLDCanvasViewModel() {
         }).catch(err => console.error(`Error broadcasting SUBSYSTEM_UPDATED:`, err));
     }
 
+    const reusableRelationships = ref([]);
+    const loadingRelationships = ref(false);
+
+    const fetchReusableRelationships = async (excludeCldId = null, shareToken = null) => {
+        loadingRelationships.value = true;
+        try {
+            let rels;
+            if (shareToken) {
+                rels = await CLDService.getOwnerReusableRelationships(shareToken, excludeCldId);
+            } else {
+                rels = await CLDService.getReusableRelationships(excludeCldId);
+            }
+            reusableRelationships.value = rels;
+        } catch (err) {
+            console.error('Error fetching reusable relationships:', err);
+        } finally {
+            loadingRelationships.value = false;
+        }
+    };
+
+    const availableRelationships = computed(() => {
+        const usedEdgeKeys = new Set(
+            edges.value.map(e => `${e.source}-${e.target}`)
+        );
+        return reusableRelationships.value.filter(rel => {
+            const key = `${rel.source_id}-${rel.target_id}`;
+            return !usedEdgeKeys.has(key);
+        });
+    });
+
+    const relationshipsByCLD = computed(() => {
+        const groups = {};
+        availableRelationships.value.forEach(rel => {
+            const cldKey = rel.cld_id;
+            if (!groups[cldKey]) {
+                groups[cldKey] = { cld_id: cldKey, cld_name: rel.cld_name || 'Unknown', relationships: [] };
+            }
+            groups[cldKey].relationships.push(rel);
+        });
+        return Object.values(groups);
+    });
+
+    const addReusableRelationship = async (rel, sourcePos, targetPos, sourceVarName, targetVarName) => {
+        if (!diagram.value) return false;
+
+        const sourceExists = nodes.value.some(n => String(n.id) === String(rel.source_id));
+        const targetExists = nodes.value.some(n => String(n.id) === String(rel.target_id));
+
+        if (!sourceExists) {
+            await addNodeToCLD(
+                { id: rel.source_id, name: sourceVarName },
+                sourcePos.x, sourcePos.y
+            );
+        }
+
+        if (!targetExists) {
+            await addNodeToCLD(
+                { id: rel.target_id, name: targetVarName },
+                targetPos.x, targetPos.y
+            );
+        }
+
+        const polarity = rel.type === 'NEGATIVE' ? 'negative' : 'positive';
+        const edgeExists = edges.value.some(e =>
+            String(e.source) === String(rel.source_id) &&
+            String(e.target) === String(rel.target_id)
+        );
+
+        if (!edgeExists) {
+            await addConnection(rel.source_id, rel.target_id, polarity, rel.has_delay || false);
+        }
+
+        return true;
+    };
+
     const availableVariables = computed(() => {
         const deployedNodeIds = new Set(nodes.value.map(node => String(node.id)));
         return variables.value.filter(variable => !deployedNodeIds.has(String(variable.id)));
@@ -1201,6 +1276,11 @@ export function useCLDCanvasViewModel() {
         isInfoModalOpen: computed(() => isInfoModalOpen.value),
         openInfoModal,
         closeInfoModal,
-        updateLayerCollab
+        updateLayerCollab,
+        reusableRelationships: computed(() => availableRelationships.value),
+        relationshipsByCLD: computed(() => relationshipsByCLD.value),
+        loadingRelationships: computed(() => loadingRelationships.value),
+        fetchReusableRelationships,
+        addReusableRelationship
     };
 }
