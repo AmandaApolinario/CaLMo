@@ -526,7 +526,7 @@ export function useCLDDiagramViewModel() {
 
         if (validNodes > 0 && isLoopVisible) {
           const centerX = sumX / validNodes;
-          const centerY = sumY / validNodes;
+          const centerY = validNodes > 2 ? (sumY / validNodes) + (validNodes * 5) : sumY / validNodes;
 
           const radius = 22;
           const startAngle = -Math.PI / 2 + 0.4;

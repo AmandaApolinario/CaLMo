@@ -696,7 +696,9 @@ export function useCLDCanvasViewModel() {
                     nodes: JSON.parse(JSON.stringify(nodes.value)),
                     edges: JSON.parse(JSON.stringify(edges.value)),
                     positions: JSON.parse(JSON.stringify(positions)),
-                    subsystems: diagram.value.subsystems
+                    subsystems: diagram.value.subsystems,
+                    archetypes: diagram.value.archetypes,
+                    feedback_loops: diagram.value.feedback_loops,
                 };
 
                 webSocketService.pushStateTo(diagram_id, currentState, requester_sid);
@@ -712,8 +714,13 @@ export function useCLDCanvasViewModel() {
                     applyStateCallback.value(state.positions);
                 }
 
-                diagram.value = {...diagram.value, nodes: nodes.value, edges: edges.value};
-                await updateLoopsAndArchetypes();
+                diagram.value = {...diagram.value,
+                    nodes: nodes.value,
+                    edges: edges.value,
+                    subsystems: state.subsystems,
+                    archetypes: state.archetypes,
+                    feedback_loops: state.feedback_loops
+                };
             }
         });
 
@@ -916,6 +923,7 @@ export function useCLDCanvasViewModel() {
 
             diagram.value.feedback_loops = getUniqueItems(diagram.value.feedback_loops);
             diagram.value.archetypes = getUniqueItems(diagram.value.archetypes);
+            diagram.value.subsystems = diagram.value.subsystems || [];
         } catch (err) {
             error.value = 'Failed to load shared diagram';
             console.error('Error fetching shared diagram:', err);
