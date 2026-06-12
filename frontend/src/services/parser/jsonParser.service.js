@@ -23,7 +23,7 @@ export const JSONParser = {
 
             for (const field of expectedFields) {
               const config = schema.fields[field];
-              // Busca ignorando maiúsculas e minúsculas
+              // Search ignoring case
               const itemKey = Object.keys(item).find(k => k.toLowerCase() === field.toLowerCase());
               let value = itemKey ? item[itemKey] : undefined;
 

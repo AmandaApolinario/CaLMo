@@ -90,7 +90,7 @@
           </div>
 
             <div class="toolbar-right">
-                <button @click="openInfoModal" class="btn-history" title="Informações do Diagrama">
+                <button @click="openInfoModal" class="btn-history" title="Diagram Information">
                     <i class="fas fa-info-circle"></i> Info
                 </button>
                 <button class="tool-btn primary" v-if="isOwner" style="background-color: #2b7042; border-color: #3b8c56;" @click="openShareModal" title="Share Diagram">
@@ -252,12 +252,8 @@
                              <div class="layer-item"
                                  :class="{
                                      active: selectedLayerId === layer.id,
-                                     'drop-before': dragOverLayerId === layer.id && dropAction === 'before',
-                                     'drop-after': dragOverLayerId === layer.id && dropAction === 'after',
-                                     'drop-inside': dragOverLayerId === layer.id && dropAction === 'inside',
                                      'global-layer': layer.id === 'global'
                                  }"
-                                 :draggable="layer.id !== 'global'"
                                  :style="{ marginLeft: (depth * 15) + 'px', borderLeft: layer.id !== 'global' ? `4px solid ${layer.color}` : 'none' }">
 
                                 <div class="layer-content" @click="selectLayer(layer.id)">
@@ -311,7 +307,7 @@
 
           <div class="node-name-section">
             <h4 class="section-title">
-              <i class="fas fa-circle"></i> Variável
+              <i class="fas fa-circle"></i> Variable
             </h4>
             <div class="node-name">{{ selectedNodeInfo.nodeName }}</div>
           </div>
@@ -654,7 +650,7 @@
 </template>
 
 <script setup>
-import {onMounted, ref, nextTick, watch, onUnmounted, onBeforeUnmount, computed, reactive} from 'vue';
+import {onMounted, ref, nextTick, watch, onBeforeUnmount, computed, reactive} from 'vue';
 import {useRouter, useRoute, onBeforeRouteLeave} from 'vue-router';
 import { useCLDCanvasViewModel } from '@/viewmodels/CLDCanvasViewModel';
 import { useCLDDiagramViewModel } from '@/viewmodels/CLDDiagramViewModel';
@@ -687,7 +683,7 @@ const {
     openCreateModal,
     closeCreateModal,
     addNodeToCLD,
-    addConnection,
+    addEdge,
     persistDiagram,
     removeNodeFromDiagram,
     removeEdgeFromDiagram,
@@ -727,7 +723,6 @@ const {
     openInfoModal,
     closeInfoModal,
     updateLayerCollab,
-    reusableRelationships,
     relationshipsByCLD,
     loadingRelationships,
     fetchReusableRelationships,
@@ -748,7 +743,6 @@ const {
     clearNodeSelection,
     zoomIn,
     zoomOut,
-    redistributeNodes,
     getArchetypeIcon,
     formatArchetypeName,
     saveNodePositions,
@@ -854,83 +848,8 @@ const selectLayer = (layerId) => {
 };
 
 
-const isLayerVisible = (layerId) => {
-    const layer = layers.value.find(l => l.id === layerId);
-    if (layer) return layer.visible;
-
-    for (const mainLayer of layers.value) {
-        const sublayer = mainLayer.sublayers?.find(s => s.id === layerId);
-        if (sublayer) return sublayer.visible;
-    }
-    return true;
-};
-
-const addLayer = () => {
-    const color = SUBSYSTEM_COLORS[layerCounter % SUBSYSTEM_COLORS.length];
-    const newLayer = {
-        id: `subsystem-${layerCounter}`,
-        name: `Subsistema ${layerCounter}`,
-        color: color,
-        visible: true,
-        expanded: false,
-        sublayers: [],
-        variableIds: []
-    };
-    layers.value.push(newLayer);
-    sublayerCounter[newLayer.id] = 1;
-    layerCounter++;
-    selectLayer(newLayer.id);
-    updateVisibility();
-};
-
-const addSubLayer = (layerId) => {
-    const layer = layers.value.find(l => l.id === layerId);
-    if (!layer) return;
-    if (!sublayerCounter[layerId]) sublayerCounter[layerId] = 1;
-
-    const newSublayer = {
-        id: `${layerId}-sub-${sublayerCounter[layerId]}`,
-        name: `Sub-subsistema ${sublayerCounter[layerId]}`,
-        color: layer.color,
-        visible: true,
-        variableIds: []
-    };
-    layer.sublayers.push(newSublayer);
-    sublayerCounter[layerId]++;
-    selectLayer(newSublayer.id);
-    syncSubsystems();
-    updateVisibility();
-};
 
 
-const deleteLayer = (layerId) => {
-    if (layerId === 'global') return;
-
-    const layerIndex = layers.value.findIndex(l => l.id === layerId);
-    if (layerIndex > -1) {
-        layers.value.splice(layerIndex, 1);
-        if (selectedLayerId.value === layerId) {
-            selectLayer('global');
-        }
-    }
-    syncSubsystems();
-    updateVisibility();
-};
-
-const deleteSubLayer = (layerId, sublayerId) => {
-    const layer = layers.value.find(l => l.id === layerId);
-    if (!layer) return;
-
-    const sublayerIndex = layer.sublayers.findIndex(s => s.id === sublayerId);
-    if (sublayerIndex > -1) {
-        layer.sublayers.splice(sublayerIndex, 1);
-        if (selectedLayerId.value === sublayerId) {
-            selectLayer(layerId);
-        }
-    }
-    syncSubsystems();
-    updateVisibility();
-};
 
 // Drag and Drop
 const dragStart = (event, variable) => {
@@ -977,7 +896,7 @@ const onDrop = async (event) => {
             const sourceVarName = getVariableNameById(data.source_id);
             const targetVarName = getVariableNameById(data.target_id);
 
-            addReusableRelationship(
+            await addReusableRelationship(
                 data,
                 sourcePos,
                 targetPos,
@@ -1057,7 +976,7 @@ onMounted(async () => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('beforeunload', handleBeforeUnload);
     edgeAddedCallback.value = async (source, target, polarity) => {
-        const newEdge = await addConnection(source, target, polarity, isDelayEnabled.value);
+        const newEdge = await addEdge(source, target, polarity, isDelayEnabled.value);
         if (newEdge) {
             addEdgeToCanvas(newEdge);
         }
@@ -1108,6 +1027,7 @@ const handleExportPNG = () => {
     exportToPNG(fileName);
 };
 
+// Delegates to VM — returns delay state for the selected edge, falls back to isDelayEnabled
 const isDelayActive = computed(() => {
     if (hasSelection.value && network.value) {
         const selection = network.value.getSelection();
@@ -1118,6 +1038,7 @@ const isDelayActive = computed(() => {
     return isDelayEnabled.value;
 });
 
+// Delegates to VM — toggles delay on the selected edge, or the global default
 const toggleDelay = async () => {
     if (hasSelection.value && network.value) {
         const selection = network.value.getSelection();
@@ -1134,6 +1055,7 @@ const toggleDelay = async () => {
 
 
 
+// Syncs layers.value into diagram.value.subsystems so the subsystems watcher never overwrites with stale data
 const syncSubsystems = () => {
     const gl = layers.value.find(l => l.id === 'global');
     diagram.value.subsystems = formatSubsystems(gl ? gl.sublayers : []);
@@ -1263,20 +1185,6 @@ const toggleLayerVisibility = (layerId) => {
     updateVisibility();
 };
 
-const getLayerShapeCount = (layerId) => {
-    const layer = findLayerDeep(layers.value, layerId);
-    if (!layer) return 0;
-
-    let count = layer.variableIds ? layer.variableIds.length : 0;
-    const countSublayers = (subList) => {
-        subList.forEach(sub => {
-            if (sub.variableIds) count += sub.variableIds.length;
-            if (sub.sublayers) countSublayers(sub.sublayers);
-        });
-    };
-    if (layer.sublayers) countSublayers(layer.sublayers);
-    return count;
-};
 
 const confirmCreateSubsystem = () => {
     if (!newSubsystem.name.trim()) return;
@@ -1350,123 +1258,7 @@ const toggleVariableSubsystem = () => {
     updateVisibility();
 };
 
-const draggedLayerId = ref(null);
-const dragOverLayerId = ref(null);
-const dropAction = ref(null);
 
-const onLayerDragStart = (event, layerId) => {
-    if (layerId === 'global') {
-        event.preventDefault();
-        return;
-    }
-    draggedLayerId.value = layerId;
-    event.dataTransfer.effectAllowed = 'move';
-};
-
-const onLayerDragOver = (event, targetLayerId) => {
-    if (draggedLayerId.value === targetLayerId) {
-        clearDragState(false);
-        return;
-    }
-
-    if (targetLayerId === 'global') {
-        dragOverLayerId.value = targetLayerId;
-        dropAction.value = 'inside';
-        return;
-    }
-
-    const draggedLayer = findLayerDeep(layers.value, draggedLayerId.value);
-    if (draggedLayer && draggedLayer.sublayers && findLayerDeep(draggedLayer.sublayers, targetLayerId)) {
-        clearDragState(false);
-        return;
-    }
-
-    dragOverLayerId.value = targetLayerId;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const y = event.clientY - rect.top;
-    const height = rect.height;
-
-    if (y < height * 0.25) {
-        dropAction.value = 'before';
-    } else if (y > height * 0.75) {
-        dropAction.value = 'after';
-    } else {
-        dropAction.value = 'inside';
-    }
-};
-
-const onLayerDragLeave = () => {
-    dragOverLayerId.value = null;
-    dropAction.value = null;
-};
-
-const onLayerDrop = (event, targetLayerId) => {
-    if (!draggedLayerId.value || !dragOverLayerId.value || !dropAction.value) {
-        clearDragState(true);
-        return;
-    }
-
-    const sourceId = draggedLayerId.value;
-    const targetId = dragOverLayerId.value;
-    const action = dropAction.value;
-
-    clearDragState(true);
-
-    if (sourceId === targetId) return;
-
-    let draggedItem = null;
-    const extractLayer = (list) => {
-        for (let i = 0; i < list.length; i++) {
-            if (list[i].id === sourceId) {
-                return list.splice(i, 1)[0];
-            }
-            if (list[i].sublayers) {
-                const found = extractLayer(list[i].sublayers);
-                if (found) return found;
-            }
-        }
-        return null;
-    };
-    draggedItem = extractLayer(layers.value);
-
-    if (!draggedItem) return;
-
-    const insertLayer = (list) => {
-        for (let i = 0; i < list.length; i++) {
-            if (list[i].id === targetId) {
-                if (action === 'before') {
-                    list.splice(i, 0, draggedItem);
-                } else if (action === 'after') {
-                    list.splice(i + 1, 0, draggedItem);
-                } else if (action === 'inside') {
-                    if (!list[i].sublayers) list[i].sublayers = [];
-                    if (draggedItem.color === list[i].color) {
-                        const availableColors = SUBSYSTEM_COLORS.filter(c => c !== list[i].color);
-                        draggedItem.color = availableColors[Math.floor(Math.random() * availableColors.length)];
-                    }
-                    list[i].sublayers.push(draggedItem);
-                    list[i].expanded = true;
-                }
-                return true;
-            }
-            if (list[i].sublayers) {
-                if (insertLayer(list[i].sublayers)) return true;
-            }
-        }
-        return false;
-    };
-
-    insertLayer(layers.value);
-    syncSubsystems();
-    broadcastSubsystems();
-    updateVisibility();
-};
-
-const clearDragState = (full = true) => {
-    if (full) draggedLayerId.value = null;
-    dragOverLayerId.value = null;
-    dropAction.value = null;
-};
 
 onBeforeUnmount(() => {
     window.removeEventListener('beforeunload', handleBeforeUnload);
@@ -1629,13 +1421,6 @@ watch(() => error.value, (newVal) => {
     justify-content: center;
 }
 
-.canvas-title {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    margin: 0;
-}
-
 .tool-btn {
     background-color: var(--bg-hover);
     color: var(--text-secondary);
@@ -1763,43 +1548,6 @@ watch(() => error.value, (newVal) => {
     gap: 8px;
 }
 
-.category {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.category-btn {
-    background-color: var(--bg-tertiary);
-    color: var(--text-secondary);
-    border: none;
-    padding: 8px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    transition: background 0.2s;
-}
-
-.category-btn:hover {
-    background-color: var(--bg-hover);
-}
-
-.var-count {
-    margin-left: auto;
-    opacity: 0.6;
-    font-size: 12px;
-}
-
-.variables-list {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-left: 24px;
-}
-
 .draggable-item {
     background-color: var(--bg-tertiary);
     padding: 8px 12px;
@@ -1821,17 +1569,10 @@ watch(() => error.value, (newVal) => {
     cursor: grabbing;
 }
 
-.loading-spinner,
-.error-message {
+.loading-spinner {
     padding: 12px;
     text-align: center;
     font-size: 13px;
-}
-
-.error-message {
-    background-color: #5a1d1d;
-    color: #f48771;
-    border-radius: 4px;
 }
 
 .canvas-area {
@@ -1929,8 +1670,7 @@ watch(() => error.value, (newVal) => {
     gap: 4px;
 }
 
-.layer-item,
-.sublayer-item {
+.layer-item {
     background-color: var(--bg-tertiary);
     padding: 8px;
     border-radius: 4px;
@@ -1941,23 +1681,15 @@ watch(() => error.value, (newVal) => {
     transition: background 0.2s;
 }
 
-.layer-item:hover,
-.sublayer-item:hover {
+.layer-item:hover {
     background-color: var(--bg-hover);
 }
 
-.layer-item.active,
-.sublayer-item.active {
+.layer-item.active {
     background-color: var(--accent-primary);
 }
 
-.sublayer-item {
-    margin-left: 16px;
-    background-color: var(--bg-secondary);
-}
-
-.layer-content,
-.sublayer-content {
+.layer-content {
     flex: 1;
     display: flex;
     align-items: center;
@@ -2025,11 +1757,6 @@ watch(() => error.value, (newVal) => {
     color: var(--text-primary);
 }
 
-.layer-shape-count {
-    font-size: 11px;
-    opacity: 0.6;
-}
-
 .layer-controls {
     display: flex;
     gap: 4px;
@@ -2055,11 +1782,6 @@ watch(() => error.value, (newVal) => {
 .delete-layer-btn:hover {
     background-color: #a12d2d;
     color: var(--text-primary);
-}
-
-.sublayer-indent {
-    opacity: 0.6;
-    margin-right: 4px;
 }
 
 .cld-legend-canvas {
@@ -2263,17 +1985,6 @@ watch(() => error.value, (newVal) => {
 .archetype-item:hover {
   transform: translateX(5px);
   background: var(--bg-hover);
-}
-
-.archetype-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--bg-hover);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--accent-primary);
 }
 
 .archetype-name {
@@ -2659,18 +2370,6 @@ watch(() => error.value, (newVal) => {
     line-height: 1.5;
 }
 
-.text-positive {
-    color: #10b981;
-    margin: 0 8px;
-    font-size: 1.1em;
-}
-
-.text-negative {
-    color: #ef4444;
-    margin: 0 8px;
-    font-size: 1.1em;
-}
-
 .badge {
     display: inline-flex;
     align-items: center;
@@ -2720,45 +2419,6 @@ watch(() => error.value, (newVal) => {
     transform: translateX(50px);
 }
 
-.info-modal-card {
-    width: min(96vw, 750px) !important;
-}
-
-.interaction-tips-list {
-    list-style: none;
-    padding: 0;
-    margin: 16px 0 24px 0;
-    color: var(--text-secondary);
-}
-
-.interaction-tips-list li {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 14px;
-    font-size: 0.95rem;
-    line-height: 1.4;
-}
-
-.interaction-tips-list i {
-    width: 24px;
-    color: #3498db;
-    font-size: 1.1rem;
-    text-align: center;
-}
-
-.dark-panel {
-    background: var(--bg-primary);
-    padding: 20px;
-    border-radius: 12px;
-    border: 1px solid var(--border-color);
-    border-left: 4px solid #3498db;
-}
-
-.mt-4 {
-    margin-top: 2rem;
-}
-
 .controls-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -2779,7 +2439,7 @@ watch(() => error.value, (newVal) => {
     width: 15px;
 }
 
-/* Estilo das listas de arquétipos dentro do modal */
+/* Archetype list styling inside the modal */
 .static-archetypes-grid {
     display: flex;
     gap: 12px;
@@ -2814,20 +2474,6 @@ watch(() => error.value, (newVal) => {
 .toolbar-info {
   font-weight: 700;
   margin-left: 0.5rem;
-}
-
-.layer-item.drop-before {
-    border-top: 2px solid #3498db !important;
-}
-
-.layer-item.drop-after {
-    border-bottom: 2px solid #3498db !important;
-}
-
-.layer-item.drop-inside {
-    background-color: rgba(52, 152, 219, 0.2) !important;
-    outline: 2px dashed #3498db;
-    outline-offset: -2px;
 }
 
 .empty-subsystems-msg {

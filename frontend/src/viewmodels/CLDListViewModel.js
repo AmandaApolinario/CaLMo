@@ -329,7 +329,7 @@ export function useCLDListViewModel() {
             rawNodes.forEach(n => { if (n.id) idToNameMap[n.id] = n.name; });
 
             const formattedNodes = rawNodes.map(n => ({
-                name: n.name || idToNameMap[n.id] || 'Variável Desconhecida',
+                name: n.name || idToNameMap[n.id] || 'Unknown Variable',
                 description: n.description || ''
             }));
 

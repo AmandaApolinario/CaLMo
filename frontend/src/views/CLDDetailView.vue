@@ -167,12 +167,12 @@
                 class="archetype-item"
                 :style="{ borderLeftColor: arch.color }"
               >
-                <!-- coluna fixa só para o dot (não encolhe) -->
+                <!-- fixed column for the dot only (does not shrink) -->
                 <div class="arch-col">
                   <span class="arch-dot" :style="{ backgroundColor: arch.color }"></span>
                 </div>
 
-                <!-- conteúdo flexível -->
+                <!-- flexible content column -->
                 <div class="arch-content">
                   <div class="archetype-header">
                     <i class="fas" :class="getArchetypeIcon(arch.type)"></i>

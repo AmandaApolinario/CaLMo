@@ -1,4 +1,4 @@
-import { ref, computed, onMounted, reactive } from 'vue';
+import { ref, computed, reactive } from 'vue';
 import ApiService from '@/services/api.service';
 import CLDService from '@/services/cld.service';
 import { webSocketService } from '@/services/websocket.service';
@@ -8,7 +8,6 @@ export function useCLDCanvasViewModel() {
     const variables = ref([]);
     const loading = ref(false);
     const error = ref(null);
-    const shapes = ref([]);
     const showCreateModal = ref(false);
     const creatingVariable = ref(false);
 
@@ -23,6 +22,7 @@ export function useCLDCanvasViewModel() {
     const undoStack = ref([]);
     const redoStack = ref([]);
     const showShareModal = ref(false);
+    // Moved from CLDCanvasView.vue — determines whether newly created edges carry a delay mark
     const isDelayEnabled = ref(false);
     const currentShareToken = ref(null);
     const isGeneratingLink = ref(false);
@@ -72,49 +72,6 @@ export function useCLDCanvasViewModel() {
     };
 
     const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-    const addShape = (variable, x, y) => {
-        const rectWidth = 150;
-        const rectHeight = 50;
-
-        shapes.value.push({
-            id: generateId(),
-            variableName: variable.name,
-            variableId: variable.id,
-            config: {
-                x: Math.max(0, x - rectWidth / 2),
-                y: Math.max(0, y - rectHeight / 2),
-                width: rectWidth,
-                height: rectHeight,
-                fill: '#3498db',
-                stroke: '#2980b9',
-            },
-        });
-    };
-
-    const updateShapePosition = (shapeId, x, y, stageWidth, stageHeight) => {
-        const shape = shapes.value.find((s) => s.id === shapeId);
-        if (shape) {
-            const width = shape.config.width;
-            const height = shape.config.height;
-
-            shape.config.x = Math.max(0, Math.min(x, stageWidth - width));
-            shape.config.y = Math.max(0, Math.min(y, stageHeight - height));
-
-            return shape;
-        }
-    };
-
-    const removeShape = (shapeId) => {
-        const index = shapes.value.findIndex((s) => s.id === shapeId);
-        if (index > -1) {
-            shapes.value.splice(index, 1);
-        }
-    };
-
-    const getShapeById = (shapeId) => {
-        return shapes.value.find((s) => s.id === shapeId);
-    };
 
     const createVariable = async (shareToken = null) => {
         if (!newVariable.name.trim()) {
@@ -243,74 +200,6 @@ export function useCLDCanvasViewModel() {
         }
     };
 
-    // Handle node selection to show info
-    const selectNodeInfo = (nodeId) => {
-        selectedNode.value = nodeId;
-
-        if (!diagram.value || !nodeId) {
-            selectedNodeInfo.value = { nodeName: '', subsystemIds: [], loops: [], archetypes: [] };
-            return;
-        }
-
-        const node = nodes.value.find(n => n.id === nodeId);
-        if (!node) {
-            selectedNodeInfo.value = { nodeName: '', subsystemIds: [], loops: [], archetypes: [] };
-            return;
-        }
-
-        // Find loops containing this node
-        const loops = (diagram.value.feedback_loops || []).filter(loop =>
-            Array.isArray(loop.variables) &&
-            loop.variables.some(v => (typeof v === 'object' ? v.id === nodeId : v === nodeId))
-        );
-
-        // Find archetypes containing this node
-        const archetypes = (diagram.value.archetypes || []).filter(arch =>
-            Array.isArray(arch.variables) &&
-            arch.variables.some(v => (typeof v === 'object' ? v.id === nodeId : v === nodeId))
-        );
-
-        const subsystem = (diagram.value.subsystems || []).filter(sub =>
-            Array.isArray(sub.id) &&
-            sub.id.some(v => v === nodeId)
-        );
-
-        const getVariableName = (varId) => {
-            const variable = nodes.value.find(n => n.id === varId);
-            return variable ? variable.name : varId;
-        };
-
-        selectedNodeInfo.value = {
-            nodeName: node.name,
-            loops: (loops || []).map(loop => ({
-                id: loop.id,
-                type: loop.type,
-                variables: Array.isArray(loop.variables)
-                    ? loop.variables.map(v => {
-                        const id = typeof v === 'object' ? v.id : v;
-                        return { id, name: getVariableName(id) };
-                    })
-                    : []
-            })),
-            archetypes: (archetypes || []).map(arch => ({
-                id: arch.id,
-                type: arch.type,
-                variables: Array.isArray(arch.variables)
-                    ? arch.variables.map(v => {
-                        const id = typeof v === 'object' ? v.id : v;
-                        return { id, name: getVariableName(id) };
-                    })
-                    : []
-            })),
-            subsystemIds: subsystem,
-        };
-    };
-
-    const clearNodeSelection = () => {
-        selectedNode.value = null;
-        selectedNodeInfo.value = { nodeName: '', subsystemIds: [], loops: [], archetypes: [] };
-    };
-
     const addNodeToCLD = async (variable, x, y) => {
         if (!diagram.value) return false;
 
@@ -350,7 +239,8 @@ export function useCLDCanvasViewModel() {
         return true;
     };
 
-    const addConnection = async (sourceId, targetId, polarity = 'positive', hasDelay = false) => {
+    // Creates a new edge between two nodes
+    const addEdge = async (sourceId, targetId, polarity = 'positive', hasDelay = false) => {
         if (!diagram.value) return null;
 
         const existingEdge = edges.value.find(edge =>
@@ -928,52 +818,6 @@ export function useCLDCanvasViewModel() {
         }
     };
 
-    const getChangesSummary = () => {
-        const newActions = pendingChanges.value;
-
-        if (newActions.length === 0) return "General update and repositioning.";
-
-        const actionLabels = {
-            'NODE_ADDED': 'Variable Added',
-            'NODE_REMOVED': 'Variable Removed',
-            'EDGE_ADDED': 'New Relationship',
-            'EDGE_REMOVED': 'Removed Relationship'
-        };
-
-        const getNodeName = (id) => {
-            let found = nodes.value.find(n => String(n.id) === String(id));
-            if (!found) found = variables.value.find(v => String(v.id) === String(id));
-            return found ? (found.name || found.label) : 'Unknown Variable';
-        };
-
-        const summaryLines = newActions.map(item => {
-            const prefix = actionLabels[item.action] || item.action;
-
-            if (item.action === 'NODE_ADDED' || item.action === 'NODE_REMOVED') {
-                const nodeName = item.data.node?.name || item.data.node?.label || 'Unknown Variable';
-                return `${prefix}: ${nodeName}`;
-            }
-            else if (item.action === 'EDGE_ADDED' || item.action === 'EDGE_REMOVED') {
-            const edgeData = item.data.edge || item.data;
-            if (!edgeData || (!edgeData.source && !edgeData.target)) {
-                return `${prefix}: Unkown Relationship`;
-            }
-
-            const sourceName = getNodeName(edgeData.source);
-            const targetName = getNodeName(edgeData.target);
-
-            const polarity = edgeData.polarity ? String(edgeData.polarity).toUpperCase() : 'UNKNOWN';
-
-            return `${prefix}: ${sourceName} -> ${targetName}, ${polarity}`;
-        }
-
-            return `${prefix}`;
-        });
-
-
-        return summaryLines.join('\n');
-    };
-
     const saveDiagramName = async () => {
         if (!diagram.value || !diagramNameRef.value.trim()) return;
 
@@ -1199,7 +1043,7 @@ export function useCLDCanvasViewModel() {
         );
 
         if (!edgeExists) {
-            await addConnection(rel.source_id, rel.target_id, polarity, rel.has_delay || false);
+            await addEdge(rel.source_id, rel.target_id, polarity, rel.has_delay || false);
         }
 
         return true;
@@ -1210,6 +1054,7 @@ export function useCLDCanvasViewModel() {
         return variables.value.filter(variable => !deployedNodeIds.has(String(variable.id)));
     });
 
+    // Moved from CLDCanvasView.vue — recursively finds a subsystem by id in nested layer lists
     const findLayerDeep = (layerList, id) => {
         for (const l of layerList) {
             if (l.id === id) return l;
@@ -1221,11 +1066,13 @@ export function useCLDCanvasViewModel() {
         return null;
     };
 
+    // Returns whether a specific edge has the delay mark enabled
     const getEdgeDelay = (edgeId) => {
         const edge = edges.value.find(e => String(e.id) === String(edgeId));
         return edge ? !!edge.has_delay : false;
     };
 
+    // Toggles the delay mark on a specific edge and triggers reactivity
     const toggleEdgeDelay = (edgeId) => {
         const edge = edges.value.find(e => String(e.id) === String(edgeId));
         if (edge) {
@@ -1236,6 +1083,7 @@ export function useCLDCanvasViewModel() {
         return false;
     };
 
+    // Moved from CLDCanvasView.vue — converts nested layer objects into the subsystems format expected by the API, preserving id and color
     const formatSubsystems = (layerList) => {
         return layerList.map(layer => ({
             id: layer.id,
@@ -1254,7 +1102,6 @@ export function useCLDCanvasViewModel() {
         isDelayEnabled,
         getEdgeDelay,
         toggleEdgeDelay,
-        shapes: computed(() => shapes.value),
         loading: computed(() => loading.value),
         error: computed(() => error.value),
         showCreateModal: computed(() => showCreateModal.value),
@@ -1268,16 +1115,10 @@ export function useCLDCanvasViewModel() {
         newVariable,
         fetchVariables,
         fetchDiagram,
-        addShape,
-        updateShapePosition,
-        removeShape,
-        getShapeById,
         createVariable,
         openCreateModal,
         closeCreateModal,
-        selectNodeInfo,
-        clearNodeSelection,
-        addConnection,
+        addEdge,
         addNodeToCLD,
         persistDiagram,
         removeNodeFromDiagram,

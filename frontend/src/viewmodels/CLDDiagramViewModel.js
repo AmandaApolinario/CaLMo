@@ -7,11 +7,9 @@ import {
   getArchetypeColor,
   getLoopColor,
   getArchetypeInstanceColor,
-  ensureContrastWithBackground, LOOP_COLORS, // ensure instance color is not too close to node regular color
+  LOOP_COLORS,
 } from '@/theme/colors';
 import { makePieEllipseDataUrl } from '@/theme/nodeImages';
-import {publishDiagramEvent} from "@/services/kafkaEvent.service.js";
-
 export function useCLDDiagramViewModel() {
   const networkContainer = ref(null);
   const network = shallowRef(null);
@@ -1126,6 +1124,7 @@ export function useCLDDiagramViewModel() {
     document.body.removeChild(downloadLink);
   }
 
+  // Hides/shows nodes based on subsystem visibility after canvas recreation
   function updateVisibility() {
     if (!network.value) return;
     const allNodes = network.value.body.data.nodes.get();

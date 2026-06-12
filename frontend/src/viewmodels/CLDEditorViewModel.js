@@ -298,6 +298,7 @@ export function useCLDEditorViewModel() {
     return null;
   };
 
+  // Renamed from checkForConflictingRelationship — validates that no two edges share the same source/target with opposite polarity
   const checkEdgeConflict = (index) => {
     const currentEdge = diagram.value.edges[index];
     if (!currentEdge || !currentEdge.source || !currentEdge.target || !currentEdge.polarity) return false;
