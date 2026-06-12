@@ -102,6 +102,9 @@
                 <button @click="handleExportPNG" class="tool-btn primary" title="Exportar as PNG">
                   <i class="fas fa-image"></i> Export as PNG
                 </button>
+                <button class="tool-btn" @click="showSettingsModal = true" title="Settings">
+                    <i class="fas fa-cog"></i>
+                </button>
                 <button class="tool-btn primary" @click="saveDiagram" title="Save">
                     <i class="fas fa-save"></i> Save
                 </button>
@@ -246,18 +249,15 @@
                     <div class="layers-list">
                         <div v-for="{ layer, depth } in flattenedLayers" :key="layer.id + '_' + layer.visible">
 
-                            <div class="layer-item"
-                                 :draggable="layer.id !== 'global'"
-                                 @dragstart="onLayerDragStart($event, layer.id)"
-                                 @dragover.prevent="onLayerDragOver($event, layer.id)"
-                                 @dragleave="onLayerDragLeave"
-                                 @drop.stop="onLayerDrop($event, layer.id)"
+                             <div class="layer-item"
                                  :class="{
                                      active: selectedLayerId === layer.id,
                                      'drop-before': dragOverLayerId === layer.id && dropAction === 'before',
                                      'drop-after': dragOverLayerId === layer.id && dropAction === 'after',
-                                     'drop-inside': dragOverLayerId === layer.id && dropAction === 'inside'
+                                     'drop-inside': dragOverLayerId === layer.id && dropAction === 'inside',
+                                     'global-layer': layer.id === 'global'
                                  }"
+                                 :draggable="layer.id !== 'global'"
                                  :style="{ marginLeft: (depth * 15) + 'px', borderLeft: layer.id !== 'global' ? `4px solid ${layer.color}` : 'none' }">
 
                                 <div class="layer-content" @click="selectLayer(layer.id)">
@@ -324,7 +324,7 @@
             <div class="loop-container" v-if="activeNodeSubsystems.length > 0">
               <div v-for="sub in activeNodeSubsystems" :key="sub.id" class="loop-item" :style="{ borderLeftColor: sub.color }">
 
-                  <div class="loop-badge" :style="{ backgroundColor: tint(sub.color, 0.18), color: '#0F172A', borderColor: tint(sub.color, 0.35) }">
+                  <div class="loop-badge" :style="{ backgroundColor: tint(sub.color, 0.18), borderColor: tint(sub.color, 0.35) }">
                       {{ sub.hierarchy }}
                   </div>
 
@@ -333,7 +333,7 @@
                   </p>
 
                   <div class="loop-variables" v-if="sub.allVariables.length > 0">
-                      <span v-for="(vName, idx) in sub.allVariables" :key="idx" class="variable-tag" :style="{ backgroundColor: tint(sub.color, 0.12), color: '#0F172A', borderColor: tint(sub.color, 0.28) }">
+                      <span v-for="(vName, idx) in sub.allVariables" :key="idx" class="variable-tag" :style="{ backgroundColor: tint(sub.color, 0.12), borderColor: tint(sub.color, 0.28) }">
                           {{ vName }}
                       </span>
                   </div>
@@ -383,19 +383,16 @@
                 :key="'loop-' + index"
                 class="loop-item"
               >
-                <!-- light background from loop.color + dark text -->
                 <div
                   class="loop-badge"
                   :style="{
                     backgroundColor: tint(loop.color, 0.18),
-                    color: '#0F172A',
                     borderColor: tint(loop.color, 0.35)
                   }"
                 >
                   {{ loop.type }}
                 </div>
 
-                <!-- chips (no commas) -->
                 <div class="loop-variables">
                   <span
                     v-for="(variable, idx) in loop.variables"
@@ -403,7 +400,6 @@
                     class="variable-tag"
                     :style="{
                       backgroundColor: tint(loop.color, 0.12),
-                      color: '#0F172A',
                       borderColor: tint(loop.color, 0.28)
                     }"
                   >
@@ -630,6 +626,30 @@
               </div>
           </div>
       </div>
+
+      <div v-if="showSettingsModal" class="modal-overlay" @click="showSettingsModal = false">
+          <div class="modal-content settings-modal" @click.stop>
+              <div class="settings-header">
+                  <h3><i class="fas fa-cog"></i> Settings</h3>
+                  <button class="close-button" @click="showSettingsModal = false">&times;</button>
+              </div>
+              <div class="settings-body">
+                  <div class="setting-item">
+                      <div class="setting-info">
+                          <span class="setting-label">Theme</span>
+                          <span class="setting-description">Switch between light and dark mode</span>
+                      </div>
+                      <label class="toggle-switch">
+                          <input type="checkbox" :checked="currentTheme === 'light'" @change="toggleTheme" />
+                          <span class="toggle-slider">
+                              <i class="fas fa-sun"></i>
+                              <i class="fas fa-moon"></i>
+                          </span>
+                      </label>
+                  </div>
+              </div>
+          </div>
+      </div>
     </div>
 </template>
 
@@ -638,10 +658,15 @@ import {onMounted, ref, nextTick, watch, onUnmounted, onBeforeUnmount, computed,
 import {useRouter, useRoute, onBeforeRouteLeave} from 'vue-router';
 import { useCLDCanvasViewModel } from '@/viewmodels/CLDCanvasViewModel';
 import { useCLDDiagramViewModel } from '@/viewmodels/CLDDiagramViewModel';
+import { useTheme } from '@/viewmodels/ThemeViewModel';
 
 const router = useRouter();
 const route = useRoute();
 const isOwner = ref(false);
+
+const { currentTheme, toggleTheme, initTheme } = useTheme();
+initTheme();
+const showSettingsModal = ref(false);
 
 // ViewModels
 const {
@@ -1535,6 +1560,45 @@ watch(() => error.value, (newVal) => {
 });
 </script>
 
+<style>
+:root {
+    --bg-primary: #1e1e1e;
+    --bg-secondary: #252526;
+    --bg-tertiary: #2d2d2d;
+    --bg-hover: #3d3d3d;
+    --bg-active: #4d4d4d;
+    --border-color: #3d3d3d;
+    --border-light: #4d4d4d;
+    --text-primary: #ffffff;
+    --text-secondary: #cccccc;
+    --text-muted: #9ca3af;
+    --accent-primary: #0e639c;
+    --accent-hover: #1177bb;
+    --danger-bg: #5a1d1d;
+    --danger-text: #f48771;
+    --canvas-bg: #1e1e1e;
+}
+
+[data-theme="light"] {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f3f4f6;
+    --bg-tertiary: #e5e7eb;
+    --bg-hover: #d1d5db;
+    --bg-active: #9ca3af;
+    --border-color: #d1d5db;
+    --border-light: #e5e7eb;
+    --text-primary: #111827;
+    --text-secondary: #374151;
+    --text-muted: #6b7280;
+    --accent-primary: #2563eb;
+    --accent-hover: #3b82f6;
+    --danger-bg: #fef2f2;
+    --danger-text: #dc2626;
+    --canvas-bg: #f9fafb;
+}
+
+</style>
+
 <style scoped>
 * {
     margin: 0;
@@ -1547,8 +1611,8 @@ watch(() => error.value, (newVal) => {
     flex-direction: column;
     width: 100vw;
     height: 100vh;
-    background-color: #1e1e1e;
-    color: #ffffff;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
     overflow: hidden;
 }
 
@@ -1556,11 +1620,13 @@ watch(() => error.value, (newVal) => {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background-color: #2d2d2d;
-    border-bottom: 1px solid #3d3d3d;
+    background-color: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
     padding: 8px 16px;
-    height: 50px;
+    min-height: 50px;
     z-index: 100;
+    flex-wrap: wrap;
+    gap: 4px;
 }
 
 .toolbar-left,
@@ -1579,14 +1645,14 @@ watch(() => error.value, (newVal) => {
 .canvas-title {
     font-size: 14px;
     font-weight: 500;
-    color: #cccccc;
+    color: var(--text-secondary);
     margin: 0;
 }
 
 .tool-btn {
-    background-color: #3d3d3d;
-    color: #cccccc;
-    border: 1px solid #4d4d4d;
+    background-color: var(--bg-hover);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-light);
     padding: 6px 12px;
     border-radius: 4px;
     cursor: pointer;
@@ -1595,27 +1661,28 @@ watch(() => error.value, (newVal) => {
     align-items: center;
     gap: 6px;
     transition: all 0.2s;
+    white-space: nowrap;
 }
 
 .tool-btn:hover {
-    background-color: #4d4d4d;
-    color: #ffffff;
+    background-color: var(--bg-active);
+    color: var(--text-primary);
 }
 
 .tool-btn.primary {
-    background-color: #0e639c;
-    border-color: #1177bb;
+    background-color: var(--accent-primary);
+    border-color: var(--accent-hover);
     color: #ffffff;
 }
 
 .tool-btn.primary:hover {
-    background-color: #1177bb;
+    background-color: var(--accent-hover);
 }
 
 .toolbar-divider {
     width: 1px;
     height: 24px;
-    background-color: #4d4d4d;
+    background-color: var(--border-light);
     margin: 0 4px;
 }
 
@@ -1629,15 +1696,17 @@ watch(() => error.value, (newVal) => {
 .left-panel {
     display: flex;
     flex-direction: column;
-    background-color: #252526;
-    border-right: 1px solid #3d3d3d;
+    background-color: var(--bg-secondary);
+    border-right: 1px solid var(--border-color);
     width: 280px;
-    transition: width 0.3s;
+    min-width: 40px;
+    transition: width 0.3s, min-width 0.3s;
     z-index: 50;
 }
 
 .left-panel.collapsed {
     width: 40px;
+    min-width: 40px;
 }
 
 .panel-header {
@@ -1645,16 +1714,16 @@ watch(() => error.value, (newVal) => {
     align-items: center;
     gap: 8px;
     padding: 12px;
-    background-color: #2d2d2d;
-    border-bottom: 1px solid #3d3d3d;
+    background-color: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
     cursor: pointer;
     font-weight: 600;
     font-size: 13px;
-    color: #cccccc;
+    color: var(--text-secondary);
 }
 
 .panel-header:hover {
-    background-color: #333333;
+    background-color: var(--bg-hover);
 }
 
 .panel-content {
@@ -1674,8 +1743,8 @@ watch(() => error.value, (newVal) => {
 }
 
 .add-variable-btn {
-    background-color: #0e639c;
-    color: white;
+    background-color: var(--accent-primary);
+    color: #ffffff;
     border: none;
     padding: 8px 12px;
     border-radius: 4px;
@@ -1690,7 +1759,7 @@ watch(() => error.value, (newVal) => {
 }
 
 .add-variable-btn:hover {
-    background-color: #1177bb;
+    background-color: var(--accent-hover);
 }
 
 .variables-toggle-header {
@@ -1714,8 +1783,8 @@ watch(() => error.value, (newVal) => {
 }
 
 .category-btn {
-    background-color: #333333;
-    color: #cccccc;
+    background-color: var(--bg-tertiary);
+    color: var(--text-secondary);
     border: none;
     padding: 8px 12px;
     border-radius: 4px;
@@ -1728,7 +1797,7 @@ watch(() => error.value, (newVal) => {
 }
 
 .category-btn:hover {
-    background-color: #3d3d3d;
+    background-color: var(--bg-hover);
 }
 
 .var-count {
@@ -1745,7 +1814,7 @@ watch(() => error.value, (newVal) => {
 }
 
 .draggable-item {
-    background-color: #2d2d2d;
+    background-color: var(--bg-tertiary);
     padding: 8px 12px;
     border-radius: 4px;
     cursor: grab;
@@ -1753,12 +1822,12 @@ watch(() => error.value, (newVal) => {
     align-items: center;
     gap: 8px;
     font-size: 13px;
-    color: #cccccc;
+    color: var(--text-secondary);
     transition: background 0.2s;
 }
 
 .draggable-item:hover {
-    background-color: #3d3d3d;
+    background-color: var(--bg-hover);
 }
 
 .draggable-item:active {
@@ -1781,10 +1850,10 @@ watch(() => error.value, (newVal) => {
 .canvas-area {
     flex: 1;
     position: relative;
-    background-color: #1e1e1e;
+    background-color: var(--canvas-bg);
     background-image:
-        linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        linear-gradient(rgba(128, 128, 128, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(128, 128, 128, 0.08) 1px, transparent 1px);
     background-size: 20px 20px;
 }
 
@@ -1794,7 +1863,7 @@ watch(() => error.value, (newVal) => {
     left: 50%;
     transform: translate(-50%, -50%);
     text-align: center;
-    color: #cccccc;
+    color: var(--text-secondary);
 }
 
 .canvas-loading i {
@@ -1811,13 +1880,13 @@ watch(() => error.value, (newVal) => {
     position: absolute;
     bottom: 16px;
     right: 16px;
-    background-color: #252526;
-    border: 1px solid #3d3d3d;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
-    width: 320px;
+    width: min(320px, calc(100vw - 32px));
     max-height: 400px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-    transition: max-height 0.3s;
+    transition: max-height 0.3s, width 0.3s;
     z-index: 40;
 }
 
@@ -1830,7 +1899,7 @@ watch(() => error.value, (newVal) => {
     justify-content: space-between;
     align-items: center;
     padding: 10px 12px;
-    background-color: #2d2d2d;
+    background-color: var(--bg-tertiary);
     border-radius: 8px 8px 0 0;
     cursor: pointer;
 }
@@ -1839,6 +1908,8 @@ watch(() => error.value, (newVal) => {
     max-height: 350px;
     overflow-y: auto;
     padding: 12px;
+    background-color: var(--bg-secondary);
+    border-radius: 0 0 8px 8px;
 }
 
 .layers-header {
@@ -1848,8 +1919,8 @@ watch(() => error.value, (newVal) => {
 }
 
 .add-layer-btn {
-    background-color: #0e639c;
-    color: white;
+    background-color: var(--accent-primary);
+    color: #ffffff;
     border: none;
     width: 32px;
     height: 32px;
@@ -1862,7 +1933,7 @@ watch(() => error.value, (newVal) => {
 }
 
 .add-layer-btn:hover {
-    background-color: #1177bb;
+    background-color: var(--accent-hover);
 }
 
 .layers-list {
@@ -1873,7 +1944,7 @@ watch(() => error.value, (newVal) => {
 
 .layer-item,
 .sublayer-item {
-    background-color: #2d2d2d;
+    background-color: var(--bg-tertiary);
     padding: 8px;
     border-radius: 4px;
     cursor: pointer;
@@ -1885,17 +1956,17 @@ watch(() => error.value, (newVal) => {
 
 .layer-item:hover,
 .sublayer-item:hover {
-    background-color: #333333;
+    background-color: var(--bg-hover);
 }
 
 .layer-item.active,
 .sublayer-item.active {
-    background-color: #094771;
+    background-color: var(--accent-primary);
 }
 
 .sublayer-item {
     margin-left: 16px;
-    background-color: #252526;
+    background-color: var(--bg-secondary);
 }
 
 .layer-content,
@@ -1905,12 +1976,13 @@ watch(() => error.value, (newVal) => {
     align-items: center;
     gap: 8px;
     font-size: 13px;
+    color: var(--text-primary);
 }
 
 .expand-btn,
 .layer-visibility-btn {
     background: transparent;
-    color: #cccccc;
+    color: var(--text-secondary);
     border: none;
     cursor: pointer;
     padding: 4px;
@@ -1919,7 +1991,7 @@ watch(() => error.value, (newVal) => {
 
 .expand-btn:hover,
 .layer-visibility-btn:hover {
-    color: #ffffff;
+    color: var(--text-primary);
 }
 
 .expand-placeholder {
@@ -1930,15 +2002,40 @@ watch(() => error.value, (newVal) => {
 .layer-name-input {
     flex: 1;
     font-size: 13px;
-    color: #cccccc;
+    color: var(--text-primary);
+}
+
+.global-layer .layer-name,
+.global-layer .layer-name-input {
+    color: #000000;
+}
+
+.global-layer.active .layer-name,
+.global-layer.active .layer-name-input {
+    color: #ffffff;
+}
+
+.global-layer .layer-visibility-btn,
+.global-layer .expand-btn {
+    color: #000000;
+}
+
+.global-layer.active .layer-visibility-btn,
+.global-layer.active .expand-btn {
+    color: #ffffff;
+}
+
+.global-layer .layer-visibility-btn:hover,
+.global-layer .expand-btn:hover {
+    color: inherit;
 }
 
 .layer-name-input {
-    background-color: #1e1e1e;
-    border: 1px solid #0e639c;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--accent-primary);
     padding: 4px;
     border-radius: 2px;
-    color: #ffffff;
+    color: var(--text-primary);
 }
 
 .layer-shape-count {
@@ -1954,7 +2051,7 @@ watch(() => error.value, (newVal) => {
 .add-sublayer-btn,
 .delete-layer-btn {
     background-color: transparent;
-    color: #cccccc;
+    color: var(--text-primary);
     border: none;
     padding: 4px 8px;
     border-radius: 3px;
@@ -1964,13 +2061,13 @@ watch(() => error.value, (newVal) => {
 }
 
 .add-sublayer-btn:hover {
-    background-color: #0e639c;
-    color: #ffffff;
+    background-color: var(--accent-primary);
+    color: var(--text-primary);
 }
 
 .delete-layer-btn:hover {
     background-color: #a12d2d;
-    color: #ffffff;
+    color: var(--text-primary);
 }
 
 .sublayer-indent {
@@ -1984,20 +2081,19 @@ watch(() => error.value, (newVal) => {
   left: 20px;
   z-index: 10;
   padding: 12px 14px;
-  border: 1px solid #3d3d3d;
+  border: 1px solid var(--border-color);
   border-radius: 10px;
-  background: rgba(37, 37, 38, 0.9);
-  backdrop-filter: blur(4px);
+  background: var(--bg-secondary);
   max-height: 180px;
   overflow-y: auto;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  color: #ccc;
+  color: var(--text-secondary);
 }
 
 .legend-title {
   font-weight: 600;
   font-size: 13px;
-  color: #fff;
+  color: var(--text-primary);
   margin-bottom: 8px;
 }
 
@@ -2017,7 +2113,7 @@ watch(() => error.value, (newVal) => {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.2);
+  border: 1px solid rgba(128,128,128,0.3);
 }
 
 .legend-label { font-size: 12px; }
@@ -2046,13 +2142,13 @@ watch(() => error.value, (newVal) => {
 
 .popup-card {
   position: relative;
-  background: white;
+  background: var(--bg-secondary);
   border-radius: 12px;
   width: 90%;
   max-width: min(96vw, 980px);
   max-height: 80vh;
   overflow-y: hidden;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
   animation: popupFadeIn 0.3s ease-out;
   z-index: 1001;
 }
@@ -2073,20 +2169,20 @@ watch(() => error.value, (newVal) => {
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem 1.5rem 1rem;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .popup-header h3 {
   margin: 0;
   font-size: 1.3rem;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .close-button {
   background: none;
   border: none;
   font-size: 1.2rem;
-  color: #7f8c8d;
+  color: var(--text-muted);
   cursor: pointer;
   transition: color 0.2s;
   padding: 0.5rem;
@@ -2123,7 +2219,7 @@ watch(() => error.value, (newVal) => {
 .loop-item {
   padding: 0.8rem;
   border-radius: 8px;
-  background: #f8f9fa;
+  background: var(--bg-tertiary);
   border-left: 4px solid #42b983;
 }
 
@@ -2132,7 +2228,7 @@ watch(() => error.value, (newVal) => {
 }
 
 .loop-item.balancing {
-  border-left-color: #3498db;
+  border-left-color: var(--accent-primary);
 }
 
 .loop-badge {
@@ -2145,22 +2241,22 @@ watch(() => error.value, (newVal) => {
 }
 
 .loop-item.reinforcing .loop-badge {
-  background: #fde8e8;
+  background: rgba(231, 76, 60, 0.15);
   color: #e74c3c;
 }
 
 .loop-item.balancing .loop-badge {
-  background: #e8f4fc;
+  background: rgba(52, 152, 219, 0.15);
   color: #3498db;
 }
 
 .loop-variables {
   font-size: 0.95rem;
-  color: #34495e;
+  color: var(--text-secondary);
 }
 
 .variable-tag {
-  background: #e8f4fc;
+  background: var(--bg-hover);
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
   margin-right: 0.3rem;
@@ -2173,29 +2269,29 @@ watch(() => error.value, (newVal) => {
   gap: 1rem;
   padding: 0.8rem;
   border-radius: 8px;
-  background: #f8f9fa;
+  background: var(--bg-tertiary);
   transition: transform 0.2s;
 }
 
 .archetype-item:hover {
   transform: translateX(5px);
-  background: #f1f8fe;
+  background: var(--bg-hover);
 }
 
 .archetype-icon {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: #e8f4fc;
+  background: var(--bg-hover);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #3498db;
+  color: var(--accent-primary);
 }
 
 .archetype-name {
   font-weight: 500;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 /* Responsive adjustments */
@@ -2212,7 +2308,7 @@ watch(() => error.value, (newVal) => {
 .node-name-section {
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .node-name {
@@ -2232,9 +2328,9 @@ watch(() => error.value, (newVal) => {
 
 /* Loops */
 .loop-container { display: grid; gap: 12px; }
-.loop-item { padding: 10px; border-left: 4px solid #D0D7DE; border-radius: 10px; background: #F7FBFF; }
-.loop-badge { display: inline-block; color: #FFFFFF; padding: 4px 10px; border-radius: 8px; font-weight: 700; }
-.variable-tag { display: inline-block; margin: 2px 6px 0 0; padding: 2px 8px; border: 2px solid #CBD5E1; border-radius: 999px; background: #FFFFFF; }
+.loop-item { padding: 10px; border-left: 4px solid var(--border-color); border-radius: 10px; background: var(--bg-tertiary); }
+.loop-badge { display: inline-block; color: var(--text-primary); padding: 4px 10px; border-radius: 8px; font-weight: 700; }
+.variable-tag { display: inline-block; margin: 2px 6px 0 0; padding: 2px 8px; border: 2px solid var(--border-color); border-radius: 999px; background: var(--bg-tertiary); color: var(--text-primary); }
 
 /* Archetypes */
 .archetype-popup .popup-card {
@@ -2259,13 +2355,12 @@ watch(() => error.value, (newVal) => {
   column-gap: 12px;
   align-items: start;
 
-  /* subtle full border plus a stronger colored left accent */
-  border: 2px solid rgba(208, 215, 222, 0.6);
-  border-left: 6px solid #D0D7DE; /* overridden inline with arch.color */
-  background: #F7FBFF;
-  border-radius: 18px; /* increased rounding */
-  padding: 8px 20px; /* smaller vertical, larger lateral padding */
-  min-height: 38px; /* slightly reduced overall height */
+  border: 2px solid var(--border-color);
+  border-left: 6px solid var(--border-color);
+  background: var(--bg-tertiary);
+  border-radius: 18px;
+  padding: 8px 20px;
+  min-height: 38px;
 }
 
 /* fixed column: dot never shrinks */
@@ -2281,8 +2376,8 @@ watch(() => error.value, (newVal) => {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  box-shadow: inset 0 0 0 3px #FFFFFF; /* WHITE ring for contrast */
-  flex: 0 0 16px; /* prevent grow/shrink */
+  box-shadow: inset 0 0 0 3px var(--bg-primary);
+  flex: 0 0 16px;
 }
 
 /* flexible content column */
@@ -2296,10 +2391,10 @@ watch(() => error.value, (newVal) => {
 .archetype-header {
   display: flex;
   align-items: center;
-  color: #2c3e50;
+  color: var(--text-primary);
   gap: 10px;
   margin-bottom: 6px;
-  justify-content: center; /* center icon + name */
+  justify-content: center;
 }
 
 .archetype-name { font-weight: 700; line-height: 1.25; text-align: center; width: 100%; }
@@ -2314,18 +2409,18 @@ watch(() => error.value, (newVal) => {
   display: inline-block;
   font-size: 12px;
   padding: 2px 8px;
-  border: 2px solid #CBD5E1; /* overridden inline with arch.color */
+  border: 2px solid var(--border-color);
   border-radius: 999px;
-  background: #FFFFFF;
+  background: var(--bg-tertiary);
 }
 .variable-chip {
   display: inline-block;
   font-size: 0.85rem;
   padding: 2px 8px;
-  border: 1px solid #CBD5E1;
+  border: 1px solid var(--border-color);
   border-radius: 999px;
-  background: #FFFFFF;
-  color: #2c3e50;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 .modal-overlay {
@@ -2342,19 +2437,21 @@ watch(() => error.value, (newVal) => {
 }
 
 .modal-content {
-    background: #2d2d2d;
-    border: 1px solid #3d3d3d;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 24px;
     width: 90%;
     max-width: 500px;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    max-height: 80vh;
+    overflow-y: auto;
 }
 
 .modal-content h3 {
     margin-top: 0;
     margin-bottom: 20px;
-    color: #ffffff;
+    color: var(--text-primary);
 }
 
 .form-group {
@@ -2365,24 +2462,24 @@ watch(() => error.value, (newVal) => {
     display: block;
     margin-bottom: 6px;
     font-size: 13px;
-    color: #cccccc;
+    color: var(--text-secondary);
 }
 
 .form-group input,
 .form-group textarea {
     width: 100%;
     padding: 8px 12px;
-    background-color: #1e1e1e;
-    border: 1px solid #3d3d3d;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
     border-radius: 4px;
-    color: #ffffff;
+    color: var(--text-primary);
     font-size: 14px;
 }
 
 .form-group input:focus,
 .form-group textarea:focus {
     outline: none;
-    border-color: #0e639c;
+    border-color: var(--accent-primary);
 }
 
 .form-actions {
@@ -2403,16 +2500,16 @@ watch(() => error.value, (newVal) => {
 }
 
 .btn-cancel {
-    background-color: #3d3d3d;
-    color: #cccccc;
+    background-color: var(--bg-hover);
+    color: var(--text-secondary);
 }
 
 .btn-cancel:hover {
-    background-color: #4d4d4d;
+    background-color: var(--bg-active);
 }
 
 .btn-create {
-    background-color: #0e639c;
+    background-color: var(--accent-primary);
     color: #ffffff;
 }
 
@@ -2431,22 +2528,22 @@ watch(() => error.value, (newVal) => {
 }
 
 ::-webkit-scrollbar-track {
-    background: #1e1e1e;
+    background: var(--bg-primary);
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #3d3d3d;
+    background: var(--bg-hover);
     border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #4d4d4d;
+    background: var(--bg-active);
 }
 
 .tool-btn.active {
-    background-color: #0e639c;
-    color: #ffffff;
-    border-color: #1177bb;
+    background-color: var(--accent-primary);
+    color: var(--text-primary);
+    border-color: var(--accent-hover);
 }
 
 .diagram-title-input {
@@ -2458,47 +2555,34 @@ watch(() => error.value, (newVal) => {
 
     font-size: 1.5rem;
     font-weight: 600;
-    color: white;
+    color: var(--text-primary);
     font-family: inherit;
 
     padding: 4px 8px;
     margin: 0;
     width: auto;
-    min-width: 250px;
+    min-width: 150px;
     max-width: 100%;
 
     transition: all 0.2s ease-in-out;
 }
 
 .diagram-title-input:hover {
-    background-color: rgba(0, 0, 0, 0.04);
+    background-color: rgba(128, 128, 128, 0.1);
     cursor: text;
 }
 
 .diagram-title-input:focus {
-    background-color: #ffffff;
+    background-color: var(--bg-tertiary);
     border-bottom: 2px solid #42b883;
     border-radius: 6px 6px 0 0;
-    color: #2c3e50;
-}
-
-@media (prefers-color-scheme: dark) {
-    .diagram-title-input {
-        color: #f8f9fa;
-    }
-    .diagram-title-input:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-    }
-    .diagram-title-input:focus {
-        background-color: #1e1e1e;
-        border-bottom-color: #42b883;
-    }
+    color: var(--text-primary);
 }
 
 .btn-history {
-    background-color: #f1f5f9;
-    color: #475569;
-    border: 1px solid #cbd5e1;
+    background-color: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
     padding: 6px 12px;
     border-radius: 6px;
     cursor: pointer;
@@ -2506,7 +2590,7 @@ watch(() => error.value, (newVal) => {
     transition: 0.2s;
 }
 .btn-history:hover {
-    background-color: #e2e8f0;
+    background-color: var(--bg-hover);
 }
 
 .history-modal-overlay {
@@ -2520,14 +2604,15 @@ watch(() => error.value, (newVal) => {
 }
 
 .history-modal-content {
-    background: white;
+    background: var(--bg-tertiary);
     width: 500px;
     max-width: 90%;
     max-height: 80vh;
     border-radius: 8px;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    border: 1px solid var(--border-color);
 }
 
 .history-header {
@@ -2535,13 +2620,13 @@ watch(() => error.value, (newVal) => {
     justify-content: space-between;
     align-items: center;
     padding: 16px 20px;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid var(--border-color);
 }
 
-.history-header h2 { margin: 0; font-size: 1.25rem; }
+.history-header h2 { margin: 0; font-size: 1.25rem; color: var(--text-primary); }
 
 .close-btn {
-    background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #64748b;
+    background: none; border: none; font-size: 1.2rem; cursor: pointer; color: var(--text-muted);
 }
 
 .history-list {
@@ -2554,32 +2639,32 @@ watch(() => error.value, (newVal) => {
 .history-item {
     margin-bottom: 20px;
     padding-bottom: 15px;
-    border-bottom: 1px dashed #e2e8f0;
+    border-bottom: 1px dashed var(--border-color);
 }
 
 .history-item:last-child { border-bottom: none; }
 
 .history-meta {
     font-size: 0.85rem;
-    color: #64748b;
+    color: var(--text-muted);
     margin-bottom: 8px;
 }
 
-.history-meta strong { color: #0f172a; }
+.history-meta strong { color: var(--text-primary); }
 
 .history-summary {
     font-family: monospace;
-    background-color: #f8fafc;
+    background-color: var(--bg-tertiary);
     padding: 10px;
     border-radius: 6px;
     white-space: pre-wrap;
     font-size: 0.9rem;
-    color: #334155;
-    border: 1px solid #e2e8f0;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
 }
 
 .history-loading, .history-empty {
-    padding: 40px; text-align: center; color: #64748b;
+    padding: 40px; text-align: center; color: var(--text-muted);
 }
 
 .history-line {
@@ -2656,7 +2741,7 @@ watch(() => error.value, (newVal) => {
     list-style: none;
     padding: 0;
     margin: 16px 0 24px 0;
-    color: #cccccc;
+    color: var(--text-secondary);
 }
 
 .interaction-tips-list li {
@@ -2676,10 +2761,10 @@ watch(() => error.value, (newVal) => {
 }
 
 .dark-panel {
-    background: #1e1e1e;
+    background: var(--bg-primary);
     padding: 20px;
     border-radius: 12px;
-    border: 1px solid #3d3d3d;
+    border: 1px solid var(--border-color);
     border-left: 4px solid #3498db;
 }
 
@@ -2696,10 +2781,10 @@ watch(() => error.value, (newVal) => {
 
 .control-item {
     padding: 10px;
-    border-left: 4px solid #D0D7DE;
+    border-left: 4px solid var(--border-color);
     border-radius: 10px;
-    background: #F7FBFF;
-    color:rgb(15, 23, 42);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
 }
 
 .control-item i {
@@ -2738,33 +2823,6 @@ watch(() => error.value, (newVal) => {
     justify-content: center;
 }
 
-/* Interaction tips list reset */
-.interaction-tips-list li {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: rgb(15, 23, 42);
-    margin-bottom: 8px;
-    font-size: 0.9rem;
-}
-
-::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-}
-
-::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-    background: grey;
-    border-radius: 5px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: #4d4d4d;
-}
 
 .toolbar-info {
   font-weight: 700;
@@ -2786,20 +2844,20 @@ watch(() => error.value, (newVal) => {
 }
 
 .empty-subsystems-msg {
-    background: #f8fafc;
-    color: #64748b;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
     padding: 20px 12px;
     border-radius: 8px;
     text-align: center;
     font-size: 0.95rem;
-    border: 1px dashed #cbd5e1;
+    border: 1px dashed var(--border-color);
     margin-top: 10px;
 }
 
 /* Redesigned Management Accordion */
 .manage-subsystems-details {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     overflow: hidden;
 }
@@ -2807,19 +2865,19 @@ watch(() => error.value, (newVal) => {
 .manage-subsystems-details summary {
     cursor: pointer;
     font-size: 0.95rem;
-    color: #34495e;
+    color: var(--text-primary);
     font-weight: 600;
     list-style: none;
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 12px 16px;
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     transition: background 0.2s;
 }
 
 .manage-subsystems-details summary::-webkit-details-marker { display: none; }
-.manage-subsystems-details summary:hover { background: #f1f5f9; }
+.manage-subsystems-details summary:hover { background: var(--bg-hover); }
 
 /* Custom Checkbox List */
 .custom-checkbox-list {
@@ -2829,7 +2887,7 @@ watch(() => error.value, (newVal) => {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    border-top: 1px solid #e2e8f0;
+    border-top: 1px solid var(--border-color);
 }
 
 .custom-checkbox-item {
@@ -2843,7 +2901,7 @@ watch(() => error.value, (newVal) => {
 }
 
 .custom-checkbox-item:hover {
-    background: #f1f8fe;
+    background: var(--bg-hover);
 }
 
 .custom-checkbox-item input[type="checkbox"] {
@@ -2853,19 +2911,19 @@ watch(() => error.value, (newVal) => {
 .checkbox-box {
     width: 18px;
     height: 18px;
-    border: 2px solid #cbd5e1;
+    border: 2px solid var(--border-color);
     border-radius: 4px;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
-    background: #fff;
+    background: var(--bg-primary);
     flex-shrink: 0;
 }
 
 .custom-checkbox-item input[type="checkbox"]:checked + .checkbox-box {
-    background: #3498db;
-    border-color: #3498db;
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
 }
 
 .custom-checkbox-item input[type="checkbox"]:checked + .checkbox-box::after {
@@ -2878,21 +2936,21 @@ watch(() => error.value, (newVal) => {
 
 .checkbox-label {
     font-size: 0.9rem;
-    color: #334155;
+    color: var(--text-secondary);
     user-select: none;
     font-weight: 500;
 }
 
 .empty-list-msg {
     font-size: 13px;
-    color: #94a3b8;
+    color: var(--text-muted);
     font-style: italic;
     text-align: center;
     padding: 10px 0;
 }
 
 .relationship-item {
-    border-left: 3px solid #6b7280;
+    border-left: 3px solid var(--border-color);
     display: flex;
     align-items: center;
     gap: 6px;
@@ -2900,25 +2958,25 @@ watch(() => error.value, (newVal) => {
 }
 
 .relationship-arrow-icon {
-    color: #6b7280;
+    color: var(--text-muted);
     font-size: 11px;
 }
 
 .relationship-source-name,
 .relationship-target-name {
     font-size: 12px;
-    color: #e5e7eb;
+    color: var(--text-secondary);
     font-weight: 500;
 }
 
 .relationship-source-name.on-canvas,
 .relationship-target-name.on-canvas {
     font-weight: 700;
-    color: #ffffff;
+    color: var(--text-primary);
 }
 
 .relationship-connector {
-    color: #9ca3af;
+    color: var(--text-muted);
     font-size: 12px;
 }
 
@@ -2947,7 +3005,7 @@ watch(() => error.value, (newVal) => {
 .relationship-group-header {
     font-size: 12px;
     font-weight: 700;
-    color: #9ca3af;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     padding: 4px 8px;
@@ -2959,14 +3017,14 @@ watch(() => error.value, (newVal) => {
 
 .relationship-group-header i {
     font-size: 11px;
-    color: #6b7280;
+    color: var(--text-muted);
 }
 
 .relationship-group-count {
     margin-left: auto;
     font-size: 11px;
-    color: #6b7280;
-    background-color: #2d2d2d;
+    color: var(--text-muted);
+    background-color: var(--bg-hover);
     padding: 0 6px;
     border-radius: 8px;
     font-weight: 600;
@@ -2975,18 +3033,15 @@ watch(() => error.value, (newVal) => {
 .relationship-delay {
     font-weight: 700;
     font-size: 11px;
-    color: #f59e0b;
-    background-color: rgba(245, 158, 11, 0.15);
-    padding: 1px 4px;
-    border-radius: 3px;
-    margin-left: 2px;
+    color: var(--text-muted);
+    margin-left: 4px;
 }
 
 .empty-relationships-msg {
     padding: 12px;
     text-align: center;
     font-size: 13px;
-    color: #6b7280;
+    color: var(--text-muted);
     font-style: italic;
 }
 
@@ -2996,6 +3051,233 @@ watch(() => error.value, (newVal) => {
     align-items: center;
     gap: 8px;
     margin: 8px 0;
+}
+
+/* Settings Modal */
+.settings-modal {
+    max-width: 400px;
+}
+
+.settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.settings-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+
+.settings-body {
+    padding: 20px;
+}
+
+.setting-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.setting-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.setting-label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.setting-description {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 52px;
+    height: 26px;
+    flex-shrink: 0;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: var(--bg-hover);
+    border-radius: 26px;
+    transition: 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 6px;
+}
+
+.toggle-slider .fa-sun {
+    color: #f59e0b;
+    font-size: 12px;
+}
+
+.toggle-slider .fa-moon {
+    color: #818cf8;
+    font-size: 12px;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: var(--accent-primary);
+}
+
+.toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: #ffffff;
+    border-radius: 50%;
+    transition: 0.3s;
+    z-index: 1;
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(26px);
+}
+
+/* Responsive styles */
+@media (max-width: 1024px) {
+    .left-panel {
+        width: 240px;
+    }
+
+    .top-toolbar {
+        padding: 6px 10px;
+    }
+
+    .tool-btn {
+        padding: 5px 8px;
+        font-size: 12px;
+    }
+
+    .toolbar-center .tool-btn span,
+    .toolbar-right .btn-history span,
+    .toolbar-right .tool-btn.primary span {
+        display: none;
+    }
+
+    .diagram-title-input {
+        min-width: 100px;
+        font-size: 1.1rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .left-panel {
+        width: 200px;
+    }
+
+    .left-panel .panel-content {
+        padding: 10px;
+    }
+
+    .layers-panel {
+        width: min(280px, calc(100vw - 24px));
+        right: 8px;
+        bottom: 8px;
+    }
+
+    .layers-panel .panel-content {
+        padding: 8px;
+    }
+
+    .top-toolbar {
+        padding: 4px 8px;
+        min-height: 44px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        flex-wrap: nowrap;
+    }
+
+    .toolbar-center {
+        flex-shrink: 0;
+        gap: 4px;
+    }
+
+    .toolbar-left,
+    .toolbar-right {
+        flex-shrink: 0;
+        flex-wrap: nowrap;
+    }
+
+    .diagram-title-input {
+        min-width: 80px;
+        font-size: 1rem;
+    }
+
+    .toolbar-right .btn-history:not(:first-child) {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .left-panel {
+        width: 160px;
+    }
+
+    .left-panel.collapsed {
+        width: 36px;
+    }
+
+    .left-panel .panel-content {
+        padding: 6px;
+    }
+
+    .draggable-item {
+        padding: 6px 8px;
+        font-size: 11px;
+    }
+
+    .layers-panel {
+        width: calc(100vw - 16px);
+        right: 8px;
+        bottom: 8px;
+    }
+
+    .top-toolbar {
+        padding: 4px 6px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        flex-wrap: nowrap;
+    }
+
+    .toolbar-center {
+        flex-shrink: 0;
+        gap: 2px;
+    }
+
+    .toolbar-left,
+    .toolbar-right {
+        flex-shrink: 0;
+    }
+
+    .tool-btn {
+        padding: 4px 6px;
+        font-size: 11px;
+    }
 }
 
 </style>

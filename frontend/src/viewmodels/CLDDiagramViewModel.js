@@ -285,7 +285,7 @@ export function useCLDDiagramViewModel() {
           arrows: 'to',
           font: {
               size: 22,
-              color: "black",
+              color: '',
               align: 'middle',
               face: 'Arial',
               background: 'transparent'
@@ -295,8 +295,13 @@ export function useCLDDiagramViewModel() {
         };
 
         if (edge.has_delay) {
-            const isDarkTheme = document.querySelector('.canvas-app') !== null;
-            edgeObj.font.background = isDarkTheme ? '#1e1e1e' : '#ffffff';
+            const isDarkTheme = document.documentElement.getAttribute('data-theme') !== 'light';
+            edgeObj.font.color = '#000000';
+            edgeObj.font.background = 'transparent';
+            if (isDarkTheme) {
+                edgeObj.font.strokeWidth = 2;
+                edgeObj.font.strokeColor = '#ffffff';
+            }
         }
 
         return edgeObj;
@@ -561,8 +566,9 @@ export function useCLDDiagramViewModel() {
           ctx.fillStyle = color;
           ctx.fill();
 
+          const isLoopDarkTheme = document.documentElement.getAttribute('data-theme') !== 'light';
           ctx.font = 'bold 16px Arial';
-          ctx.fillStyle = '#FFFFFF';
+          ctx.fillStyle = isLoopDarkTheme ? '#FFFFFF' : '#000000';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(labelText, centerX, centerY);
@@ -571,8 +577,8 @@ export function useCLDDiagramViewModel() {
 
       const allEdges = network.value.body.data.edges.get();
 
-      const isDarkTheme = !!networkContainer.value.closest('.canvas-app');
-      const bgStrokeColor = isDarkTheme ? '#1e1e1e' : '#ffffff';
+      const isEdgeDarkTheme = document.documentElement.getAttribute('data-theme') !== 'light';
+      const bgStrokeColor = isEdgeDarkTheme ? '#1e1e1e' : '#ffffff';
   
       allEdges.forEach(edge => {
         const visEdge = network.value.body.edges[edge.id];
@@ -953,8 +959,6 @@ export function useCLDDiagramViewModel() {
     const isPositive = edgeData.polarity === 'positive';
     const c = isPositive ? EDGE_COLORS.positive : EDGE_COLORS.negative;
 
-    const isDarkTheme = document.querySelector('.canvas-app') !== null;
-
     const allEdges = network.value.body.data.edges.get();
     const hasReciprocal = allEdges.some(e => e.from === edgeData.target && e.to === edgeData.source);
 
@@ -972,6 +976,7 @@ export function useCLDDiagramViewModel() {
         ? { type: 'curvedCW', roundness: 0.2 }
         : { type: 'continuous', roundness: 0.2 };
 
+    const delayDarkTheme = document.documentElement.getAttribute('data-theme') !== 'light';
     const edgeObj = {
       id: edgeData.id,
       from: edgeData.source,
@@ -982,10 +987,12 @@ export function useCLDDiagramViewModel() {
       smooth: smartSmooth,
       font: {
           size: 20,
-          color: c.base,
+          color: edgeData.has_delay ? '#000000' : c.base,
           align: 'middle',
           face: 'Arial',
-          background: edgeData.has_delay ? (isDarkTheme ? '#1e1e1e' : '#ffffff') : 'transparent'
+          background: 'transparent',
+          strokeWidth: edgeData.has_delay && delayDarkTheme ? 2 : 0,
+          strokeColor: edgeData.has_delay && delayDarkTheme ? '#ffffff' : 'transparent'
       },
       width: 2,
       color: { color: c.base, highlight: c.highlight }
