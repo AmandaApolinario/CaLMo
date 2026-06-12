@@ -165,7 +165,8 @@ const {
   addEdge,
   removeEdge,
   filteredTargetVariables,
-  validateDiagram
+  validateDiagram,
+  checkEdgeConflict
 } = useCLDEditorViewModel()
 
 // Make sure date is in the proper format for date input (YYYY-MM-DD)
@@ -222,43 +223,11 @@ const cancelEdit = () => {
   router.go(-1)
 }
 
-// Add the checkForConflictingRelationship method
 const checkForConflictingRelationship = (index) => {
   const currentEdge = diagram.value.edges[index];
-  
-  // Skip if the edge is not fully defined
-  if (!currentEdge.source || !currentEdge.target || !currentEdge.polarity) {
-    return;
-  }
-  
-  // Check if there's already a relationship between these variables with a different polarity
-  for (let i = 0; i < diagram.value.edges.length; i++) {
-    if (i === index) continue; // Skip the current edge
-    
-    const otherEdge = diagram.value.edges[i];
-    
-    // Skip incomplete edges
-    if (!otherEdge.source || !otherEdge.target || !otherEdge.polarity) {
-      continue;
-    }
-    
-    // Check if exactly the same variables are connected in the same direction
-    const sameDirectionalRelationship = 
-      (currentEdge.source === otherEdge.source && currentEdge.target === otherEdge.target);
-    
-    if (sameDirectionalRelationship && currentEdge.polarity !== otherEdge.polarity) {
-      error.value = `Conflicting relationship: Cannot have both positive and negative relationships between the same variables in the same direction`;
-      
-      // Reset the last selection 
-      currentEdge.target = '';
-      
-      // Clear the error after 5 seconds
-      setTimeout(() => {
-        error.value = null;
-      }, 5000);
-      
-      break;
-    }
+  if (!currentEdge) return;
+  if (checkEdgeConflict(index)) {
+    currentEdge.target = '';
   }
 }
 </script>

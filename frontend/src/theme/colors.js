@@ -175,3 +175,11 @@ export function getArchetypeInstanceColor(type, index, total) {
   const chosen = shades[Math.max(0, Math.min(shades.length - 1, index))];
   return ensureContrastWithBackground(chosen, NODE_COLORS.regular.background, 0.30);
 }
+
+export function tint(hex, alpha = 0.16) {
+  if (!hex) return 'rgba(200, 200, 200, 0.2)';
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!m) return hex;
+  const r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}

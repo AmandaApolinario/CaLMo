@@ -205,6 +205,7 @@ import { useRoute, useRouter } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
 import { useCLDDetailViewModel } from '@/viewmodels/CLDDetailViewModel'
 import { useCLDDiagramViewModel } from '@/viewmodels/CLDDiagramViewModel'
+import { tint } from '@/theme/colors'
 
 const route = useRoute()
 const router = useRouter()
@@ -261,14 +262,6 @@ onMounted(async () => {
 })
 
 // Make a translucent version of a HEX color for light backgrounds
-const tint = (hex, alpha = 0.16) => {
-  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  if (!m) return hex; // fallback if not a HEX
-  const r = parseInt(m[1], 16);
-  const g = parseInt(m[2], 16);
-  const b = parseInt(m[3], 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-};
 </script>
 
 <style scoped>

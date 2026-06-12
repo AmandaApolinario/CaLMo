@@ -23,6 +23,7 @@ export function useCLDCanvasViewModel() {
     const undoStack = ref([]);
     const redoStack = ref([]);
     const showShareModal = ref(false);
+    const isDelayEnabled = ref(false);
     const currentShareToken = ref(null);
     const isGeneratingLink = ref(false);
     const provideStateCallback = ref(null);
@@ -1056,7 +1057,6 @@ export function useCLDCanvasViewModel() {
                 const isNeg = e.polarity === 'negative' || e.type === 'NEGATIVE';
                 uniqueEdgesMap.set(`${e.source}-${e.target}`, {
                     ...e,
-                    polarity: isNeg ? 'negative' : 'positive',
                     type: isNeg ? 'NEGATIVE' : 'POSITIVE'
                 });
             });
@@ -1085,7 +1085,8 @@ export function useCLDCanvasViewModel() {
                         nodes: nodes.value,
                         edges: edges.value,
                         feedback_loops: uniqueLoops,
-                        archetypes: uniqueArchetypes
+                        archetypes: uniqueArchetypes,
+                        subsystems: diagram.value.subsystems,
                     };
                 }
 
@@ -1209,10 +1210,50 @@ export function useCLDCanvasViewModel() {
         return variables.value.filter(variable => !deployedNodeIds.has(String(variable.id)));
     });
 
+    const findLayerDeep = (layerList, id) => {
+        for (const l of layerList) {
+            if (l.id === id) return l;
+            if (l.sublayers) {
+                const found = findLayerDeep(l.sublayers, id);
+                if (found) return found;
+            }
+        }
+        return null;
+    };
 
+    const getEdgeDelay = (edgeId) => {
+        const edge = edges.value.find(e => String(e.id) === String(edgeId));
+        return edge ? !!edge.has_delay : false;
+    };
+
+    const toggleEdgeDelay = (edgeId) => {
+        const edge = edges.value.find(e => String(e.id) === String(edgeId));
+        if (edge) {
+            edge.has_delay = !edge.has_delay;
+            diagram.value = { ...diagram.value };
+            return true;
+        }
+        return false;
+    };
+
+    const formatSubsystems = (layerList) => {
+        return layerList.map(layer => ({
+            id: layer.id,
+            name: layer.name,
+            description: layer.description || '',
+            color: layer.color,
+            variableIds: layer.variableIds || [],
+            sublayers: layer.sublayers ? formatSubsystems(layer.sublayers) : []
+        }));
+    };
 
     return {
         variables: availableVariables,
+        formatSubsystems,
+        findLayerDeep,
+        isDelayEnabled,
+        getEdgeDelay,
+        toggleEdgeDelay,
         shapes: computed(() => shapes.value),
         loading: computed(() => loading.value),
         error: computed(() => error.value),

@@ -298,6 +298,23 @@ export function useCLDEditorViewModel() {
     return null;
   };
 
+  const checkEdgeConflict = (index) => {
+    const currentEdge = diagram.value.edges[index];
+    if (!currentEdge || !currentEdge.source || !currentEdge.target || !currentEdge.polarity) return false;
+
+    for (let i = 0; i < diagram.value.edges.length; i++) {
+      if (i === index) continue;
+      const otherEdge = diagram.value.edges[i];
+      if (!otherEdge.source || !otherEdge.target || !otherEdge.polarity) continue;
+      if (currentEdge.source === otherEdge.source && currentEdge.target === otherEdge.target && currentEdge.polarity !== otherEdge.polarity) {
+        error.value = 'Conflicting relationship: Cannot have both positive and negative relationships between the same variables in the same direction';
+        setTimeout(() => { error.value = null; }, 5000);
+        return true;
+      }
+    }
+    return false;
+  };
+
   const importRelationshipsFromFile = async (file) => {
     isImporting.value = true;
     error.value = null;
@@ -389,6 +406,7 @@ export function useCLDEditorViewModel() {
     filteredTargetVariables,
     validateDiagram,
     isImporting,
-    importRelationshipsFromFile
+    importRelationshipsFromFile,
+    checkEdgeConflict
   };
 } 

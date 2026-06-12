@@ -225,7 +225,7 @@
             </div>
             <div class="layers-panel" :class="{ collapsed: !layersPanelExpanded }">
                 <div class="panel-header" @click="layersPanelExpanded = !layersPanelExpanded">
-                    <span>Subsystem</span>
+                    <span style="font-weight: bold">Subsystem</span>
                     <i :class="layersPanelExpanded ? 'fas fa-chevron-down' : 'fas fa-chevron-up'"></i>
                 </div>
 
@@ -276,7 +276,7 @@
 
                                 <div class="layer-controls" v-if="layer.id !== 'global'">
                                     <button class="add-sublayer-btn" @click.stop="openCreateSubsystemModal(layer.id)" title="Add Subsystem"><i class="fas fa-plus"></i></button>
-                                    <button class="delete-layer-btn" @click.stop="deleteLayerDeep(layers, layer.id); broadcastSubsystems(); updateVisibility();" title="Delete"><i class="fas fa-times"></i></button>
+                                    <button class="delete-layer-btn" @click.stop="deleteLayerDeep(layers, layer.id); syncSubsystems(); broadcastSubsystems(); updateVisibility();" title="Delete"><i class="fas fa-times"></i></button>
                                 </div>
                             </div>
 
@@ -659,6 +659,7 @@ import {useRouter, useRoute, onBeforeRouteLeave} from 'vue-router';
 import { useCLDCanvasViewModel } from '@/viewmodels/CLDCanvasViewModel';
 import { useCLDDiagramViewModel } from '@/viewmodels/CLDDiagramViewModel';
 import { useTheme } from '@/viewmodels/ThemeViewModel';
+import { tint } from '@/theme/colors';
 
 const router = useRouter();
 const route = useRoute();
@@ -731,6 +732,11 @@ const {
     loadingRelationships,
     fetchReusableRelationships,
     addReusableRelationship,
+    formatSubsystems,
+    findLayerDeep,
+    isDelayEnabled,
+    getEdgeDelay,
+    toggleEdgeDelay,
 } = useCLDCanvasViewModel();
 
 const {
@@ -783,7 +789,6 @@ const getCLDGroupExpanded = (cldId) => {
     }
     return cldGroupExpanded[cldId];
 };
-const isDelayEnabled = ref(false);
 const showSubsystemModal = ref(false);
 const newSubsystem = reactive({ name: '', description: '', parentId: null });
 
@@ -893,6 +898,7 @@ const addSubLayer = (layerId) => {
     layer.sublayers.push(newSublayer);
     sublayerCounter[layerId]++;
     selectLayer(newSublayer.id);
+    syncSubsystems();
     updateVisibility();
 };
 
@@ -907,6 +913,7 @@ const deleteLayer = (layerId) => {
             selectLayer('global');
         }
     }
+    syncSubsystems();
     updateVisibility();
 };
 
@@ -921,6 +928,7 @@ const deleteSubLayer = (layerId, sublayerId) => {
             selectLayer(layerId);
         }
     }
+    syncSubsystems();
     updateVisibility();
 };
 
@@ -947,7 +955,7 @@ const isNodeOnCanvas = (id) => {
 
 const dragEnd = () => {};
 
-const onDrop = (event) => {
+const onDrop = async (event) => {
     event.preventDefault();
     const jsonData = event.dataTransfer.getData('application/json');
     if (!jsonData || !network.value) return;
@@ -985,7 +993,7 @@ const onDrop = (event) => {
             [variable.id]: { x: canvasPosition.x, y: canvasPosition.y }
         });
 
-        addNodeToCLD(variable, canvasPosition.x, canvasPosition.y);
+        await addNodeToCLD(variable, canvasPosition.x, canvasPosition.y);
 
         const layer = layers.value.find(l => l.id === selectedLayerId.value);
         if (layer) {
@@ -999,6 +1007,8 @@ const onDrop = (event) => {
                 }
             }
         }
+
+        syncSubsystems();
     } catch (e) {
         console.error('Error adding node:', e);
     }
@@ -1017,15 +1027,6 @@ const saveDiagram = async () => {
     if (success) { console.log('Diagram Saved!'); }
 };
 
-const formatSubsystems = (layerList) => {
-    return layerList.map(layer => ({
-        name: layer.name,
-        description: layer.description || '',
-        variableIds: layer.variableIds || [],
-        sublayers: layer.sublayers ? formatSubsystems(layer.sublayers) : []
-    }));
-};
-
 const goBack = () => {
     router.back();
 };
@@ -1036,14 +1037,6 @@ const handleCreateVariable = async () => {
     if (success) {
         console.log('Variable created successfully');
     }
-};
-
-const tint = (hex, alpha = 0.16) => {
-    if (!hex) return 'rgba(200, 200, 200, 0.2)';
-    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    if (!m) return hex;
-    const r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
 const handleDelete = () => {
@@ -1119,9 +1112,7 @@ const isDelayActive = computed(() => {
     if (hasSelection.value && network.value) {
         const selection = network.value.getSelection();
         if (selection.edges.length > 0 && selection.nodes.length === 0) {
-            const edgeId = selection.edges[0];
-            const edge = edges.value.find(e => String(e.id) === String(edgeId));
-            return edge ? !!edge.has_delay : false;
+            return getEdgeDelay(selection.edges[0]);
         }
     }
     return isDelayEnabled.value;
@@ -1131,11 +1122,7 @@ const toggleDelay = async () => {
     if (hasSelection.value && network.value) {
         const selection = network.value.getSelection();
         if (selection.edges.length > 0 && selection.nodes.length === 0) {
-            const edgeId = selection.edges[0];
-            const edge = edges.value.find(e => String(e.id) === String(edgeId));
-            if (edge) {
-                edge.has_delay = !edge.has_delay;
-                diagram.value = { ...diagram.value };
+            if (toggleEdgeDelay(selection.edges[0])) {
                 await saveDiagram();
                 return;
             }
@@ -1145,15 +1132,11 @@ const toggleDelay = async () => {
 };
 
 
-const findLayerDeep = (layerList, id) => {
-    for (const l of layerList) {
-        if (l.id === id) return l;
-        if (l.sublayers) {
-            const found = findLayerDeep(l.sublayers, id);
-            if (found) return found;
-        }
-    }
-    return null;
+
+
+const syncSubsystems = () => {
+    const gl = layers.value.find(l => l.id === 'global');
+    diagram.value.subsystems = formatSubsystems(gl ? gl.sublayers : []);
 };
 
 const deleteLayerDeep = (layerList, id) => {
@@ -1338,6 +1321,7 @@ const confirmCreateSubsystem = () => {
         }
         layerCounter++;
     }
+    syncSubsystems();
     broadcastSubsystems();
     showSubsystemModal.value = false;
     updateVisibility();
@@ -1361,6 +1345,7 @@ const toggleVariableSubsystem = () => {
     };
 
     updateNodeInLayers(layers.value);
+    syncSubsystems();
     updateLayerCollab(layers.value.filter(l => l.id !== 'global'));
     updateVisibility();
 };
@@ -1472,6 +1457,7 @@ const onLayerDrop = (event, targetLayerId) => {
     };
 
     insertLayer(layers.value);
+    syncSubsystems();
     broadcastSubsystems();
     updateVisibility();
 };
@@ -1548,6 +1534,7 @@ watch(() => diagram.value, (newDiagram) => {
       if (network.value) {
             network.value.redraw();
         }
+      nextTick(() => updateVisibility());
     }
 }, { deep: true });
 
