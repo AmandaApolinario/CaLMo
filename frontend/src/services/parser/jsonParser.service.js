@@ -1,3 +1,5 @@
+import { findFieldKey } from './parserUtils.js';
+
 export const JSONParser = {
   parse(file, schema) {
     return new Promise((resolve, reject) => {
@@ -10,7 +12,8 @@ export const JSONParser = {
              return resolve({
                 diagram: data.diagram || { title: 'Imported CLD', description: '' },
                 nodes: data.nodes || [],
-                edges: data.edges || []
+                edges: data.edges || [],
+                subsystems: data.subsystems || []
              });
           }
 
@@ -24,7 +27,7 @@ export const JSONParser = {
             for (const field of expectedFields) {
               const config = schema.fields[field];
               // Search ignoring case
-              const itemKey = Object.keys(item).find(k => k.toLowerCase() === field.toLowerCase());
+              const itemKey = findFieldKey(item, field, config);
               let value = itemKey ? item[itemKey] : undefined;
 
               if (value !== undefined && value !== null && String(value).trim() !== '') {

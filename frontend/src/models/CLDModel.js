@@ -74,6 +74,7 @@ export class CLDModel {
       date: this.date,
       variables: this.variables,
       relationships: this.relationships,
+      subsystems: this.subsystems,
       feedback_loops: this.feedback_loops,
       archetypes: this.archetypes,
       variable_count: this.variable_count || this.variables.length

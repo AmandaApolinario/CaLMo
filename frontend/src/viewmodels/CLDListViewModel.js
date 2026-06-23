@@ -3,7 +3,60 @@ import CLDService from '@/services/cld.service';
 import {FileParserService} from "@/services/fileParser.service.js";
 import ApiService from "@/services/api.service.js";
 import {FileExportService} from "@/services/fileExport.service.js";
+import {parseBoolean} from "@/services/parser/parserUtils.js";
 import JSZip from "jszip";
+
+const normalizeName = value => String(value || '').trim().toLowerCase();
+
+const normalizePolarity = value => {
+  const polarity = String(value || '').trim().toLowerCase();
+  return ['-', '-1', 'negative'].includes(polarity) ? 'NEGATIVE' : 'POSITIVE';
+};
+
+const getEdgeDelay = edge => parseBoolean(
+  edge?.has_delay ?? edge?.delay ?? edge?.delay_mark,
+  false
+);
+
+const visitSubsystems = (subsystems, visitor) => {
+  (subsystems || []).forEach(subsystem => {
+    visitor(subsystem);
+    visitSubsystems(subsystem.subsystems || [], visitor);
+  });
+};
+
+const normalizeSubsystems = (subsystems, resolveVariableId) => (
+  (subsystems || []).flatMap(subsystem => {
+    const children = subsystem.subsystems || [];
+    if (subsystem.id === 'global') return normalizeSubsystems(children, resolveVariableId);
+
+    const variableIds = (subsystem.variableIds || subsystem.variables || [])
+      .map(reference => resolveVariableId(reference))
+      .filter(Boolean);
+
+    const normalized = {
+      name: subsystem.name || 'Unnamed',
+      description: subsystem.description || '',
+      variableIds: [...new Set(variableIds)],
+      subsystem: normalizeSubsystems(children, resolveVariableId)
+    };
+
+    if (subsystem.id) normalized.id = subsystem.id;
+    if (subsystem.color) normalized.color = subsystem.color;
+    return [normalized];
+  })
+);
+
+const formatPortableSubsystems = (subsystems, idToNameMap) => (
+  (subsystems || []).map(subsystem => ({
+    ...(subsystem.id ? { id: subsystem.id } : {}),
+    name: subsystem.name || 'Unnamed',
+    description: subsystem.description || '',
+    ...(subsystem.color ? { color: subsystem.color } : {}),
+    variableIds: (subsystem.variableIds || []).map(id => idToNameMap[id] || id),
+    subsystem: formatPortableSubsystems(subsystem.subsystem || [], idToNameMap)
+  }))
+);
 
 export function useCLDListViewModel() {
   const diagrams = ref([]);
@@ -17,7 +70,8 @@ export function useCLDListViewModel() {
     xmlSelectors: {
       diagram: 'header',
       nodes: 'aux, stock, flow',
-      edges: 'connector'
+      edges: 'connector',
+      groups: 'model > variables > group'
     },
     fields: {
       diagram: {
@@ -31,7 +85,13 @@ export function useCLDListViewModel() {
       edges: {
         source: { required: true, xmlAttr: 'from' },
         target: { required: true, xmlAttr: 'to' },
-        polarity: { required: false, default: 'positive', xmlAttr: 'polarity' }
+        polarity: { required: false, default: 'positive', xmlAttr: 'polarity' },
+        has_delay: {
+          required: false,
+          default: false,
+          xmlAttr: 'delay_mark',
+          aliases: ['delay', 'delay_mark']
+        }
       }
     }
   };
@@ -108,17 +168,59 @@ export function useCLDListViewModel() {
     try {
       const rawData = await FileParserService.parseFile(file, cldSchema);
 
+      const rawNodes = Array.isArray(rawData.nodes) ? rawData.nodes : [];
+      const rawEdges = Array.isArray(rawData.edges) ? rawData.edges : [];
+      const rawSubsystems = Array.isArray(rawData.subsystems) ? rawData.subsystems : [];
+
       let varsResponse = await ApiService.get('variables');
       let existingVarsArray = varsResponse.data || [];
-      let existingVars = new Map(existingVarsArray.map(v => [v.name.toLowerCase().trim(), v.id]));
+      let existingVars = new Map(existingVarsArray.map(v => [normalizeName(v.name), v.id]));
+      let existingVarIds = new Set(existingVarsArray.map(v => String(v.id)));
 
-      const nodeNames = new Set((rawData.nodes || []).map(n => n.name.trim()));
-      const nodesToCreate = [...nodeNames].filter(name => !existingVars.has(name.toLowerCase()));
+      const nodesByReference = new Map();
+      const variableCandidates = new Map();
+
+      const addVariableCandidate = (reference, description = '') => {
+        if (reference === undefined || reference === null) return;
+        const rawReference = typeof reference === 'object'
+          ? (reference.name ?? reference.id)
+          : reference;
+        const node = nodesByReference.get(String(rawReference));
+        const name = typeof reference === 'object'
+          ? (reference.name || node?.name)
+          : (node?.name || rawReference);
+        if (!name || existingVarIds.has(String(name))) return;
+
+        const key = normalizeName(name);
+        if (!variableCandidates.has(key)) {
+          variableCandidates.set(key, {
+            name: String(name).trim(),
+            description: description || node?.description || 'Imported via CLD'
+          });
+        }
+      };
+
+      rawNodes.forEach(node => {
+        if (!node?.name) return;
+        if (node.id !== undefined && node.id !== null) nodesByReference.set(String(node.id), node);
+        nodesByReference.set(String(node.name), node);
+      });
+
+      rawNodes.forEach(node => addVariableCandidate(node, node.description));
+      rawEdges.forEach(edge => {
+        addVariableCandidate(edge.source);
+        addVariableCandidate(edge.target);
+      });
+      visitSubsystems(rawSubsystems, subsystem => {
+        (subsystem.variableIds || subsystem.variables || []).forEach(reference => addVariableCandidate(reference));
+      });
+
+      const nodesToCreate = Array.from(variableCandidates.values())
+        .filter(node => !existingVars.has(normalizeName(node.name)));
 
       let createdVarsCount = 0;
       if (nodesToCreate.length > 0) {
-        for (const name of nodesToCreate) {
-          const nodeData = (rawData.nodes || []).find(n => n.name === name) || { name };
+        for (const nodeData of nodesToCreate) {
           try {
             await ApiService.post('variable', {
               name: nodeData.name,
@@ -126,32 +228,46 @@ export function useCLDListViewModel() {
             });
             createdVarsCount++;
           } catch (e) {
-            console.warn(`Warning: Failed to create auto-imported variable: ${name}`, e);
+            console.warn(`Warning: Failed to create auto-imported variable: ${nodeData.name}`, e);
           }
         }
 
         varsResponse = await ApiService.get('variables');
         existingVarsArray = varsResponse.data || [];
-        existingVars = new Map(existingVarsArray.map(v => [v.name.toLowerCase().trim(), v.id]));
+        existingVars = new Map(existingVarsArray.map(v => [normalizeName(v.name), v.id]));
+        existingVarIds = new Set(existingVarsArray.map(v => String(v.id)));
       }
 
+      const resolveVariableId = reference => {
+        if (reference === undefined || reference === null) return null;
+        const rawReference = typeof reference === 'object'
+          ? (reference.id ?? reference.name)
+          : reference;
+        if (existingVarIds.has(String(rawReference))) return String(rawReference);
 
-      const relationships = (rawData.edges || []).map(edge => {
-        const sId = existingVars.get(edge.source.toLowerCase().trim());
-        const tId = existingVars.get(edge.target.toLowerCase().trim());
+        const node = nodesByReference.get(String(rawReference));
+        const name = typeof reference === 'object'
+          ? (reference.name || node?.name || rawReference)
+          : (node?.name || rawReference);
+        return existingVars.get(normalizeName(name)) || null;
+      };
+
+      const relationships = rawEdges.map(edge => {
+        const sId = resolveVariableId(edge.source);
+        const tId = resolveVariableId(edge.target);
         if (!sId || !tId) return null;
 
-        let pol = String(edge.polarity).toLowerCase();
-        if (['+', '1', 'positive', 'reinforcing'].includes(pol)) pol = 'POSITIVE';
-        else if (['-', '-1', 'negative', 'balancing'].includes(pol)) pol = 'NEGATIVE';
-        else pol = 'POSITIVE';
-
-        return { source_id: sId, target_id: tId, type: pol };
+        return {
+          source_id: sId,
+          target_id: tId,
+          type: normalizePolarity(edge.polarity ?? edge.type),
+          has_delay: getEdgeDelay(edge)
+        };
       }).filter(Boolean);
 
       const variableIds = new Set();
-      (rawData.nodes || []).forEach(n => {
-        const id = existingVars.get(n.name.toLowerCase().trim());
+      rawNodes.forEach(node => {
+        const id = resolveVariableId(node);
         if (id) variableIds.add(id);
       });
       relationships.forEach(r => {
@@ -159,12 +275,18 @@ export function useCLDListViewModel() {
         variableIds.add(r.target_id);
       });
 
+      const subsystems = normalizeSubsystems(rawSubsystems, resolveVariableId);
+      visitSubsystems(subsystems, subsystem => {
+        subsystem.variableIds.forEach(id => variableIds.add(id));
+      });
+
       const cldPayload = {
         name: rawData.diagram?.title || file.name.replace(/\.[^/.]+$/, ""),
         description: rawData.diagram?.description || "Diagram imported directly from file.",
         date: new Date().toISOString().split('T')[0],
         variables: Array.from(variableIds),
-        relationships: relationships
+        relationships,
+        subsystems
       };
 
       await CLDService.createCLD(cldPayload);
@@ -221,9 +343,12 @@ export function useCLDListViewModel() {
             return {
                 source: sourceName,
                 target: targetName,
-                polarity: cleanPol
+                polarity: cleanPol,
+                has_delay: getEdgeDelay(e)
             };
         });
+
+        const formattedSubsystems = formatPortableSubsystems(fullDiagram.subsystems || [], idToNameMap);
 
         const exportData = {
             diagram: {
@@ -231,7 +356,8 @@ export function useCLDListViewModel() {
                 description: fullDiagram.description || ''
             },
             nodes: formattedNodes,
-            edges: formattedEdges
+            edges: formattedEdges,
+            subsystems: formattedSubsystems
         };
         let fileContent = '';
         if (format === 'json'){
@@ -342,8 +468,15 @@ export function useCLDListViewModel() {
                 const pol = String(e.polarity || e.type || 'positive').toLowerCase();
                 const cleanPol = (pol === '+' || pol === 'positive' || pol === '1') ? 'positive' : 'negative';
 
-                return { source: sourceName, target: targetName, polarity: cleanPol };
+                return {
+                    source: sourceName,
+                    target: targetName,
+                    polarity: cleanPol,
+                    has_delay: getEdgeDelay(e)
+                };
             });
+
+            const formattedSubsystems = formatPortableSubsystems(fullDiagram.subsystems || [], idToNameMap);
 
             const exportData = {
                 diagram: {
@@ -351,7 +484,8 @@ export function useCLDListViewModel() {
                     description: fullDiagram.description || ''
                 },
                 nodes: formattedNodes,
-                edges: formattedEdges
+                edges: formattedEdges,
+                subsystems: formattedSubsystems
             };
 
             let fileContent = '';

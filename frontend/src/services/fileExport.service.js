@@ -26,6 +26,7 @@ export const FileExportService = {
     const description = cldData.diagram?.description || cldData.description || '';
     const nodes = cldData.nodes || [];
     const edges = cldData.edges || [];
+    const subsystems = cldData.subsystems || [];
 
     const escapeXml = (str) => {
       if (!str) return '';
@@ -50,6 +51,24 @@ export const FileExportService = {
       if (node.description) xml += `                <doc>${escapeXml(node.description)}</doc>\n`;
       xml += `            </aux>\n`;
     });
+
+    const appendSubsystem = (subsystem) => {
+      xml += `            <group name="${escapeXml(subsystem.name || 'Unnamed')}">\n`;
+      if (subsystem.description) {
+        xml += `                <doc>${escapeXml(subsystem.description)}</doc>\n`;
+      }
+      (subsystem.variableIds || []).forEach(variableName => {
+        xml += `                <entity name="${escapeXml(variableName)}" />\n`;
+      });
+      (subsystem.sublayers || []).forEach(child => {
+        xml += `                <entity name="${escapeXml(child.name || 'Unnamed')}" />\n`;
+      });
+      xml += `            </group>\n`;
+
+      (subsystem.sublayers || []).forEach(child => appendSubsystem(child));
+    };
+
+    subsystems.forEach(subsystem => appendSubsystem(subsystem));
     xml += `        </variables>\n`;
 
     xml += `        <views>\n`;
@@ -68,8 +87,9 @@ export const FileExportService = {
       const from = escapeXml(sourceName);
       const to = escapeXml(targetName);
       const pol = (edge.polarity === 'NEGATIVE' || edge.polarity === 'negative' || edge.polarity === '-') ? '-' : '+';
+      const delayMark = edge.has_delay ? ' delay_mark="true"' : '';
 
-      xml += `                <connector uid="${index + 1}" polarity="${pol}">\n`;
+      xml += `                <connector uid="${index + 1}" polarity="${pol}"${delayMark}>\n`;
       xml += `                    <from>${from}</from>\n`;
       xml += `                    <to>${to}</to>\n`;
       xml += `                </connector>\n`;

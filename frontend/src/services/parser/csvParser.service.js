@@ -1,4 +1,5 @@
 import Papa from 'papaparse';
+import { findFieldKey } from './parserUtils.js';
 
 export const CSVParser = {
   parse(file, schema) {
@@ -11,20 +12,20 @@ export const CSVParser = {
              return reject(new Error('Failed to parse CSV file.'));
           }
 
-          const expectedFields = Object.keys(schema.fields);
+          const fields = schema.xmlSelectors ? schema.fields.edges : schema.fields;
+          const expectedFields = Object.keys(fields);
 
           const parsedData = results.data.map(row => {
-            const rowKeys = Object.keys(row);
             const resultObj = {};
             let isValid = true;
 
             for (const field of expectedFields) {
-              const config = schema.fields[field];
-              const matchingCol = rowKeys.find(k => k.toLowerCase().trim() === field.toLowerCase());
+              const config = fields[field];
+              const matchingCol = findFieldKey(row, field, config);
               let value = matchingCol ? row[matchingCol] : undefined;
 
-              if (value !== undefined && value.trim() !== '') {
-                resultObj[field] = value.trim();
+              if (value !== undefined && value !== null && String(value).trim() !== '') {
+                resultObj[field] = typeof value === 'string' ? value.trim() : value;
               } else if (config.required) {
                 isValid = false;
                 break;
@@ -35,6 +36,21 @@ export const CSVParser = {
 
             return isValid ? resultObj : null;
           }).filter(Boolean);
+
+          if (schema.xmlSelectors) {
+            const nodeNames = new Set();
+            parsedData.forEach(edge => {
+              if (edge.source) nodeNames.add(edge.source);
+              if (edge.target) nodeNames.add(edge.target);
+            });
+
+            return resolve({
+              diagram: {},
+              nodes: Array.from(nodeNames, name => ({ name, description: '' })),
+              edges: parsedData,
+              subsystems: []
+            });
+          }
 
           resolve(parsedData);
         },

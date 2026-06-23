@@ -2,6 +2,7 @@ import { ref, reactive, computed } from 'vue';
 import CLDService from '@/services/cld.service';
 import ApiService from '@/services/api.service';
 import {FileParserService} from "@/services/fileParser.service.js";
+import {parseBoolean} from "@/services/parser/parserUtils.js";
 
 export function useCLDEditorViewModel() {
   // Initialize with default empty structure to avoid null references
@@ -24,7 +25,13 @@ export function useCLDEditorViewModel() {
     fields: {
       source: { required: true, xmlAttr: 'from' },
       target: { required: true, xmlAttr: 'to' },
-      polarity: { required: false, default: 'positive', xmlAttr: 'polarity' }
+      polarity: { required: false, default: 'positive', xmlAttr: 'polarity' },
+      has_delay: {
+        required: false,
+        default: false,
+        xmlAttr: 'delay_mark',
+        aliases: ['delay', 'delay_mark']
+      }
     }
   };
 
@@ -366,7 +373,11 @@ export function useCLDEditorViewModel() {
             diagram.value.edges.push({
                source: sourceId,
                target: targetId,
-               polarity: pol
+               polarity: pol,
+               has_delay: parseBoolean(
+                 edge.has_delay ?? edge.delay ?? edge.delay_mark,
+                 false
+               )
             });
             addedEdgesCount++;
          }
