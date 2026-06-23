@@ -426,6 +426,9 @@ export function useCLDDiagramViewModel() {
       }
     });
 
+    // Subsystem boundaries are an overlay derived from the current graph positions.
+    // A parent includes visible descendants only while expanded, and depth-dependent
+    // padding keeps nested subsystem boxes visually distinguishable.
     network.value.on('beforeDrawing', (ctx) => {
         if (!showSubsystemBorders.value) return;
         if (diagramLayers.value && diagramLayers.value.length > 0) {
@@ -500,6 +503,9 @@ export function useCLDDiagramViewModel() {
         }
     });
 
+    // Loop badges are rendered after the network so they remain above nodes and edges.
+    // Their anchor is the centroid of the loop members; the small vertical offset keeps
+    // larger loops from placing the badge directly on a central node.
     network.value.on('afterDrawing', (ctx) => {
 
       diagram.feedback_loops.forEach((loop, index) => {

@@ -465,6 +465,9 @@ export function useCLDCanvasViewModel() {
         await updateLoopsAndArchetypes();
     };
 
+    // Structural events may be observed through both the immediate Socket.IO broadcast
+    // and the Kafka-backed replay. Keep every case idempotent and discard the local
+    // client's echo so the reactive graph is not mutated twice.
     const handleKafkaEvent = async (event) => {
         const { action, data, clientId: eventClientId } = event;
         console.log(`Received Kafka event: ${action} from client ${eventClientId}`, data);
@@ -569,6 +572,9 @@ export function useCLDCanvasViewModel() {
         }
     };
 
+    // A newly joined client receives a full snapshot from an existing participant;
+    // subsequent structural edits use diagram events, while node movement stays on
+    // the low-latency WebSocket channel and is intentionally not added to history.
     const initCollabMode = (diagramId, userId) => {
         webSocketService.connect(userId);
         webSocketService.joinDiagram(diagramId);
@@ -625,6 +631,9 @@ export function useCLDCanvasViewModel() {
       return clientId;
     };
 
+    // Undo applies the inverse command locally, mirrors it to the visual adapter, and
+    // publishes the same inverse command so collaborators converge on the same graph.
+    // The original command is retained on redoStack for a future redo implementation.
     const performUndo = async () => {
       if (undoStack.value.length === 0) return;
 

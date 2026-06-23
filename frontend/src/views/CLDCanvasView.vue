@@ -1284,6 +1284,9 @@ watch(() => diagram.value?.subsystems, (newSubsystems) => {
     if (newSubsystems) {
         let colorCounter = 0;
 
+        // Persisted/collaborative subsystem data intentionally excludes UI-only state.
+        // Rebuild the canonical tree while preserving local colors, visibility, and
+        // expansion flags so a remote update does not collapse or recolor the panel.
         const mergeUIState = (incomingList, currentList) => {
             return incomingList.map(incomingLayer => {
                 const existingLayer = findLayerDeep(currentList, incomingLayer.id);
