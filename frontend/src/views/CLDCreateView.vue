@@ -225,12 +225,12 @@ const handleSubmit = async () => {
   
   // Create the diagram
   try {
-    const newDiagram = await createDiagram(diagram.value, isCanvasRedirect.value)
+    const newDiagram = await createDiagram(diagram.value)
     if (newDiagram) {
       // Redirect to the diagram list after successful creation
       setTimeout(() => {
         if (isCanvasRedirect.value) {
-          router.push(`/cld/${newDiagram}/canvas`)
+          router.push(`/cld/${newDiagram.id}/canvas`)
         } else {
           router.push('/clds')
         }

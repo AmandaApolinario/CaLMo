@@ -106,7 +106,7 @@ class CLD(db.Model):
     share_token = Column(String(100), unique=True, nullable=True)
     user = relationship("User", back_populates="clds")
     variables = relationship('Variable', secondary=cld_variables)
-    relationships = relationship('Relationship', back_populates='cld', cascade='all, delete-orphan', passive_deletes=True,)
+    relationships = relationship('Relationship', back_populates='cld', cascade='all, delete-orphan')
     feedback_loops = relationship(
         'FeedbackLoop',
         back_populates='cld',
@@ -169,9 +169,10 @@ class Subsystem(db.Model):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String, nullable=False)
     description = Column(Text)
+    color = Column(String, nullable=True)
 
     cld_id = Column(String, ForeignKey('clds.id', ondelete='CASCADE'), nullable=False)
-    cld = relationship('CLD', backref=db.backref('subsystems_list', cascade='all, delete-orphan'))
+    cld = relationship('CLD', back_populates='subsystems')
 
     parent_id = Column(String, ForeignKey('subsystems.id', ondelete='CASCADE'), nullable=True)
     sublayers = relationship("Subsystem", backref=db.backref('parent', remote_side=[id]), cascade="all, delete-orphan")

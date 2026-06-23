@@ -27,7 +27,7 @@ export function useCLDEditorViewModel() {
       polarity: { required: false, default: 'positive', xmlAttr: 'polarity' }
     }
   };
-  
+
   // Initialize empty diagram structure
   const createEmptyDiagram = () => {
     return {
@@ -124,7 +124,7 @@ export function useCLDEditorViewModel() {
   };
   
   // Save a new diagram
-  const createDiagram = async (diagramData, isCanvasRedirect = false) => {
+  const createDiagram = async (diagramData) => {
     if (!diagramData) {
       error.value = 'No diagram data to save';
       return null;
@@ -143,14 +143,14 @@ export function useCLDEditorViewModel() {
       });
       
       // Format relationships in the way the backend expects them
-      const relationships = (diagramData.edges || []).map(edge => {
-        return {
+      const relationships = (diagramData.edges || [])
+        .filter(edge => edge.source !== "" && edge.target !== "")
+        .map(edge => ({
           source_id: edge.source,
           target_id: edge.target,
           type: edge.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE',
           has_delay: edge.has_delay,
-        };
-      });
+        }));
 
       // Transform data for API - using the exact field names required by the backend
       const apiData = {
@@ -160,13 +160,6 @@ export function useCLDEditorViewModel() {
         variables: Array.from(variableIds),
         relationships: relationships
       };
-      
-      console.log('Creating diagram with API data:', apiData);
-      if(isCanvasRedirect){
-        const newDiagram = await CLDService.createEmptyCLD(apiData);
-        successMessage.value = 'Diagram created successfully!';
-        return newDiagram;
-      }
 
       const newDiagram = await CLDService.createCLD(apiData);
       successMessage.value = 'Diagram created successfully!';

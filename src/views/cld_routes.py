@@ -29,7 +29,7 @@ def create_cld(user_id):
     data = request.get_json()
     
     # Validate required fields
-    required_fields = ['name', 'date', 'description', 'variables', 'relationships']
+    required_fields = ['name', 'date', 'description']
     if not all(field in data for field in required_fields):
         return jsonify({
             'message': 'Missing required fields. Need: name, date, description, variables, and relationships'
@@ -41,8 +41,9 @@ def create_cld(user_id):
         data['name'],
         data['date'],
         data['description'],
-        data['variables'],
-        data['relationships'],
+        data.get('variables', []),
+        data.get('relationships', []),
+        data.get('subsystems', []),
     )
     
     if not result:
@@ -359,24 +360,3 @@ def get_reusable_relationships(user_id):
         'relationships': relationships,
         'message': message
     }), 200
-
-
-@cld_routes.route('/cld/create-empty', methods=['POST'])
-@token_required
-def create_empty_diagram(user_id):
-    data = request.json
-    view_model = CLDViewModel(db.session)
-    result, message = view_model.createEmptyCLD(
-        user_id,
-        data['name'],
-        data['date'],
-        data['description']
-    )
-
-    if not result:
-        return jsonify({'message': message}), 400
-
-    return jsonify({
-        'message': 'CLD created successfully',
-        'cld_id': result
-    }), 201

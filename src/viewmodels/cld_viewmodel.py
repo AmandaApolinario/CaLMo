@@ -14,7 +14,16 @@ class CLDViewModel:
         self.cld_history_repo = CLDHistoryRepository()
         self.analyzer = CLDAnalyzer
     
-    def create_cld(self, user_id, name, date_str, description, variable_ids, relationships_data):
+    def create_cld(
+        self,
+        user_id,
+        name,
+        date_str,
+        description,
+        variable_ids,
+        relationships_data,
+        subsystems_data=None,
+    ):
         """Create a new Causal Loop Diagram"""
         # Validate date format
         try:
@@ -67,8 +76,14 @@ class CLDViewModel:
                     source_id=rel['source_id'],
                     target_id=rel['target_id'],
                     rel_type=RelationshipType[rel['type'].upper()],
-                    has_delay=rel['has_delay']
+                    has_delay=rel.get('has_delay', False)
                 )
+
+            for sub_data in subsystems_data or []:
+                self.insert_subsystem(sub_data, cld_id=cld.id)
+
+            self.db_session.commit()
+            self.db_session.refresh(cld)
             
             # Format CLD for response
             cld_data = self._format_cld(cld)
@@ -254,6 +269,7 @@ class CLDViewModel:
                 
             return True, "CLD deleted successfully"
         except Exception as e:
+            self.db_session.rollback()
             return False, f"Error deleting CLD: {str(e)}"
     
     def identify_feedback_loops(self, cld_id):

@@ -40,11 +40,11 @@ class CLDService {
       console.log('CLD Service - Create response:', response.data);
       
       // Generate feedback loops and archetypes for the new CLD
-      if (response.data && response.data.id) {
-        await this.generateLoopsAndArchetypes(response.data.id);
+      if (response.data && response.data.cld.id) {
+        await this.generateLoopsAndArchetypes(response.data.cld.id);
       }
       
-      return CLDModel.fromJSON(response.data);
+      return CLDModel.fromJSON(response.data.cld);
     } catch (error) {
       console.error('Error creating CLD:', error);
       console.error('Error response:', error.response?.data);
