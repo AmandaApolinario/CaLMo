@@ -1,4 +1,5 @@
 import Papa from 'papaparse';
+import { parseBoolean } from './parser/parserUtils.js';
 
 export const FileExportService = {
   downloadFile(content, filename, contentType) {
@@ -87,7 +88,8 @@ export const FileExportService = {
       const from = escapeXml(sourceName);
       const to = escapeXml(targetName);
       const pol = (edge.polarity === 'NEGATIVE' || edge.polarity === 'negative' || edge.polarity === '-') ? '-' : '+';
-      const delayMark = edge.has_delay ? ' delay_mark="true"' : '';
+      const hasDelay = parseBoolean(edge.has_delay ?? edge.delay ?? edge.delay_mark, false);
+      const delayMark = hasDelay ? ' delay_mark="true"' : '';
 
       xml += `                <connector uid="${index + 1}" polarity="${pol}"${delayMark}>\n`;
       xml += `                    <from>${from}</from>\n`;

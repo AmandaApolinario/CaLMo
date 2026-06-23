@@ -42,7 +42,6 @@ const normalizeSubsystems = (subsystems, resolveVariableId) => (
     };
 
     if (subsystem.id) normalized.id = subsystem.id;
-    if (subsystem.color) normalized.color = subsystem.color;
     return [normalized];
   })
 );
@@ -52,7 +51,6 @@ const formatPortableSubsystems = (subsystems, idToNameMap) => (
     ...(subsystem.id ? { id: subsystem.id } : {}),
     name: subsystem.name || 'Unnamed',
     description: subsystem.description || '',
-    ...(subsystem.color ? { color: subsystem.color } : {}),
     variableIds: (subsystem.variableIds || []).map(id => idToNameMap[id] || id),
     subsystem: formatPortableSubsystems(subsystem.subsystem || [], idToNameMap)
   }))

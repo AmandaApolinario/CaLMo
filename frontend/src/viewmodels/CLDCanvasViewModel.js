@@ -1083,13 +1083,12 @@ export function useCLDCanvasViewModel() {
         return false;
     };
 
-    // Moved from CLDCanvasView.vue — converts nested layer objects into the subsystems format expected by the API, preserving id and color
+    // Converts nested layer objects into the persisted subsystem format.
     const formatSubsystems = (layerList) => {
         return layerList.map(layer => ({
             id: layer.id,
             name: layer.name,
             description: layer.description || '',
-            color: layer.color,
             variableIds: layer.variableIds || [],
             sublayers: layer.sublayers ? formatSubsystems(layer.sublayers) : []
         }));
