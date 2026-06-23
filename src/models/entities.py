@@ -169,8 +169,6 @@ class Subsystem(db.Model):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String, nullable=False)
     description = Column(Text)
-    color = Column(String, nullable=True)
-
     cld_id = Column(String, ForeignKey('clds.id', ondelete='CASCADE'), nullable=False)
     cld = relationship('CLD', back_populates='subsystems')
 
