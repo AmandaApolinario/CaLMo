@@ -59,8 +59,6 @@ def handle_diagram_event(payload):
     data = payload.get('data')
 
     if diagram_id:
-        emit('diagram_event', payload, room=diagram_id, include_self=False)
-
         kafka_producer.publish_event(
             diagram_id=diagram_id,
             user_id=data.get('clientId', 'unknown'),

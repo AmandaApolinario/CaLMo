@@ -106,30 +106,35 @@ class CLDService {
   }
   
   // Generate feedback loops and archetypes for a CLD
-  async generateLoopsAndArchetypes(cldId) {
+  async generateLoopsAndArchetypes(cldId, shareToken = null) {
     if (!cldId) {
       console.error('Cannot generate loops and archetypes: No CLD ID provided');
       return;
     }
     
     try {
+      const payload = shareToken ? { share_token: shareToken } : undefined;
       console.log('Regenerating feedback loops for CLD:', cldId);
       // The POST request will replace existing data, not add to it
-      const loopsResponse = await ApiService.post(`cld/${cldId}/feedback-loops`);
+      const loopsResponse = await ApiService.post(`cld/${cldId}/feedback-loops`, payload);
       console.log('Feedback loops regenerated:', loopsResponse.data);
       
       console.log('Regenerating archetypes for CLD:', cldId);
       // The POST request will replace existing data, not add to it
-      const archetypesResponse = await ApiService.post(`cld/${cldId}/archetypes`);
+      const archetypesResponse = await ApiService.post(`cld/${cldId}/archetypes`, payload);
       console.log('Archetypes regenerated:', archetypesResponse.data);
       
       // Return the CLD with updated loops and archetypes
-      return await this.getCLDById(cldId);
+      return shareToken
+        ? await this.getSharedCLD(shareToken)
+        : await this.getCLDById(cldId);
     } catch (error) {
       console.error('Error generating loops and archetypes:', error);
       // Don't throw the error - we still want the creation/update to succeed
       // Just log it and return the original CLD
-      return await this.getCLDById(cldId);
+      return shareToken
+        ? await this.getSharedCLD(shareToken)
+        : await this.getCLDById(cldId);
     }
   }
 
@@ -216,4 +221,4 @@ class CLDService {
   }
 }
 
-export default new CLDService(); 
+export default new CLDService();

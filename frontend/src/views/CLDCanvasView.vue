@@ -257,7 +257,7 @@
                                  :style="{ marginLeft: (depth * 15) + 'px', borderLeft: layer.id !== 'global' ? `4px solid ${layer.color}` : 'none' }">
 
                                 <div class="layer-content" @click="selectLayer(layer.id)">
-                                    <button class="expand-btn" @click.stop="toggleLayerExpanded(layer.id)" v-if="layer.sublayers && layer.sublayers.length > 0">
+                                    <button class="expand-btn" @click.stop="toggleLayerExpanded(layer.id)" v-if="layer.subsystems && layer.subsystems.length > 0">
                                         <i :class="layer.expanded ? 'fas fa-caret-down' : 'fas fa-caret-right'"></i>
                                     </button>
                                     <div v-else class="expand-placeholder"></div>
@@ -825,7 +825,7 @@ const layers = ref([
         name: 'Global',
         visible: true,
         expanded: false,
-        sublayers: [],
+        subsystems: [],
         variableIds: []
     }
 ]);
@@ -838,7 +838,7 @@ diagramLayers.value = layers.value;
 
 const broadcastSubsystems = () => {
     const globalLayer = layers.value.find(l => l.id === 'global');
-    const cleanLayers = JSON.parse(JSON.stringify(globalLayer && globalLayer.sublayers ? globalLayer.sublayers : []));
+    const cleanLayers = JSON.parse(JSON.stringify(globalLayer && globalLayer.subsystems ? globalLayer.subsystems : []));
     updateLayerCollab(cleanLayers);
 };
 
@@ -919,7 +919,7 @@ const onDrop = async (event) => {
             layer.variableIds.push(variable.id);
         } else {
             for (const mainLayer of layers.value) {
-                const sublayer = mainLayer.sublayers?.find(s => s.id === selectedLayerId.value);
+                const sublayer = mainLayer.subsystems?.find(s => s.id === selectedLayerId.value);
                 if (sublayer) {
                     sublayer.variableIds.push(variable.id);
                     break;
@@ -939,7 +939,7 @@ const saveDiagram = async () => {
     saveNodePositions(diagram.value.id, positions);
 
     const globalLayer = layers.value.find(l => l.id === 'global');
-    const rawSubsystems = globalLayer ? globalLayer.sublayers : [];
+    const rawSubsystems = globalLayer ? globalLayer.subsystems : [];
     diagram.value.subsystems = formatSubsystems(rawSubsystems);
 
     const success = await persistDiagram(nodes.value, edges.value);
@@ -1058,7 +1058,7 @@ const toggleDelay = async () => {
 // Syncs layers.value into diagram.value.subsystems so the subsystems watcher never overwrites with stale data
 const syncSubsystems = () => {
     const gl = layers.value.find(l => l.id === 'global');
-    diagram.value.subsystems = formatSubsystems(gl ? gl.sublayers : []);
+    diagram.value.subsystems = formatSubsystems(gl ? gl.subsystems : []);
 };
 
 const deleteLayerDeep = (layerList, id) => {
@@ -1067,8 +1067,8 @@ const deleteLayerDeep = (layerList, id) => {
             layerList.splice(i, 1);
             return true;
         }
-        if (layerList[i].sublayers) {
-            if (deleteLayerDeep(layerList[i].sublayers, id)) return true;
+        if (layerList[i].subsystems) {
+            if (deleteLayerDeep(layerList[i].subsystems, id)) return true;
         }
     }
     return false;
@@ -1087,8 +1087,8 @@ const flattenedLayers = computed(() => {
         layerList.forEach(l => {
             const _trackVis = l.visible;
             result.push({ layer: l, depth });
-            if (l.expanded && l.sublayers && l.sublayers.length > 0) {
-                flatten(l.sublayers, depth + 1);
+            if (l.expanded && l.subsystems && l.subsystems.length > 0) {
+                flatten(l.subsystems, depth + 1);
             }
         });
     };
@@ -1104,9 +1104,9 @@ const availableSubsystems = computed(() => {
             if (l.id !== 'global') {
                 list.push({ id: l.id, name: `${prefix}${l.name}` });
             }
-            if (l.sublayers) {
+            if (l.subsystems) {
                 const newPrefix = l.id === 'global' ? '' : prefix + '↳ ';
-                traverse(l.sublayers, newPrefix);
+                traverse(l.subsystems, newPrefix);
             }
         });
     };
@@ -1128,7 +1128,7 @@ const activeNodeSubsystems = computed(() => {
                     if (l.id !== 'global') path = [...currentPath, l.name];
                     return true;
                 }
-                if (l.sublayers && search(l.sublayers, l.id !== 'global' ? [...currentPath, l.name] : currentPath)) {
+                if (l.subsystems && search(l.subsystems, l.id !== 'global' ? [...currentPath, l.name] : currentPath)) {
                     return true;
                 }
             }
@@ -1178,7 +1178,7 @@ const toggleLayerVisibility = (layerId) => {
 
     const toggleRecursively = (l, state) => {
         l.visible = state;
-        if (l.sublayers) l.sublayers.forEach(sub => toggleRecursively(sub, state));
+        if (l.subsystems) l.subsystems.forEach(sub => toggleRecursively(sub, state));
     };
 
     toggleRecursively(layer, newState);
@@ -1196,9 +1196,9 @@ const confirmCreateSubsystem = () => {
             const randomColor = availableColors[Math.floor(Math.random() * availableColors.length)];
 
             if (!sublayerCounter[parent.id]) sublayerCounter[parent.id] = 1;
-            if (!parent.sublayers) parent.sublayers = [];
+            if (!parent.subsystems) parent.subsystems = [];
 
-            parent.sublayers.push({
+            parent.subsystems.push({
                 id: `${parent.id}-sub-${Date.now()}`,
                 name: newSubsystem.name,
                 description: newSubsystem.description,
@@ -1206,7 +1206,7 @@ const confirmCreateSubsystem = () => {
                 visible: true,
                 expanded: true,
                 variableIds: [],
-                sublayers: []
+                subsystems: []
             });
             parent.expanded = true;
         }
@@ -1214,8 +1214,8 @@ const confirmCreateSubsystem = () => {
         const color = SUBSYSTEM_COLORS[layerCounter % SUBSYSTEM_COLORS.length];
         const globalLayer = layers.value.find(l => l.id === 'global');
         if (globalLayer) {
-            if (!globalLayer.sublayers) globalLayer.sublayers = [];
-            globalLayer.sublayers.push({
+            if (!globalLayer.subsystems) globalLayer.subsystems = [];
+            globalLayer.subsystems.push({
                 id: `subsystem-${Date.now()}`,
                 name: newSubsystem.name,
                 description: newSubsystem.description,
@@ -1223,7 +1223,7 @@ const confirmCreateSubsystem = () => {
                 visible: true,
                 expanded: false,
                 variableIds: [],
-                sublayers: []
+                subsystems: []
             });
             globalLayer.expanded = true;
         }
@@ -1248,7 +1248,7 @@ const toggleVariableSubsystem = () => {
                 if (shouldBeInLayer && !isInLayer) l.variableIds.push(nodeId);
                 if (!shouldBeInLayer && isInLayer) l.variableIds = l.variableIds.filter(id => id !== nodeId);
             }
-            if (l.sublayers) updateNodeInLayers(l.sublayers);
+            if (l.subsystems) updateNodeInLayers(l.subsystems);
         });
     };
 
@@ -1302,16 +1302,16 @@ watch(() => diagram.value?.subsystems, (newSubsystems) => {
                     color: assignedColor,
                     visible: existingLayer ? existingLayer.visible : true,
                     expanded: existingLayer ? existingLayer.expanded : false,
-                    sublayers: incomingLayer.sublayers ? mergeUIState(incomingLayer.sublayers, currentList) : []
+                    subsystems: incomingLayer.subsystems ? mergeUIState(incomingLayer.subsystems, currentList) : []
                 };
             });
         };
 
         const existingGlobal = layers.value.find(l => l.id === 'global') || {
-            id: 'global', name: 'Global', visible: true, expanded: true, sublayers: [], variableIds: []
+            id: 'global', name: 'Global', visible: true, expanded: true, subsystems: [], variableIds: []
         };
 
-        existingGlobal.sublayers = mergeUIState(newSubsystems, layers.value);
+        existingGlobal.subsystems = mergeUIState(newSubsystems, layers.value);
 
         layers.value = [existingGlobal];
         diagramLayers.value = layers.value;

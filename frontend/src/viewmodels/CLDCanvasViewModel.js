@@ -3,6 +3,10 @@ import ApiService from '@/services/api.service';
 import CLDService from '@/services/cld.service';
 import { webSocketService } from '@/services/websocket.service';
 import {publishDiagramEvent} from "@/services/kafkaEvent.service.js";
+import {
+    checkpointAfterSuccessful,
+    getDiagramEventClientId,
+} from '@/services/canvasState.utils.js';
 
 export function useCLDCanvasViewModel() {
     const variables = ref([]);
@@ -332,12 +336,16 @@ export function useCLDCanvasViewModel() {
             }
 
 
-            await CLDService.updateCLD(diagram.value.id, payload);
-            if (shareToken){
-                await fetchSharedDiagram(shareToken);
-                return true;
-            }
-            await fetchDiagram(diagram.value.id);
+            await checkpointAfterSuccessful(async () => {
+                await CLDService.updateCLD(diagram.value.id, payload);
+                if (shareToken) {
+                    await fetchSharedDiagram(shareToken);
+                } else {
+                    await fetchDiagram(diagram.value.id);
+                }
+            }, () => {
+                lastSaveStackSize.value = undoStack.value.length;
+            });
             return true;
 
         } catch (err) {
@@ -346,7 +354,6 @@ export function useCLDCanvasViewModel() {
             return false;
         } finally {
             isLoadingDiagram.value = false;
-            lastSaveStackSize.value = undoStack.value.length;
         }
     };
 
@@ -465,11 +472,11 @@ export function useCLDCanvasViewModel() {
         await updateLoopsAndArchetypes();
     };
 
-    // Structural events may be observed through both the immediate Socket.IO broadcast
-    // and the Kafka-backed replay. Keep every case idempotent and discard the local
-    // client's echo so the reactive graph is not mutated twice.
+    // Structural events return through Kafka with their source client in the envelope.
+    // Discard the local replay so the initiating client does not apply its own edit twice.
     const handleKafkaEvent = async (event) => {
-        const { action, data, clientId: eventClientId } = event;
+        const { action, data } = event;
+        const eventClientId = getDiagramEventClientId(event);
         console.log(`Received Kafka event: ${action} from client ${eventClientId}`, data);
 
         if (eventClientId && eventClientId === clientId.value) return;
@@ -628,7 +635,7 @@ export function useCLDCanvasViewModel() {
     };
 
     const getClientId = () => {
-      return clientId;
+      return clientId.value;
     };
 
     // Undo applies the inverse command locally, mirrors it to the visual adapter, and
@@ -774,11 +781,12 @@ export function useCLDCanvasViewModel() {
     const fetchSharedDiagram = async (token) => {
         isLoadingDiagram.value = true;
         error.value = null;
+        currentShareToken.value = token;
 
         try {
             const diagramData = await CLDService.getSharedCLD(token);
             try {
-                const updatedDiagram = await CLDService.generateLoopsAndArchetypes(diagramData.id);
+                const updatedDiagram = await CLDService.generateLoopsAndArchetypes(diagramData.id, token);
                 if (updatedDiagram) {
                     diagram.value = updatedDiagram;
                 }
@@ -865,7 +873,10 @@ export function useCLDCanvasViewModel() {
         isLoadingHistory.value = true;
 
         try {
-            const response = await ApiService.get(`cld/${diagram.value.id}/history`);
+            const shareQuery = currentShareToken.value
+                ? `?share_token=${encodeURIComponent(currentShareToken.value)}`
+                : '';
+            const response = await ApiService.get(`cld/${diagram.value.id}/history${shareQuery}`);
             historyList.value = response.data;
         } catch (error) {
             console.error('Error fetching history:', error);
@@ -1067,8 +1078,8 @@ export function useCLDCanvasViewModel() {
     const findLayerDeep = (layerList, id) => {
         for (const l of layerList) {
             if (l.id === id) return l;
-            if (l.sublayers) {
-                const found = findLayerDeep(l.sublayers, id);
+            if (l.subsystems) {
+                const found = findLayerDeep(l.subsystems, id);
                 if (found) return found;
             }
         }
@@ -1099,7 +1110,7 @@ export function useCLDCanvasViewModel() {
             name: layer.name,
             description: layer.description || '',
             variableIds: layer.variableIds || [],
-            sublayers: layer.sublayers ? formatSubsystems(layer.sublayers) : []
+            subsystems: layer.subsystems ? formatSubsystems(layer.subsystems) : []
         }));
     };
 

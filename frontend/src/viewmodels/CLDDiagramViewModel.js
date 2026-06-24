@@ -10,6 +10,7 @@ import {
   LOOP_COLORS,
 } from '@/theme/colors';
 import { makePieEllipseDataUrl } from '@/theme/nodeImages';
+import { getSingleArchetypeColor } from '@/viewmodels/archetypePresentation.utils.js';
 export function useCLDDiagramViewModel() {
   const networkContainer = ref(null);
   const network = shallowRef(null);
@@ -222,12 +223,11 @@ export function useCLDDiagramViewModel() {
           nodeObj.shadow = true;
 
         } else if (archKeys.length === 1) {
-          const meta = archetypeMetaById.get(archKeys[0]);
-          let typeFromKey = null;
-          if (typeof key === 'string' && key.includes('-')) {
-              typeFromKey = key.split('-')[0];
-          }
-          const c = meta?.color || getArchetypeColor(meta?.type || typeFromKey);
+          const c = getSingleArchetypeColor(
+            archKeys[0],
+            archetypeMetaById,
+            getArchetypeColor,
+          );
           nodeObj.shape = 'ellipse';
           nodeObj.color = {
             background: c,
@@ -443,8 +443,8 @@ export function useCLDDiagramViewModel() {
                 const collectNodes = (l) => {
                     if (!l.visible) return [];
                     let ns = [...l.variableIds];
-                    if (l.expanded && l.sublayers) {
-                        l.sublayers.forEach(sub => ns = ns.concat(collectNodes(sub)));
+                    if (l.expanded && l.subsystems) {
+                        l.subsystems.forEach(sub => ns = ns.concat(collectNodes(sub)));
                     }
                     return ns;
                 };
@@ -491,14 +491,14 @@ export function useCLDDiagramViewModel() {
                     ctx.fillText(layer.name, x + 10, y - 5);
                 }
 
-                if (layer.expanded && layer.sublayers) {
-                    layer.sublayers.forEach(sub => drawLayerBox(sub, depth + 1));
+                if (layer.expanded && layer.subsystems) {
+                    layer.subsystems.forEach(sub => drawLayerBox(sub, depth + 1));
                 }
             };
 
             const globalLayer = diagramLayers.value.find(l => l.id === 'global');
-            if (globalLayer && globalLayer.sublayers && globalLayer.visible) {
-                globalLayer.sublayers.forEach(sublayer => drawLayerBox(sublayer, 0));
+            if (globalLayer && globalLayer.subsystems && globalLayer.visible) {
+                globalLayer.subsystems.forEach(sublayer => drawLayerBox(sublayer, 0));
             }
         }
     });
@@ -739,7 +739,7 @@ export function useCLDDiagramViewModel() {
         if (l.id !== 'global' && l.variableIds && l.variableIds.includes(nodeId)) {
             currentSubsystemIds.push(l.id);
         }
-        if (l.sublayers) l.sublayers.forEach(checkNodeSubsystem);
+        if (l.subsystems) l.subsystems.forEach(checkNodeSubsystem);
     };
     if (diagramLayers.value) {
         diagramLayers.value.forEach(checkNodeSubsystem);
@@ -1145,8 +1145,8 @@ export function useCLDDiagramViewModel() {
           belongsToAnySubsystem = true;
           if (layer.visible) isVisible = true;
         }
-        if (layer.sublayers) {
-          layer.sublayers.forEach(checkLayer);
+        if (layer.subsystems) {
+          layer.subsystems.forEach(checkLayer);
         }
       };
 

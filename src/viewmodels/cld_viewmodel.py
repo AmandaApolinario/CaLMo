@@ -113,12 +113,31 @@ class CLDViewModel:
         
         return cld_list, "CLDs retrieved successfully"
     
-    def get_cld(self, cld_id):
-        """Get a specific CLD by ID"""
-        cld = self.cld_repo.get_cld_by_id(self.db_session, cld_id)
+    def get_accessible_cld(self, cld_id, user_id, share_token=None):
+        """Return a CLD when the caller owns it or presents its share token."""
+        if share_token:
+            cld = self.db_session.query(CLD).filter_by(
+                id=cld_id,
+                share_token=share_token,
+            ).first()
+        else:
+            cld = self.cld_repo.get_cld_by_user(
+                self.db_session,
+                cld_id,
+                user_id,
+            )
+
         if not cld:
-            return None, "CLD not found or not owned by user"
-        
+            return None, "CLD not found or access denied"
+
+        return cld, "CLD retrieved successfully"
+
+    def get_cld(self, cld_id, user_id, share_token=None):
+        """Get a formatted CLD after owner-or-share-token authorization."""
+        cld, message = self.get_accessible_cld(cld_id, user_id, share_token)
+        if not cld:
+            return None, message
+
         cld_data = self._format_cld(cld)
         return cld_data, "CLD retrieved successfully"
     
@@ -272,11 +291,11 @@ class CLDViewModel:
             self.db_session.rollback()
             return False, f"Error deleting CLD: {str(e)}"
     
-    def identify_feedback_loops(self, cld_id):
+    def identify_feedback_loops(self, cld_id, user_id, share_token=None):
         """Identify feedback loops in a CLD"""
-        cld = self.cld_repo.get_cld_by_id(self.db_session, cld_id)
+        cld, message = self.get_accessible_cld(cld_id, user_id, share_token)
         if not cld:
-            return None, "CLD not found or not owned by user"
+            return None, message
             
         try:
             # First, clear existing feedback loops
@@ -307,11 +326,11 @@ class CLDViewModel:
             self.db_session.rollback()
             return None, f"Error identifying feedback loops: {str(e)}"
     
-    def identify_archetypes(self, cld_id):
+    def identify_archetypes(self, cld_id, user_id, share_token=None):
         """Identify system archetypes in a CLD"""
-        cld = self.cld_repo.get_cld_by_id(self.db_session, cld_id)
+        cld, message = self.get_accessible_cld(cld_id, user_id, share_token)
         if not cld:
-            return None, "CLD not found or not owned by user"
+            return None, message
             
         try:
             # First, clear existing archetypes
@@ -475,7 +494,11 @@ class CLDViewModel:
             return None
         return cld.user_id
 
-    def get_cld_history(self, cld_id):
+    def get_cld_history(self, cld_id, user_id, share_token=None):
+        cld, message = self.get_accessible_cld(cld_id, user_id, share_token)
+        if not cld:
+            return None, message
+
         histories = self.cld_history_repo.get_history(self.db_session, cld_id)
         result = []
         for h in histories:
@@ -485,7 +508,7 @@ class CLDViewModel:
                 'action_summary': h.action_summary,
                 'timestamp': h.timestamp.isoformat()
             })
-        return result
+        return result, "CLD history retrieved successfully"
 
     def analyze_live_state(self, nodes_data, edges_data):
         try:
@@ -570,7 +593,7 @@ class CLDViewModel:
             sub_model.variables.extend(vars_to_link)
 
         # Recursively process children
-        for child_data in sub_data.get('sublayers', []):
+        for child_data in sub_data.get('subsystems', []):
             self.insert_subsystem(child_data, parent_id=sub_id, cld_id=cld_id)
 
     def build_subsystem_tree(self, cld, parent_id=None):
@@ -583,7 +606,7 @@ class CLDViewModel:
                 'name': child.name,
                 'description': child.description,
                 'variableIds': [v.id for v in child.variables],  # Extract linked variable IDs
-                'sublayers': self.build_subsystem_tree(cld, child.id)  # Recurse
+                'subsystems': self.build_subsystem_tree(cld, child.id)  # Recurse
             }
             tree.append(node)
         return tree

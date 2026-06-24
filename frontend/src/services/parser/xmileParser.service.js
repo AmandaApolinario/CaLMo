@@ -34,14 +34,14 @@ const buildSubsystemTree = (groupElements) => {
     const key = group.name.toLowerCase();
     const nextAncestors = new Set(ancestors);
     nextAncestors.add(key);
-    const sublayers = [];
+    const subsystems = [];
     const variableIds = [];
 
     group.entityNames.forEach(entityName => {
       const entityKey = entityName.toLowerCase();
       const childGroup = byName.get(entityKey);
       if (childGroup && !nextAncestors.has(entityKey)) {
-        sublayers.push(buildGroup(childGroup, nextAncestors));
+        subsystems.push(buildGroup(childGroup, nextAncestors));
       } else if (!childGroup) {
         variableIds.push(entityName);
       }
@@ -51,7 +51,7 @@ const buildSubsystemTree = (groupElements) => {
       name: group.name,
       description: group.description,
       variableIds,
-      sublayers
+      subsystems
     };
   };
 

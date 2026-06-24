@@ -67,7 +67,7 @@ def get_user_clds(user_id):
 @token_required
 def get_cld(user_id, cld_id):
     view_model = CLDViewModel(db.session)
-    cld, message = view_model.get_cld(cld_id)
+    cld, message = view_model.get_cld(cld_id, user_id)
     
     if cld is None:  # Error case - CLD not found
         return jsonify({'message': message}), 404
@@ -162,10 +162,12 @@ def delete_cld_route(user_id, cld_id):
 @token_required
 def identify_feedback_loops(user_id, cld_id):
     view_model = CLDViewModel(db.session)
+    request_data = request.get_json(silent=True) or {}
+    share_token = request.args.get('share_token') or request_data.get('share_token')
     
     # For GET requests, retrieve existing feedback loops without re-analyzing
     if request.method == 'GET':
-        cld, get_message = view_model.get_cld_by_id(cld_id)
+        cld, get_message = view_model.get_cld(cld_id, user_id, share_token)
         
         if cld is None:  # Error case - CLD not found
             return jsonify({'message': get_message}), 404
@@ -181,7 +183,11 @@ def identify_feedback_loops(user_id, cld_id):
     # POST request - analyze and identify feedback loops
     try:
         print(f"Identifying feedback loops for CLD {cld_id}")
-        loops, message = view_model.identify_feedback_loops(cld_id)
+        loops, message = view_model.identify_feedback_loops(
+            cld_id,
+            user_id,
+            share_token,
+        )
         
         if loops is None:  # Error case - CLD not found
             print(f"Error identifying feedback loops: {message}")
@@ -201,10 +207,12 @@ def identify_feedback_loops(user_id, cld_id):
 @token_required
 def identify_archetypes(user_id, cld_id):
     view_model = CLDViewModel(db.session)
+    request_data = request.get_json(silent=True) or {}
+    share_token = request.args.get('share_token') or request_data.get('share_token')
     
     # For GET requests, retrieve existing archetypes without re-analyzing
     if request.method == 'GET':
-        cld, get_message = view_model.get_cld_by_id(cld_id)
+        cld, get_message = view_model.get_cld(cld_id, user_id, share_token)
         
         if cld is None:  # Error case - CLD not found
             return jsonify({'message': get_message}), 404
@@ -220,7 +228,11 @@ def identify_archetypes(user_id, cld_id):
     # POST request - analyze and identify archetypes
     try:
         print(f"Identifying archetypes for CLD {cld_id}")
-        archetypes, message = view_model.identify_archetypes(cld_id)
+        archetypes, message = view_model.identify_archetypes(
+            cld_id,
+            user_id,
+            share_token,
+        )
         
         if archetypes is None:  # Error case - CLD not found
             print(f"Error identifying archetypes: {message}")
@@ -326,10 +338,17 @@ def get_shared_cld_owner_variables(user_id):
 
 
 @cld_routes.route('/cld/<string:cld_id>/history', methods=['GET'])
-def get_cld_history_route(cld_id):
+@token_required
+def get_cld_history_route(user_id, cld_id):
     try:
         view_model = CLDViewModel(db.session)
-        result = view_model.get_cld_history(cld_id)
+        result, message = view_model.get_cld_history(
+            cld_id,
+            user_id,
+            request.args.get('share_token'),
+        )
+        if result is None:
+            return jsonify({'message': message}), 404
         return jsonify(result), 200
     except Exception as e:
         print(f"Erro ao buscar histórico: {e}")

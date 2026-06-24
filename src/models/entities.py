@@ -173,6 +173,6 @@ class Subsystem(db.Model):
     cld = relationship('CLD', back_populates='subsystems')
 
     parent_id = Column(String, ForeignKey('subsystems.id', ondelete='CASCADE'), nullable=True)
-    sublayers = relationship("Subsystem", backref=db.backref('parent', remote_side=[id]), cascade="all, delete-orphan")
+    subsystems = relationship("Subsystem", backref=db.backref('parent', remote_side=[id]), cascade="all, delete-orphan")
 
     variables = relationship('Variable', secondary=subsystem_variables)

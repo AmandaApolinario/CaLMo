@@ -61,12 +61,12 @@ export const FileExportService = {
       (subsystem.variableIds || []).forEach(variableName => {
         xml += `                <entity name="${escapeXml(variableName)}" />\n`;
       });
-      (subsystem.sublayers || []).forEach(child => {
+      (subsystem.subsystems || []).forEach(child => {
         xml += `                <entity name="${escapeXml(child.name || 'Unnamed')}" />\n`;
       });
       xml += `            </group>\n`;
 
-      (subsystem.sublayers || []).forEach(child => appendSubsystem(child));
+      (subsystem.subsystems || []).forEach(child => appendSubsystem(child));
     };
 
     subsystems.forEach(subsystem => appendSubsystem(subsystem));
