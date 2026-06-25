@@ -7,6 +7,11 @@ import {
     checkpointAfterSuccessful,
     getDiagramEventClientId,
 } from '@/services/canvasState.utils.js';
+import {
+    appendVariableIfMissing,
+    applyUndoGraphMutation,
+    getCreatedVariableFromResponse,
+} from '@/viewmodels/canvasGraphState.utils.js';
 
 export function useCLDCanvasViewModel() {
     const variables = ref([]);
@@ -67,7 +72,7 @@ export function useCLDCanvasViewModel() {
                 response = await ApiService.get('variables');
             }
 
-            variables.value = response.data || [];
+            variables.value = Array.isArray(response.data) ? response.data : [];
         } catch (err) {
             console.error('Error fetching variables:', err);
         } finally {
@@ -95,11 +100,16 @@ export function useCLDCanvasViewModel() {
         }
         try {
             const response = await ApiService.post('variable', payload);
-            const newVariable = response.data;
+            const createdVariable = getCreatedVariableFromResponse(response.data);
+            if (createdVariable) {
+                variables.value = appendVariableIfMissing(variables.value, createdVariable);
+            } else {
+                await fetchVariables(null, shareToken);
+            }
             resetVariableForm();
              if (diagram.value) {
                 publishDiagramEvent(diagram.value.id, 'VARIABLE_ADDED', {
-                    variable: newVariable,
+                    variable: createdVariable,
                     clientId: clientId.value
                 }).catch(console.error);
             }
@@ -645,63 +655,43 @@ export function useCLDCanvasViewModel() {
       if (undoStack.value.length === 0) return;
 
       const lastAction = undoStack.value.pop();
-      const { action, data } = lastAction;
-      let inverseAction;
-      let inverseData;
+      const { action } = lastAction;
 
-      switch (action) {
-        case 'NODE_ADDED':
-          inverseAction = 'NODE_REMOVED';
-          inverseData = { nodeId: data.node.id, clientId: clientId.value };
-          nodes.value = nodes.value.filter(n => n.id !== data.node.id);
+      const undoResult = applyUndoGraphMutation(
+        { nodes: nodes.value, edges: edges.value },
+        lastAction,
+        clientId.value
+      );
 
-          const edgesToDelete = edges.value.filter(e => e.source === data.node.id || e.target === data.node.id);
-          edges.value = edges.value.filter(
-            e => e.source !== data.node.id && e.target !== data.node.id
-          );
-          if (remoteNodeRemovedCallback.value) remoteNodeRemovedCallback.value(data.node.id);
-          edgesToDelete.forEach(edge => {
-              if (remoteEdgeRemovedCallback.value) remoteEdgeRemovedCallback.value(edge.id);
-              publishDiagramEvent(diagram.value.id, 'EDGE_REMOVED', { edgeId: edge.id, clientId: clientId.value }).catch(console.error);
-          });
-          break;
-
-        case 'NODE_REMOVED':
-          inverseAction = 'NODE_ADDED';
-          inverseData = { node: data.node, clientId: clientId.value };
-          nodes.value.push(data.node);
-          if (remoteNodeAddedCallback.value) remoteNodeAddedCallback.value(data.node);
-
-          if (data.deletedEdges && data.deletedEdges.length > 0) {
-            edges.value.push(...data.deletedEdges);
-
-            data.deletedEdges.forEach(edge => {
-                if (remoteEdgeAddedCallback.value) remoteEdgeAddedCallback.value(edge);
-                publishDiagramEvent(diagram.value.id, 'EDGE_ADDED', { edge: edge, clientId: clientId.value }).catch(console.error);
-            });
-          }
-          break;
-
-        case 'EDGE_ADDED':
-          inverseAction = 'EDGE_REMOVED';
-          inverseData = { edgeId: data.edge.id, clientId: clientId.value };
-          edges.value = edges.value.filter(e => e.id !== data.edge.id);
-          if (remoteEdgeRemovedCallback.value) remoteEdgeRemovedCallback.value(data.edge.id);
-          break;
-
-        case 'EDGE_REMOVED':
-          inverseAction = 'EDGE_ADDED';
-          inverseData = { edge: data.edge, clientId: clientId.value };
-          if (!edges.value.some(e => e.id === data.edge.id)) {
-            edges.value.push(data.edge);
-            if (remoteEdgeAddedCallback.value) remoteEdgeAddedCallback.value(data.edge);
-          }
-          break;
-
-        default:
-          console.warn('Undo is not supported for this action:', action);
-          return;
+      if (undoResult.unsupported) {
+        console.warn('Undo is not supported for this action:', action);
+        return;
       }
+
+      nodes.value = undoResult.nodes;
+      edges.value = undoResult.edges;
+
+      if (undoResult.removedNodeId && remoteNodeRemovedCallback.value) {
+        remoteNodeRemovedCallback.value(undoResult.removedNodeId);
+      }
+
+      undoResult.removedEdges.forEach(edge => {
+          if (remoteEdgeRemovedCallback.value) remoteEdgeRemovedCallback.value(edge.id);
+          if (action === 'NODE_ADDED' && diagram.value?.id) {
+              publishDiagramEvent(diagram.value.id, 'EDGE_REMOVED', { edgeId: edge.id, clientId: clientId.value }).catch(console.error);
+          }
+      });
+
+      if (undoResult.restoredNode && remoteNodeAddedCallback.value) {
+        remoteNodeAddedCallback.value(undoResult.restoredNode);
+      }
+
+      undoResult.restoredEdges.forEach(edge => {
+          if (remoteEdgeAddedCallback.value) remoteEdgeAddedCallback.value(edge);
+          if (action === 'NODE_REMOVED' && diagram.value?.id) {
+              publishDiagramEvent(diagram.value.id, 'EDGE_ADDED', { edge: edge, clientId: clientId.value }).catch(console.error);
+          }
+      });
 
       redoStack.value.push(lastAction);
       diagram.value = {
@@ -710,9 +700,12 @@ export function useCLDCanvasViewModel() {
           edges: [...edges.value],
       };
 
-      publishDiagramEvent(diagram.value.id, inverseAction, inverseData)
+      publishDiagramEvent(diagram.value.id, undoResult.inverseAction, undoResult.inverseData)
         .catch(err => console.error('Error publishing undo:', err));
-      await updateLoopsAndArchetypes();
+
+      if (undoResult.requiresAnalysis) {
+        await updateLoopsAndArchetypes();
+      }
     };
 
     const openShareModal = async () => {
