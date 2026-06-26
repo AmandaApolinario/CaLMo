@@ -1,3 +1,4 @@
+from services.kafka_consumer import pending_diagram_changes
 from . import socketio
 from flask_socketio import join_room, emit, leave_room
 from flask import request
@@ -47,6 +48,9 @@ def handle_disconnect():
             room_occupancy[diagram_id] -= 1
 
             if room_occupancy[diagram_id] <= 0:
+                if diagram_id in pending_diagram_changes:
+                    del pending_diagram_changes[diagram_id]
+
                 del room_occupancy[diagram_id]
 
         if request.sid in user_current_room:
