@@ -16,11 +16,11 @@ class WebSocketService {
             query: { userId }
         });
 
-        this.socket.on("connect", () => {
+        this.socket.on("CONNECT", () => {
             this.connected.value = true;
         });
 
-        this.socket.on("disconnect", () => {
+        this.socket.on("DISCONNECT", () => {
             this.connected.value = false;
         });
     }
@@ -28,17 +28,9 @@ class WebSocketService {
     /** Join a diagram collaboration room */
     joinDiagram(diagramId) {
         if (!this.socket) return;
-        this.socket.emit("join_diagram", { diagram_id: diagramId });
+        this.socket.emit("JOIN_DIAGRAM", { diagram_id: diagramId });
     }
 
-    /**
-     * Push initial canvas state to the server cache (called by owner on load).
-     * state = { nodes, edges, positions, variables }
-     */
-    initDiagramState(diagramId, state) {
-        if (!this.socket) return;
-        this.socket.emit("init_state", { diagram_id: diagramId, state });
-    }
 
     /**
      * Respond to a STATE_REQUEST from the server by pushing the current
@@ -46,7 +38,7 @@ class WebSocketService {
      */
     pushStateTo(diagramId, state, requesterSid) {
         if (!this.socket) return;
-        this.socket.emit("state_push", {
+        this.socket.emit("STATE_PUSH", {
             diagram_id: diagramId,
             state,
             requester_sid: requesterSid
@@ -60,7 +52,7 @@ class WebSocketService {
      */
     emitNodeMoved(diagramId, nodeId, position, clientId) {
         if (!this.socket) return;
-        this.socket.emit("node_moved", {
+        this.socket.emit("NODE_MOVED", {
             diagram_id: diagramId,
             node_id: nodeId,
             position,
@@ -73,7 +65,7 @@ class WebSocketService {
     /** Kafka-driven diagram events (NODE_ADDED, EDGE_ADDED, …) */
     onDiagramEvent(callback) {
         if (!this.socket) return;
-        this.socket.on("diagram_event", callback);
+        this.socket.on("DIAGRAM_EVENT", callback);
     }
 
     /** Server sends full canvas state snapshot to a new joiner */
@@ -94,13 +86,13 @@ class WebSocketService {
     /** Real-time node drag position updates from other clients */
     onNodeMoved(callback) {
         if (!this.socket) return;
-        this.socket.on("node_moved", callback);
+        this.socket.on("NODE_MOVED", callback);
     }
 
     /** Remove all collaboration listeners (call before disconnect) */
     offAll() {
         if (!this.socket) return;
-        ["diagram_event", "STATE_SYNC", "STATE_REQUEST", "node_moved"]
+        ["DIAGRAM_EVENT", "STATE_SYNC", "STATE_REQUEST", "NODE_MOVED"]
             .forEach(ev => this.socket.off(ev));
     }
 
@@ -114,7 +106,7 @@ class WebSocketService {
 
     emitDiagramEvent(diagramId, action, data) {
         if (!this.socket) return;
-        this.socket.emit("diagram_event", {
+        this.socket.emit("DIAGRAM_EVENT", {
             diagram_id: diagramId,
             action: action,
             data: data

@@ -1,4 +1,5 @@
 import json
+import os
 import uuid
 from datetime import datetime
 
@@ -7,6 +8,7 @@ from src import socketio, db
 from src.models.entities import CLDHistory, Variable
 
 pending_diagram_changes = {}
+KAFKA_BOOTSTRAP = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka1:29092,kafka2:29093,kafka3:29094')
 
 def get_node_name(app, node_id):
     with app.app_context():
@@ -15,7 +17,7 @@ def get_node_name(app, node_id):
 
 def kafka_consumer_worker(app):
     consumer = Consumer({
-        'bootstrap.servers': 'kafka:29092',
+        'bootstrap.servers': KAFKA_BOOTSTRAP,
         'group.id': 'flask_websocket_group',
         'auto.offset.reset': 'latest'
     })

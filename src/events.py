@@ -7,7 +7,7 @@ from .services.kafka_producer import kafka_producer
 room_occupancy = {}
 user_current_room = {}
 
-@socketio.on('join_diagram')
+@socketio.on('JOIN_DIAGRAM')
 def handle_join_diagram(data):
     diagram_id = data.get('diagram_id')
     if diagram_id:
@@ -22,21 +22,21 @@ def handle_join_diagram(data):
         }, room=diagram_id, include_self=False)
 
 
-@socketio.on('state_push')
+@socketio.on('STATE_PUSH')
 def handle_state_push(data):
     requester_sid = data.get('requester_sid')
     if requester_sid:
         emit('STATE_SYNC', data, to=requester_sid)
 
 
-@socketio.on('node_moved')
+@socketio.on('NODE_MOVED')
 def handle_node_moved(data):
     diagram_id = data.get('diagram_id')
     if diagram_id:
-        emit('node_moved', data, room=diagram_id, include_self=False)
+        emit('NODE_MOVED', data, room=diagram_id, include_self=False)
 
 
-@socketio.on('disconnect')
+@socketio.on('DISCONNECT')
 def handle_disconnect():
     diagram_id = user_current_room.get(request.sid)
 
@@ -45,14 +45,14 @@ def handle_disconnect():
 
         if diagram_id in room_occupancy:
             room_occupancy[diagram_id] -= 1
-            print(f"👋 Cliente saiu. Pessoas restantes na sala {diagram_id}: {room_occupancy[diagram_id]}")
 
             if room_occupancy[diagram_id] <= 0:
-                print(f"🧹 A sala {diagram_id} ficou vazia! Limpando conexões do Kafka...")
                 del room_occupancy[diagram_id]
-        del user_current_room[request.sid]
 
-@socketio.on('diagram_event')
+        if request.sid in user_current_room:
+            del user_current_room[request.sid]
+
+@socketio.on('DIAGRAM_EVENT')
 def handle_diagram_event(payload):
     diagram_id = payload.get('diagram_id')
     action = payload.get('action')
