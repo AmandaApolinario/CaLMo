@@ -159,7 +159,6 @@ import { useCLDDiagramViewModel } from '@/viewmodels/CLDDiagramViewModel';
 import { useCLDSubsystemsViewModel } from '@/viewmodels/CLDSubsystemsViewModel';
 import { useTheme } from '@/viewmodels/ThemeViewModel';
 import { tint } from '@/theme/colors';
-import '@/styles/cldCanvas.css';
 
 const router = useRouter();
 const route = useRoute();
@@ -561,3 +560,6 @@ watch(() => error.value, (newVal) => {
   }
 });
 </script>
+<style lang="scss">
+@import '@/styles/cldCanvas.scss';
+</style>

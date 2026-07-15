@@ -1,4 +1,4 @@
-from services.kafka_consumer import pending_diagram_changes
+from .services.kafka_consumer import pending_diagram_changes
 from . import socketio
 from flask_socketio import join_room, emit, leave_room
 from flask import request
@@ -15,12 +15,11 @@ def handle_join_diagram(data):
         join_room(diagram_id)
         user_current_room[request.sid] = diagram_id
         room_occupancy[diagram_id] = room_occupancy.get(diagram_id, 0) + 1
-        print(f"✅ Cliente entrou na sala do diagrama: {diagram_id} (SID: {request.sid})")
 
         emit('STATE_REQUEST', {
             'diagram_id': diagram_id,
             'requester_sid': request.sid
-        }, room=diagram_id, include_self=False)
+        },to=diagram_id, include_self=False)
 
 
 @socketio.on('STATE_PUSH')
@@ -34,7 +33,7 @@ def handle_state_push(data):
 def handle_node_moved(data):
     diagram_id = data.get('diagram_id')
     if diagram_id:
-        emit('NODE_MOVED', data, room=diagram_id, include_self=False)
+        emit('NODE_MOVED', data, include_self=False)
 
 
 @socketio.on('DISCONNECT')

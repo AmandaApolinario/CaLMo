@@ -351,7 +351,6 @@ def get_cld_history_route(user_id, cld_id):
             return jsonify({'message': message}), 404
         return jsonify(result), 200
     except Exception as e:
-        print(f"Erro ao buscar histórico: {e}")
         return jsonify({'message': 'Server Error'}), 500
 
 
