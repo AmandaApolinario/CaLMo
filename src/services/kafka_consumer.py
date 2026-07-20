@@ -118,7 +118,7 @@ def kafka_consumer_worker(app):
                         'edges_added': {}, 'edges_removed': {}
                     }
 
-                socketio.emit('diagram_event', event_data, room=diagram_id)
+                socketio.emit('DIAGRAM_EVENT', event_data, room=diagram_id)
             except Exception as e:
                 import traceback
                 traceback.print_exc()

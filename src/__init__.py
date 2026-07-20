@@ -86,6 +86,10 @@ def create_app():
             END $$;
             """))
 
+            # Fresh-DB fix: create ORM-defined base tables before legacy migration DDL
+            db.session.commit()
+            db.create_all()
+
             db.session.execute(text("""
                 DO $$ BEGIN
                     IF EXISTS (

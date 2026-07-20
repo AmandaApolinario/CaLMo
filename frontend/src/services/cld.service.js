@@ -83,11 +83,15 @@ class CLDService {
       // The backend now returns the CLD data directly without nesting in a 'cld' property
       const updatedCLD = CLDModel.fromJSON(response.data);
       
-      // Re-generate feedback loops and archetypes after update
-      await this.generateLoopsAndArchetypes(id);
-      
-      // Fetch the latest CLD with all regenerated data
-      return await this.getCLDById(id);
+      // Re-generate feedback loops and archetypes after update.
+      // Forward the share token so collaborators (non-owners) stay authorized.
+      const shareToken = cldData.share_token || null;
+      await this.generateLoopsAndArchetypes(id, shareToken);
+
+      // Fetch the latest CLD with all regenerated data (share-token aware)
+      return shareToken
+        ? await this.getSharedCLD(shareToken)
+        : await this.getCLDById(id);
     } catch (error) {
       console.error(`Error updating CLD with ID ${id}:`, error);
       console.error('Error response:', error.response?.data);

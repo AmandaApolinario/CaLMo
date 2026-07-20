@@ -33,7 +33,7 @@ def handle_state_push(data):
 def handle_node_moved(data):
     diagram_id = data.get('diagram_id')
     if diagram_id:
-        emit('NODE_MOVED', data, include_self=False)
+        emit('NODE_MOVED', data, to=diagram_id, include_self=False)
 
 
 @socketio.on('DISCONNECT')

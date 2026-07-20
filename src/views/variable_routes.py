@@ -57,7 +57,7 @@ def get_variables(user_id):
     variables, message = view_model.get_user_variables(user_id)
     
     if not variables:
-        return jsonify({"message": message}), 200
+        return jsonify([]), 200
         
     return jsonify(variables), 200
 
