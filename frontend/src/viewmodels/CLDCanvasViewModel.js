@@ -232,11 +232,6 @@ export function useCLDCanvasViewModel() {
         };
 
         nodes.value = [...nodes.value, newNode];
-        diagram.value = {
-            ...diagram.value,
-            nodes: nodes.value,
-            edges: edges.value,
-        };
 
         undoStack.value.push({
           action: 'NODE_ADDED',
@@ -281,17 +276,6 @@ export function useCLDCanvasViewModel() {
 
         edges.value = [...edges.value, newRelationship];
 
-        diagram.value = {
-            ...diagram.value,
-            edges: edges.value,
-            relationships: edges.value.map(e => ({
-                source_id: e.source,
-                target_id: e.target,
-                type: e.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE',
-                has_delay: hasDelay
-            }))
-        };
-
         undoStack.value.push({
             action: 'EDGE_ADDED',
             data: { edge: newRelationship }
@@ -307,7 +291,7 @@ export function useCLDCanvasViewModel() {
         return newRelationship;
     };
 
-    const persistDiagram = async (currentNodes, currentEdges) => {
+    const persistDiagram = async (currentNodes, currentEdges, { reload = true } = {}) => {
         if (!diagram.value || !diagram.value.id) {
             return false;
         }
@@ -348,10 +332,15 @@ export function useCLDCanvasViewModel() {
 
             await checkpointAfterSuccessful(async () => {
                 await CLDService.updateCLD(diagram.value.id, payload);
-                if (shareToken) {
-                    await fetchSharedDiagram(shareToken);
-                } else {
-                    await fetchDiagram(diagram.value.id);
+                // Skip the re-fetch when the caller only needs to persist a small
+                // change (e.g. toggling an edge delay): reloading rebuilds the
+                // canvas and would discard the current layout.
+                if (reload) {
+                    if (shareToken) {
+                        await fetchSharedDiagram(shareToken);
+                    } else {
+                        await fetchDiagram(diagram.value.id);
+                    }
                 }
             }, () => {
                 lastSaveStackSize.value = undoStack.value.length;
@@ -908,22 +897,29 @@ export function useCLDCanvasViewModel() {
     const updateLoopsAndArchetypes = async () => {
         if (!diagram.value?.id) return;
 
-        try {
-            const uniqueEdgesMap = new Map();
-            edges.value.forEach(e => {
-                const isNeg = e.polarity === 'negative' || e.type === 'NEGATIVE';
-                uniqueEdgesMap.set(`${e.source}-${e.target}`, {
-                    ...e,
-                    type: isNeg ? 'NEGATIVE' : 'POSITIVE'
-                });
+        // Dedupe edges up front (same source->target kept once).
+        const uniqueEdgesMap = new Map();
+        edges.value.forEach(e => {
+            const isNeg = e.polarity === 'negative' || e.type === 'NEGATIVE';
+            uniqueEdgesMap.set(`${e.source}-${e.target}`, {
+                ...e,
+                type: isNeg ? 'NEGATIVE' : 'POSITIVE'
             });
-            edges.value = Array.from(uniqueEdgesMap.values());
+        });
+        edges.value = Array.from(uniqueEdgesMap.values());
+
+        // Fall back to the current loops/archetypes so a failed analysis still
+        // renders the new node/edge instead of silently dropping the update.
+        let uniqueLoops = diagram.value.feedback_loops || [];
+        let uniqueArchetypes = diagram.value.archetypes || [];
+
+        try {
             const liveAnalysis = await CLDService.generateLiveLoopsAndArchetypes(nodes.value, edges.value);
 
             if (liveAnalysis) {
                 const getUniqueItems = (items) => {
                     const seen = new Set();
-                    return items.filter(item => {
+                    return (items || []).filter(item => {
                         const vars = (item.variables || []).map(v => typeof v === 'object' ? v.id : v).sort().join('|');
                         const sig = `${item.type}-${vars}`;
                         if (seen.has(sig)) return false;
@@ -932,20 +928,8 @@ export function useCLDCanvasViewModel() {
                     });
                 };
 
-                const uniqueLoops = getUniqueItems(liveAnalysis.loops);
-                const uniqueArchetypes = getUniqueItems(liveAnalysis.archetypes);
-
-                if (diagram.value) {
-                    syncPositionsToNodes();
-                    diagram.value = {
-                        ...diagram.value,
-                        nodes: nodes.value,
-                        edges: edges.value,
-                        feedback_loops: uniqueLoops,
-                        archetypes: uniqueArchetypes,
-                        subsystems: diagram.value.subsystems,
-                    };
-                }
+                uniqueLoops = getUniqueItems(liveAnalysis.loops);
+                uniqueArchetypes = getUniqueItems(liveAnalysis.archetypes);
 
                 publishDiagramEvent(diagram.value.id, 'ANALYSIS_UPDATED', {
                     loops: uniqueLoops,
@@ -953,9 +937,24 @@ export function useCLDCanvasViewModel() {
                     clientId: clientId.value
                 }).catch(console.error);
             }
-        } catch (error) {
-            console.error('Error reprocessing loops and archetypes', error);
-            error.value = 'Error reprocessing loops and archetypes'
+        } catch (err) {
+            console.error('Error reprocessing loops and archetypes', err);
+            error.value = 'Error reprocessing loops and archetypes';
+        }
+
+        // Single diagram.value reassignment -> single canvas recreate. This is
+        // the only place add-node/add-edge push structural changes to the
+        // canvas, so the graph updates once (no double "reload" glitch).
+        if (diagram.value) {
+            syncPositionsToNodes();
+            diagram.value = {
+                ...diagram.value,
+                nodes: nodes.value,
+                edges: edges.value,
+                feedback_loops: uniqueLoops,
+                archetypes: uniqueArchetypes,
+                subsystems: diagram.value.subsystems,
+            };
         }
     };
 
@@ -1079,21 +1078,45 @@ export function useCLDCanvasViewModel() {
         return null;
     };
 
-    // Returns whether a specific edge has the delay mark enabled
-    const getEdgeDelay = (edgeId) => {
-        const edge = edges.value.find(e => String(e.id) === String(edgeId));
+    // Resolve a canvas (vis) edge to our edges model. The vis edge id does not
+    // always match our edge id, so fall back to matching by endpoints (from/to),
+    // which are consistent across the vis DataSet and our model.
+    const resolveModelEdge = (visEdge) => {
+        if (!visEdge) return null;
+        return edges.value.find(e =>
+            (visEdge.id != null && String(e.id) === String(visEdge.id)) ||
+            (String(e.source) === String(visEdge.from) && String(e.target) === String(visEdge.to))
+        ) || null;
+    };
+
+    // Returns whether the given canvas edge has the delay mark enabled
+    const getEdgeDelay = (visEdge) => {
+        const edge = resolveModelEdge(visEdge);
         return edge ? !!edge.has_delay : false;
     };
 
-    // Toggles the delay mark on a specific edge and triggers reactivity
-    const toggleEdgeDelay = (edgeId) => {
-        const edge = edges.value.find(e => String(e.id) === String(edgeId));
-        if (edge) {
-            edge.has_delay = !edge.has_delay;
-            diagram.value = { ...diagram.value };
-            return true;
-        }
-        return false;
+    // Toggles the delay mark on a specific edge and reflects it in diagram.value
+    // (both edges and relationships) so the canvas re-renders the "||" mark and
+    // the save persists it.
+    const toggleEdgeDelay = (visEdge) => {
+        const edge = resolveModelEdge(visEdge);
+        if (!edge) return false;
+        edge.has_delay = !edge.has_delay;
+        // diagram.value may be a CLDModel whose `nodes`/`edges` are prototype
+        // getters that a spread does NOT copy — set both explicitly so the nodes
+        // are not dropped (which would blank the canvas).
+        diagram.value = {
+            ...diagram.value,
+            nodes: nodes.value,
+            edges: [...edges.value],
+            relationships: edges.value.map(e => ({
+                source_id: e.source,
+                target_id: e.target,
+                type: e.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE',
+                has_delay: e.has_delay,
+            })),
+        };
+        return true;
     };
 
     // Converts nested layer objects into the persisted subsystem format.

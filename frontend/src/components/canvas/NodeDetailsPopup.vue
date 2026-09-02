@@ -1,6 +1,6 @@
 <template>
   <div
-    v-if="selectedNodeInfo && (selectedNodeInfo.loops.length > 0 || selectedNodeInfo.archetypes.length > 0)"
+    v-if="selectedNodeInfo && selectedNodeInfo.nodeId"
     class="archetype-popup"
   >
     <div class="popup-overlay" @click="$emit('clear')"></div>

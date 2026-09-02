@@ -500,7 +500,8 @@ const isDelayActive = computed(() => {
   if (hasSelection.value && network.value) {
     const selection = network.value.getSelection();
     if (selection.edges.length > 0 && selection.nodes.length === 0) {
-      return getEdgeDelay(selection.edges[0]);
+      const visEdge = network.value.body.data.edges.get(selection.edges[0]);
+      return getEdgeDelay(visEdge);
     }
   }
   return isDelayEnabled.value;
@@ -510,8 +511,12 @@ const toggleDelay = async () => {
   if (hasSelection.value && network.value) {
     const selection = network.value.getSelection();
     if (selection.edges.length > 0 && selection.nodes.length === 0) {
-      if (toggleEdgeDelay(selection.edges[0])) {
-        await saveDiagram();
+      const visEdge = network.value.body.data.edges.get(selection.edges[0]);
+      if (toggleEdgeDelay(visEdge)) {
+        // Persist the delay WITHOUT reloading the canvas (a reload rebuilds the
+        // network and discards the current layout). Snapshot positions first.
+        if (network.value) saveNodePositions(diagram.value.id, network.value.getPositions());
+        await persistDiagram(nodes.value, edges.value, { reload: false });
         return;
       }
     }
@@ -520,6 +525,7 @@ const toggleDelay = async () => {
 };
 
 onBeforeUnmount(() => {
+  if (recreateTimer) clearTimeout(recreateTimer);
   window.removeEventListener('beforeunload', handleBeforeUnload);
   window.removeEventListener('keydown', handleKeyDown);
   stopCollabMode();
@@ -538,18 +544,31 @@ onBeforeRouteLeave((to, from, next) => {
   }
 });
 
+let recreateTimer = null;
+let pendingDiagram = null;
 watch(() => diagram.value, (newDiagram) => {
-  if (newDiagram && networkContainer.value) {
+  if (!newDiagram || !networkContainer.value) return;
+  // Coalesce rapid diagram.value changes from a single user action (e.g. add a
+  // node -> subsystem assignment, plus the loop-analysis update) into ONE
+  // canvas recreate. Without this the network is torn down and rebuilt 2x,
+  // producing the double "reload" flash.
+  pendingDiagram = newDiagram;
+  if (recreateTimer) return;
+  recreateTimer = setTimeout(() => {
+    recreateTimer = null;
+    const d = pendingDiagram;
+    pendingDiagram = null;
+    if (!d || !networkContainer.value) return;
     if (network.value) {
-      saveNodePositions(newDiagram.id);
+      saveNodePositions(d.id);
     }
     clearNodeSelection();
-    createDiagram(newDiagram, networkContainer.value);
+    createDiagram(d, networkContainer.value);
     if (network.value) {
       network.value.redraw();
     }
     nextTick(() => updateVisibility());
-  }
+  }, 70);
 }, { deep: true });
 
 watch(() => error.value, (newVal) => {

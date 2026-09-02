@@ -119,14 +119,32 @@ export function useCLDDiagramViewModel() {
 
   function createDiagram(diagram, container) {
     if (!container || !diagram) return;
+
+    // Capture the current on-screen positions BEFORE tearing down the old
+    // network. Recreating the network on every structural change (new edge,
+    // new loop) must not fall back to a physics re-layout: the live positions
+    // are the source of truth and win over any stale persisted layout.
+    let livePositions = {};
+    let liveViewport = null;
     if (network.value !== null) {
+      try {
+        livePositions = network.value.getPositions() || {};
+        liveViewport = { scale: network.value.getScale(), position: network.value.getViewPosition() };
+      } catch (e) { livePositions = {}; }
       network.value.destroy();
       network.value = null;
     }
     networkContainer.value = container;
 
-    // Saved positions for this diagram
+    // Persisted layout (localStorage) as base, live on-screen positions win.
     const savedPositions = getSavedPositions(diagram.id);
+    const positionMap = { ...(savedPositions || {}), ...livePositions };
+    const hasPositions = Object.keys(positionMap).length > 0;
+    // Persist the merged layout so future loads restore it without physics.
+    if (hasPositions && diagram.id) {
+      diagramPositions.value[diagram.id] = positionMap;
+      try { localStorage.setItem(`cld-positions-${diagram.id}`, JSON.stringify(positionMap)); } catch (e) {}
+    }
 
     // ---- Pass 1: count instances per archetype type ----
     const typeTotals = new Map(); // type -> total instances
@@ -203,9 +221,9 @@ export function useCLDDiagramViewModel() {
           title: node.name
         };
 
-        if (savedPositions && savedPositions[node.id]) {
-          nodeObj.x = savedPositions[node.id].x;
-          nodeObj.y = savedPositions[node.id].y;
+        if (positionMap[node.id]) {
+          nodeObj.x = positionMap[node.id].x;
+          nodeObj.y = positionMap[node.id].y;
         } else if (node.x !== undefined && node.y !== undefined) {
           nodeObj.x = node.x;
           nodeObj.y = node.y;
@@ -307,7 +325,7 @@ export function useCLDDiagramViewModel() {
       })
     );
 
-    const hasSavedPositions = !!savedPositions;
+    const hasSavedPositions = hasPositions;
 
     // ---- Network options ----
     const options = {
@@ -337,7 +355,11 @@ export function useCLDDiagramViewModel() {
         selectable: interactionMode.value === 'select'
       },
       physics: {
-        enabled: false,
+        // Must be enabled up front so vis-network runs the initial layout as a
+        // headless stabilization (redraw is blocked). Enabling it after the
+        // Network is built starts a *visible* simulation instead, and
+        // 'stabilizationIterationsDone' never fires.
+        enabled: !hasSavedPositions,
         stabilization: { enabled: !hasSavedPositions, iterations: 100, fit: true },
         barnesHut: {
           gravitationalConstant: -2000, centralGravity: 0.05,
@@ -626,33 +648,58 @@ export function useCLDDiagramViewModel() {
       });
     });
 
-    setTimeout(() => {
-      if (network && network.value) {
+    // Preserve the user's current camera (zoom/pan) across a recreate; only
+    // auto-fit on a fresh layout, when there is no previous viewport to keep.
+    const restoreView = () => {
+      if (!network.value) return;
+      if (liveViewport) {
+        network.value.moveTo({ position: liveViewport.position, scale: liveViewport.scale, animation: false });
+      } else {
         network.value.fit({ animation: false });
       }
-    }, 500);
+    };
+    setTimeout(restoreView, 500);
 
-    if (!savedPositions) {
-      network.value.setOptions({ physics: { enabled: true } });
+    if (!hasPositions) {
+      // Physics only runs for a brand-new diagram with no known positions.
+      // Turn it off once the initial layout stabilizes so the graph doesn't
+      // keep floating, and persist the resulting positions.
+      let physicsStopped = false;
+      const stopPhysics = () => {
+        if (physicsStopped || !network || !network.value) return;
+        physicsStopped = true;
+        network.value.setOptions({ physics: { enabled: false } });
+        network.value.stopSimulation();
+        network.value.fit({ animation: false });
+        saveNodePositions(diagram.id);
+      };
+
       network.value.once('stabilizationIterationsDone', () => {
-        setTimeout(() => {
-          if (network && network.value) {
-            network.value.fit({ animation: false });
-          }
-        }, 100);
+        setTimeout(stopPhysics, 100);
       });
+      // Fallback: stabilize() bails out early (no event) when the diagram has
+      // no physics nodes, e.g. a brand new empty CLD.
+      setTimeout(stopPhysics, 2000);
     } else {
       setTimeout(() => {
         if (network && network.value) {
           network.value.setOptions({ physics: { enabled: false } });
           network.value.stopSimulation();
-          network.value.fit({ animation: false });
+          restoreView();
         }
       }, 100);
     }
 
     if (interactionMode.value === 'addPositiveEdge' || interactionMode.value === 'addNegativeEdge') {
       setInteractionMode(interactionMode.value);
+      // Re-arm once more after the post-recreate settle timers (fit/physics at
+      // ~100ms) have run, so the add-edge mode reliably survives the recreate
+      // and stays sticky — the user draws many edges with a single tool click.
+      setTimeout(() => {
+        if (network.value && (interactionMode.value === 'addPositiveEdge' || interactionMode.value === 'addNegativeEdge')) {
+          network.value.addEdgeMode();
+        }
+      }, 160);
     }
   }
 
@@ -960,6 +1007,12 @@ export function useCLDDiagramViewModel() {
 
   function addEdgeToCanvas(edgeData) {
     if (!network.value) return;
+    // Skip the optimistic add when either endpoint isn't in the network yet
+    // (e.g. connecting a just-added node whose recreate is still pending). Adding
+    // it now makes vis spawn a phantom node at the origin — the visible glitch.
+    // The pending diagram recreate will render this edge correctly.
+    const nodesDS = network.value.body.data.nodes;
+    if (!nodesDS.get(edgeData.source) || !nodesDS.get(edgeData.target)) return;
     const isPositive = edgeData.polarity === 'positive';
     const c = isPositive ? EDGE_COLORS.positive : EDGE_COLORS.negative;
 
