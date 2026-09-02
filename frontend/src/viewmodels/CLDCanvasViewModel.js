@@ -417,12 +417,22 @@ export function useCLDCanvasViewModel() {
         if (!diagram.value) return;
         let edgeToRemove = edges.value.find(e => e.id != null && String(e.id) === String(edgeId));
 
+        // Fall back to matching by endpoints (the vis edge id may not match our
+        // model id) so we keep the real edge with its correct polarity/delay.
+        if (!edgeToRemove && visEdge) {
+            edgeToRemove = edges.value.find(e =>
+                String(e.source) === String(visEdge.from) && String(e.target) === String(visEdge.to)
+            );
+        }
+
         if (!edgeToRemove && visEdge) {
             edgeToRemove = {
                 id: edgeId,
                 source: visEdge.from,
                 target: visEdge.to,
-                polarity: visEdge.label === '+' ? 'positive' : 'negative'
+                // Polarity lives in polarityLabel ('+'/'-'); `label` is the delay mark.
+                polarity: visEdge.polarityLabel === '+' ? 'positive' : 'negative',
+                has_delay: visEdge.label === '||'
             };
         }
 
@@ -572,6 +582,18 @@ export function useCLDCanvasViewModel() {
                             ...diagram.value,
                             subsystems: data.subsystems
                         };
+                    }
+                }
+                break;
+            case 'EDGE_DELAY_UPDATED':
+                if (data.clientId !== clientId.value) {
+                    const delayEdge = edges.value.find(e =>
+                        String(e.source) === String(data.source) && String(e.target) === String(data.target)
+                    );
+                    if (delayEdge) {
+                        delayEdge.has_delay = data.has_delay;
+                        syncPositionsToNodes();
+                        diagram.value = { ...diagram.value, nodes: nodes.value, edges: [...edges.value] };
                     }
                 }
                 break;
@@ -1098,24 +1120,21 @@ export function useCLDCanvasViewModel() {
     // Toggles the delay mark on a specific edge and reflects it in diagram.value
     // (both edges and relationships) so the canvas re-renders the "||" mark and
     // the save persists it.
-    const toggleEdgeDelay = (visEdge) => {
+    const toggleEdgeDelay = async (visEdge) => {
         const edge = resolveModelEdge(visEdge);
         if (!edge) return false;
         edge.has_delay = !edge.has_delay;
-        // diagram.value may be a CLDModel whose `nodes`/`edges` are prototype
-        // getters that a spread does NOT copy — set both explicitly so the nodes
-        // are not dropped (which would blank the canvas).
-        diagram.value = {
-            ...diagram.value,
-            nodes: nodes.value,
-            edges: [...edges.value],
-            relationships: edges.value.map(e => ({
-                source_id: e.source,
-                target_id: e.target,
-                type: e.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE',
-                has_delay: e.has_delay,
-            })),
-        };
+        // Broadcast so collaborators update this edge's delay mark in real time.
+        publishDiagramEvent(diagram.value.id, 'EDGE_DELAY_UPDATED', {
+            source: edge.source,
+            target: edge.target,
+            has_delay: edge.has_delay,
+            clientId: clientId.value,
+        }).catch(console.error);
+        // Recompute loops/archetypes (a delay can change archetype detection) and
+        // push nodes/edges + the refreshed analysis to the canvas in a single
+        // reassignment. updateLoopsAndArchetypes also broadcasts ANALYSIS_UPDATED.
+        await updateLoopsAndArchetypes();
         return true;
     };
 

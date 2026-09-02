@@ -512,11 +512,9 @@ const toggleDelay = async () => {
     const selection = network.value.getSelection();
     if (selection.edges.length > 0 && selection.nodes.length === 0) {
       const visEdge = network.value.body.data.edges.get(selection.edges[0]);
-      if (toggleEdgeDelay(visEdge)) {
-        // Persist the delay WITHOUT reloading the canvas (a reload rebuilds the
-        // network and discards the current layout). Snapshot positions first.
-        if (network.value) saveNodePositions(diagram.value.id, network.value.getPositions());
-        await persistDiagram(nodes.value, edges.value, { reload: false });
+      if (await toggleEdgeDelay(visEdge)) {
+        // Treat the delay as an unsaved edit (like adding a variable/edge): it
+        // is broadcast + recomputed locally and only persisted on explicit Save.
         return;
       }
     }

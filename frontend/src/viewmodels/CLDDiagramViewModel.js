@@ -414,6 +414,14 @@ export function useCLDDiagramViewModel() {
     // ---- Create network ----
     network.value = markRaw(new Network(networkContainer.value, { nodes, edges }, options));
 
+    // Restore the previous camera synchronously so the recreate paints at the
+    // same viewport instead of briefly fitting and then shifting into place.
+    if (liveViewport) {
+      try {
+        network.value.moveTo({ position: liveViewport.position, scale: liveViewport.scale, animation: false });
+      } catch (e) { /* viewport not ready yet; the delayed restoreView covers it */ }
+    }
+
     // Selection & UX
     network.value.on('selectNode', (params) => handleNodeSelection(params, diagram));
     network.value.on('click', (params) => {
@@ -796,18 +804,26 @@ export function useCLDDiagramViewModel() {
       nodeId: node.id,
       nodeName: node.name,
       subsystemIds: currentSubsystemIds,
-      loops: filteredLoops.map(loop => ({
-        id: loop.id,
-        type: loop.type,
-        color: getLoopColor(loop.type),
-        variables: Array.isArray(loop.variables)
-          ? loop.variables.map(v => {
-              if (typeof v === 'object' && v.name) return v.name;
-              if (typeof v === 'object' && v.id)   return getVariableName(v.id);
-              return getVariableName(v);
-            })
-          : []
-      })),
+      loops: filteredLoops.map(loop => {
+        // Match the canvas badge label (B1/R2/...): prefix by type + the loop's
+        // global position in diagram.feedback_loops.
+        const globalIdx = (diagram.feedback_loops || []).indexOf(loop);
+        const isReinforcing = String(loop.type).toUpperCase().includes('REINFORCING');
+        const label = `${isReinforcing ? 'R' : 'B'}${globalIdx >= 0 ? globalIdx + 1 : ''}`;
+        return {
+          id: loop.id,
+          type: loop.type,
+          label,
+          color: getLoopColor(loop.type),
+          variables: Array.isArray(loop.variables)
+            ? loop.variables.map(v => {
+                if (typeof v === 'object' && v.name) return v.name;
+                if (typeof v === 'object' && v.id)   return getVariableName(v.id);
+                return getVariableName(v);
+              })
+            : []
+        };
+      }),
       archetypes: filteredArchetypes.map(arch => {
         const meta = archetypeMetaById.get(arch.id);
         return {

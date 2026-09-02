@@ -306,7 +306,19 @@ class CLDViewModel:
             
             # Use domain logic to identify feedback loops
             feedback_loops = self.analyzer.identify_feedback_loops(cld, self.db_session)
-            
+
+            # Deduplicate each loop's variables to avoid a duplicate
+            # (feedback_loop_id, variable_id) pair violating the association PK.
+            for loop in feedback_loops:
+                seen = set()
+                unique_vars = []
+                for var in loop.variables:
+                    if var.id not in seen:
+                        seen.add(var.id)
+                        unique_vars.append(var)
+                if len(unique_vars) != len(loop.variables):
+                    loop.variables = unique_vars
+
             # Commit the changes
             self.db_session.commit()
             
@@ -341,10 +353,34 @@ class CLDViewModel:
             
             # Use domain logic to identify archetypes
             archetypes = self.analyzer.identify_archetypes(cld, self.db_session)
-            
+
+            # Deduplicate before persisting:
+            #  - distinct variables per archetype (a variable can fill more than
+            #    one role, which would otherwise duplicate the (archetype_id,
+            #    variable_id) pair and violate archetype_variables_pkey);
+            #  - drop archetypes repeating the same (type, variable set), since
+            #    the detector can emit the same pattern more than once.
+            seen = set()
+            kept = []
+            for arch in archetypes:
+                seen_var = set()
+                unique_vars = []
+                for var in arch.variables:
+                    if var.id not in seen_var:
+                        seen_var.add(var.id)
+                        unique_vars.append(var)
+                if len(unique_vars) != len(arch.variables):
+                    arch.variables = unique_vars
+                sig = (arch.type.name, frozenset(v.id for v in unique_vars))
+                if sig in seen:
+                    self.db_session.delete(arch)
+                    continue
+                seen.add(sig)
+                kept.append(arch)
+
             # Commit the changes
             self.db_session.commit()
-            
+
             # Format archetypes for response
             archetypes_data = [
                 {
@@ -352,7 +388,7 @@ class CLDViewModel:
                     'type': arch.type.name,
                     'variables': [var.id for var in arch.variables]
                 }
-                for arch in archetypes
+                for arch in kept
             ]
             
             # Return empty array if no archetypes found
@@ -541,23 +577,26 @@ class CLDViewModel:
             self.analyzer.identify_feedback_loops(temp_cld, mock_session)
             self.analyzer.identify_archetypes(temp_cld, mock_session)
 
-            loops_data = [
-                {
-                    'id': loop.id,
-                    'type': loop.type.name if hasattr(loop.type, 'name') else str(loop.type),
-                    'variables': [var.id for var in loop.variables]
-                }
-                for loop in temp_cld.feedback_loops
-            ]
+            # Deduplicate the analysis output: (1) a variable can fill more than
+            # one role in a pattern, but must not be reported twice within an
+            # item; (2) the detector can emit the same pattern more than once, so
+            # collapse items with the same type + variable set. dict.fromkeys
+            # preserves order.
+            def _dedupe(items):
+                seen = set()
+                out = []
+                for it in items:
+                    t = it.type.name if hasattr(it.type, 'name') else str(it.type)
+                    var_ids = list(dict.fromkeys(v.id for v in it.variables))
+                    sig = (t, frozenset(var_ids))
+                    if sig in seen:
+                        continue
+                    seen.add(sig)
+                    out.append({'id': it.id, 'type': t, 'variables': var_ids})
+                return out
 
-            archetypes_data = [
-                {
-                    'id': arch.id,
-                    'type': arch.type.name if hasattr(arch.type, 'name') else str(arch.type),
-                    'variables': [var.id for var in arch.variables]
-                }
-                for arch in temp_cld.archetypes
-            ]
+            loops_data = _dedupe(temp_cld.feedback_loops)
+            archetypes_data = _dedupe(temp_cld.archetypes)
 
             return {
                 "loops": loops_data,

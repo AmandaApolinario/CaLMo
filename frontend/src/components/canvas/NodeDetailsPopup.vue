@@ -118,7 +118,8 @@
                   borderColor: tint(loop.color, 0.35)
                 }"
               >
-                {{ loop.type }}
+                <strong v-if="loop.label">{{ loop.label }}</strong>
+                <span v-if="loop.label"> · </span>{{ loop.type }}
               </div>
 
               <div class="loop-variables">
