@@ -76,84 +76,84 @@ services:
     restart: always
 
   # Broker 2
-  kafka2:
-    image: apache/kafka:latest
-    container_name: kafka2
-    ports:
-      - "9093:9092"   # external (localhost)
-      - "29093:29092" # internal (rede Docker)
-    environment:
-      - KAFKA_NODE_ID=2
-      - KAFKA_PROCESS_ROLES=broker,controller
-      - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9092
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka2:29092,EXTERNAL://localhost:9093
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
-      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
-      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka1:9093,2@kafka2:9093,3@kafka3:9093
-      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3
-      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3
-      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2
-      - KAFKA_DEFAULT_REPLICATION_FACTOR=3
-      - KAFKA_MIN_INSYNC_REPLICAS=2
-      - KAFKA_LOG_RETENTION_HOURS=168
-      - KAFKA_LOG_SEGMENT_BYTES=1073741824
-      - KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS=300000
-      - KAFKA_MESSAGE_MAX_BYTES=10485760
-      - KAFKA_NUM_NETWORK_THREADS=8
-      - KAFKA_NUM_IO_THREADS=8
-      - KAFKA_SOCKET_SEND_BUFFER_BYTES=102400
-      - KAFKA_SOCKET_RECEIVE_BUFFER_BYTES=102400
-      - KAFKA_SOCKET_REQUEST_MAX_BYTES=104857600
-    volumes:
-      - kafka2_data:/var/lib/kafka/data
-    healthcheck:
-      test: [ "CMD-SHELL", "kafka-topics --bootstrap-server localhost:29092 --list" ]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-    restart: always
+  # kafka2:
+  #   image: apache/kafka:latest
+  #   container_name: kafka2
+  #   ports:
+  #     - "9093:9092"   # external (localhost)
+  #     - "29093:29092" # internal (rede Docker)
+  #   environment:
+  #     - KAFKA_NODE_ID=2
+  #     - KAFKA_PROCESS_ROLES=broker,controller
+  #     - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9092
+  #     - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka2:29092,EXTERNAL://localhost:9093
+  #     - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+  #     - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+  #     - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+  #     - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka1:9093,2@kafka2:9093,3@kafka3:9093
+  #     - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3
+  #     - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3
+  #     - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2
+  #     - KAFKA_DEFAULT_REPLICATION_FACTOR=3
+  #     - KAFKA_MIN_INSYNC_REPLICAS=2
+  #     - KAFKA_LOG_RETENTION_HOURS=168
+  #     - KAFKA_LOG_SEGMENT_BYTES=1073741824
+  #     - KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS=300000
+  #     - KAFKA_MESSAGE_MAX_BYTES=10485760
+  #     - KAFKA_NUM_NETWORK_THREADS=8
+  #     - KAFKA_NUM_IO_THREADS=8
+  #     - KAFKA_SOCKET_SEND_BUFFER_BYTES=102400
+  #     - KAFKA_SOCKET_RECEIVE_BUFFER_BYTES=102400
+  #     - KAFKA_SOCKET_REQUEST_MAX_BYTES=104857600
+  #   volumes:
+  #     - kafka2_data:/var/lib/kafka/data
+  #   healthcheck:
+  #     test: [ "CMD-SHELL", "kafka-topics --bootstrap-server localhost:29092 --list" ]
+  #     interval: 15s
+  #     timeout: 10s
+  #     retries: 10
+  #     start_period: 30s
+  #   restart: always
 
-  # Broker 3
-  kafka3:
-    image: apache/kafka:latest
-    container_name: kafka3
-    ports:
-      - "9094:9092"   # external (localhost)
-      - "29094:29092" # internal (rede Docker)
-    environment:
-      - KAFKA_NODE_ID=3
-      - KAFKA_PROCESS_ROLES=broker,controller
-      - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9092
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka3:29092,EXTERNAL://localhost:9094
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
-      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
-      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka1:9093,2@kafka2:9093,3@kafka3:9093
-      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3
-      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3
-      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2
-      - KAFKA_DEFAULT_REPLICATION_FACTOR=3
-      - KAFKA_MIN_INSYNC_REPLICAS=2
-      - KAFKA_LOG_RETENTION_HOURS=168
-      - KAFKA_LOG_SEGMENT_BYTES=1073741824
-      - KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS=300000
-      - KAFKA_MESSAGE_MAX_BYTES=10485760
-      - KAFKA_NUM_NETWORK_THREADS=8
-      - KAFKA_NUM_IO_THREADS=8
-      - KAFKA_SOCKET_SEND_BUFFER_BYTES=102400
-      - KAFKA_SOCKET_RECEIVE_BUFFER_BYTES=102400
-      - KAFKA_SOCKET_REQUEST_MAX_BYTES=104857600
-    volumes:
-      - kafka3_data:/var/lib/kafka/data
-    healthcheck:
-      test: [ "CMD-SHELL", "kafka-topics --bootstrap-server localhost:29092 --list" ]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-    restart: always
+  # # Broker 3
+  # kafka3:
+  #   image: apache/kafka:latest
+  #   container_name: kafka3
+  #   ports:
+  #     - "9094:9092"   # external (localhost)
+  #     - "29094:29092" # internal (rede Docker)
+  #   environment:
+  #     - KAFKA_NODE_ID=3
+  #     - KAFKA_PROCESS_ROLES=broker,controller
+  #     - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9092
+  #     - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka3:29092,EXTERNAL://localhost:9094
+  #     - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+  #     - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+  #     - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+  #     - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka1:9093,2@kafka2:9093,3@kafka3:9093
+  #     - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3
+  #     - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3
+  #     - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2
+  #     - KAFKA_DEFAULT_REPLICATION_FACTOR=3
+  #     - KAFKA_MIN_INSYNC_REPLICAS=2
+  #     - KAFKA_LOG_RETENTION_HOURS=168
+  #     - KAFKA_LOG_SEGMENT_BYTES=1073741824
+  #     - KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS=300000
+  #     - KAFKA_MESSAGE_MAX_BYTES=10485760
+  #     - KAFKA_NUM_NETWORK_THREADS=8
+  #     - KAFKA_NUM_IO_THREADS=8
+  #     - KAFKA_SOCKET_SEND_BUFFER_BYTES=102400
+  #     - KAFKA_SOCKET_RECEIVE_BUFFER_BYTES=102400
+  #     - KAFKA_SOCKET_REQUEST_MAX_BYTES=104857600
+  #   volumes:
+  #     - kafka3_data:/var/lib/kafka/data
+  #   healthcheck:
+  #     test: [ "CMD-SHELL", "kafka-topics --bootstrap-server localhost:29092 --list" ]
+  #     interval: 15s
+  #     timeout: 10s
+  #     retries: 10
+  #     start_period: 30s
+  #   restart: always
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -189,7 +189,7 @@ volumes:
     name: myapp-postgres-data
   kafka1_data:
     name: camo_kafka1_data
-  kafka2_data:
-    name: camo_kafka2_data
-  kafka3_data:
-    name: camo_kafka3_data
+  # kafka2_data:
+  #   name: camo_kafka2_data
+  # kafka3_data:
+  #   name: camo_kafka3_data
