@@ -351,18 +351,14 @@ class CLDViewModel:
             cld.archetypes = []
             self.db_session.flush()
             
-            # Use domain logic to identify archetypes
-            archetypes = self.analyzer.identify_archetypes(cld, self.db_session)
 
-            # Deduplicate before persisting:
-            #  - distinct variables per archetype (a variable can fill more than
-            #    one role, which would otherwise duplicate the (archetype_id,
-            #    variable_id) pair and violate archetype_variables_pkey);
-            #  - drop archetypes repeating the same (type, variable set), since
-            #    the detector can emit the same pattern more than once.
+            self.analyzer.identify_archetypes(cld, self.db_session)
+
+            distinct_archetypes = list(dict.fromkeys(cld.archetypes))
+
             seen = set()
             kept = []
-            for arch in archetypes:
+            for arch in distinct_archetypes:
                 seen_var = set()
                 unique_vars = []
                 for var in arch.variables:
@@ -373,10 +369,11 @@ class CLDViewModel:
                     arch.variables = unique_vars
                 sig = (arch.type.name, frozenset(v.id for v in unique_vars))
                 if sig in seen:
-                    self.db_session.delete(arch)
                     continue
                 seen.add(sig)
                 kept.append(arch)
+
+            cld.archetypes = kept
 
             # Commit the changes
             self.db_session.commit()

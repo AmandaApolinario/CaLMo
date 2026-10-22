@@ -16,13 +16,6 @@
       <div class="popup-body">
         <div class="node-name-section">
           <h4 class="section-title">
-            <i class="fas fa-circle"></i> Node Name
-          </h4>
-          <div class="node-name">{{ selectedNodeInfo.nodeName }}</div>
-        </div>
-
-        <div class="node-name-section">
-          <h4 class="section-title">
             <i class="fas fa-circle"></i> Variable
           </h4>
           <div class="node-name">{{ selectedNodeInfo.nodeName }}</div>
