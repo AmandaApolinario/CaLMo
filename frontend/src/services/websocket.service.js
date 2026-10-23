@@ -11,11 +11,12 @@ class WebSocketService {
     connect(userId) {
         if (this.socket) return;
 
-        this.socket = io("http://localhost:5001", {
+        this.socket = io(import.meta.env.VITE_WS_URL || window.location.origin, {
+            path: import.meta.env.VITE_WS_PATH || "/calmo/socket.io",
             transports: ["websocket"],
             query: { userId }
         });
-
+        
         this.socket.on("CONNECT", () => {
             this.connected.value = true;
         });

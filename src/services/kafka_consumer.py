@@ -1,6 +1,5 @@
 import json
 import os
-import time
 import uuid
 import traceback
 from datetime import datetime
@@ -128,8 +127,12 @@ def kafka_consumer_worker(app):
 
             with app.app_context():
                 while True:
-                    msg = consumer.poll(1.0)
+                    # poll(0) is non-blocking: a blocking poll() would freeze
+                    # the eventlet hub (and thus the whole server). We yield
+                    # with socketio.sleep() so the web server keeps running.
+                    msg = consumer.poll(0)
                     if msg is None:
+                        socketio.sleep(0.5)
                         continue
                     if msg.error():
                         continue
@@ -142,7 +145,7 @@ def kafka_consumer_worker(app):
         except Exception as e:
             traceback.print_exc()
             print(f"Kafka consumer crashed, restarting in 5s: {e}", flush=True)
-            time.sleep(5)
+            socketio.sleep(5)
         finally:
             if consumer is not None:
                 try:

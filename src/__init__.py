@@ -4,12 +4,17 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from sqlalchemy import text
 from flask_socketio import SocketIO
+import os
 
 load_dotenv()
 
 db = SQLAlchemy()
 
 socketio = SocketIO(cors_allowed_origins="*")
+
+# Set once create_app() has launched the Kafka consumer, so it starts exactly
+# once even if create_app() is called more than once.
+_consumer_started = False
 
 
 def create_app():
@@ -25,7 +30,7 @@ def create_app():
     })
 
     # Database configuration
-    app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://app:postgres@db:5432/app"
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI') or os.getenv('DATABASE_URL')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
     db.init_app(app)
@@ -110,6 +115,23 @@ def create_app():
 
             db.session.execute(text("""
                 DO $$ BEGIN
+                    IF EXISTS (
+                        SELECT FROM information_schema.tables
+                        WHERE table_name = 'relationships'
+                    ) THEN
+                        IF NOT EXISTS (
+                            SELECT 1
+                            FROM information_schema.columns
+                            WHERE table_name='relationships' AND column_name='has_delay'
+                        ) THEN
+                            ALTER TABLE relationships ADD COLUMN has_delay BOOLEAN NOT NULL DEFAULT FALSE;
+                        END IF;
+                    END IF;
+                END $$;
+            """))
+
+            db.session.execute(text("""
+                DO $$ BEGIN
                 CREATE TABLE IF NOT EXISTS cld_history (
                     id VARCHAR(36) PRIMARY KEY,
                     cld_id VARCHAR(36) REFERENCES clds(id) ON DELETE CASCADE,
@@ -186,5 +208,15 @@ def create_app():
     @app.errorhandler(404)
     def handle_404(e):
         return {"error": "Not Found"}, 404
+
+    # Launch the Kafka consumer inside the server process so it also runs under
+    # gunicorn (main.py's __main__ block only runs with `python main.py`).
+    # start_background_task uses the SocketIO async mode (eventlet under
+    # gunicorn), so the consumer shares the server's event loop.
+    global _consumer_started
+    if not _consumer_started:
+        from .services.kafka_consumer import kafka_consumer_worker
+        socketio.start_background_task(kafka_consumer_worker, app)
+        _consumer_started = True
 
     return app

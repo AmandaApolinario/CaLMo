@@ -2,8 +2,8 @@ import axios from 'axios';
 
 // Create axios instance with baseURL
 const apiClient = axios.create({
-  baseURL: 'http://localhost:5001',  // Direct connection to backend at port 5001
-  // baseURL: import.meta.env.VITE_API_URL || "/calmo/api",
+  // baseURL: 'http://localhost:5001',  // Direct connection to backend at port 5001
+  baseURL: import.meta.env.VITE_API_URL || "/calmo/api",
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',

@@ -11,3 +11,4 @@ networkx==3.2.1
 pydevd-pycharm~=261.22158.340
 confluent-kafka
 flask-socketio
+eventlet>=0.35.2
