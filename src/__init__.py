@@ -3,15 +3,23 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from dotenv import load_dotenv
 from sqlalchemy import text
+from flask_socketio import SocketIO
 import os
 
 load_dotenv()
 
 db = SQLAlchemy()
 
+socketio = SocketIO(cors_allowed_origins="*")
+
+# Set once create_app() has launched the Kafka consumer, so it starts exactly
+# once even if create_app() is called more than once.
+_consumer_started = False
+
+
 def create_app():
     app = Flask(__name__)
-    
+
     # Configure CORS with specific settings
     CORS(app, resources={
         r"/*": {
@@ -20,19 +28,18 @@ def create_app():
             "allow_headers": ["Content-Type", "Authorization"]
         }
     })
-    
+
     # Database configuration
-    app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://app:postgres@db:5432/app"
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI') or os.getenv('DATABASE_URL')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    
+
     db.init_app(app)
-    
+    socketio.init_app(app)
+
+    from . import events
+
     with app.app_context():
         # Import models to ensure they are registered with SQLAlchemy
-        from .models.entities import (
-            User, Variable, CLD, Relationship, FeedbackLoop, Archetype,
-            RelationshipType, LoopType, ArchetypeType
-        )
 
         try:
             # Cria os tipos ENUM apenas se ainda não existirem (no schema public)
@@ -83,10 +90,104 @@ def create_app():
             END IF;
             END $$;
             """))
-            
+
+            # Fresh-DB fix: create ORM-defined base tables before legacy migration DDL
+            db.session.commit()
+            db.create_all()
+
+            db.session.execute(text("""
+                DO $$ BEGIN
+                    IF EXISTS (
+                        SELECT FROM information_schema.tables
+                        WHERE table_name = 'clds'
+                    ) THEN
+
+                        IF NOT EXISTS (
+                            SELECT 1
+                            FROM information_schema.columns
+                            WHERE table_name='clds' AND column_name='share_token'
+                        ) THEN
+                            ALTER TABLE clds ADD COLUMN share_token VARCHAR(100) UNIQUE;
+                        END IF;
+                    END IF;
+                END $$;
+            """))
+
+            db.session.execute(text("""
+                DO $$ BEGIN
+                    IF EXISTS (
+                        SELECT FROM information_schema.tables
+                        WHERE table_name = 'relationships'
+                    ) THEN
+                        IF NOT EXISTS (
+                            SELECT 1
+                            FROM information_schema.columns
+                            WHERE table_name='relationships' AND column_name='has_delay'
+                        ) THEN
+                            ALTER TABLE relationships ADD COLUMN has_delay BOOLEAN NOT NULL DEFAULT FALSE;
+                        END IF;
+                    END IF;
+                END $$;
+            """))
+
+            db.session.execute(text("""
+                DO $$ BEGIN
+                CREATE TABLE IF NOT EXISTS cld_history (
+                    id VARCHAR(36) PRIMARY KEY,
+                    cld_id VARCHAR(36) REFERENCES clds(id) ON DELETE CASCADE,
+                    user_id VARCHAR(36) REFERENCES users(id),
+                    action_summary TEXT,
+                    timestamp TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+                END $$;
+            """))
+
+            db.session.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM information_schema.tables
+                        WHERE table_schema = 'public'
+                          AND table_name = 'subsystems'
+                    ) THEN
+                        CREATE TABLE public.subsystems (
+                            id VARCHAR PRIMARY KEY,
+                            name VARCHAR NOT NULL,
+                            description TEXT,
+                            cld_id VARCHAR NOT NULL,
+                            parent_id VARCHAR,
+                            CONSTRAINT fk_subsystems_cld 
+                                FOREIGN KEY (cld_id) REFERENCES public.clds(id) ON DELETE CASCADE,
+                            CONSTRAINT fk_subsystems_parent 
+                                FOREIGN KEY (parent_id) REFERENCES public.subsystems(id) ON DELETE CASCADE
+                        );
+                    END IF;
+
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM information_schema.tables
+                        WHERE table_schema = 'public'
+                          AND table_name = 'subsystem_variables'
+                    ) THEN
+                        CREATE TABLE public.subsystem_variables (
+                            subsystem_id VARCHAR NOT NULL,
+                            variable_id VARCHAR NOT NULL,
+                            PRIMARY KEY (subsystem_id, variable_id),
+                            CONSTRAINT fk_subsystem_vars_subsystem 
+                                FOREIGN KEY (subsystem_id) REFERENCES public.subsystems(id) ON DELETE CASCADE,
+                            CONSTRAINT fk_subsystem_vars_variable 
+                                FOREIGN KEY (variable_id) REFERENCES public.variables(id) ON DELETE CASCADE
+                        );
+                    END IF;
+                END $$;
+            """))
+
+
+
+
             db.session.commit()
 
-            # Cria as tabelas (só se não existirem)
             db.create_all()
             print("✅ Database tables checked/created (no drop).")
 
@@ -98,14 +199,24 @@ def create_app():
         # Register all routes
         from .views import register_routes
         register_routes(app)
-    
+
     # Error handlers
     @app.errorhandler(500)
     def handle_500(e):
         return {"error": "Internal Server Error"}, 500
-    
+
     @app.errorhandler(404)
     def handle_404(e):
         return {"error": "Not Found"}, 404
-    
+
+    # Launch the Kafka consumer inside the server process so it also runs under
+    # gunicorn (main.py's __main__ block only runs with `python main.py`).
+    # start_background_task uses the SocketIO async mode (eventlet under
+    # gunicorn), so the consumer shares the server's event loop.
+    global _consumer_started
+    if not _consumer_started:
+        from .services.kafka_consumer import kafka_consumer_worker
+        socketio.start_background_task(kafka_consumer_worker, app)
+        _consumer_started = True
+
     return app

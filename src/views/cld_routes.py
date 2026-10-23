@@ -1,4 +1,6 @@
 from flask import Blueprint, request, jsonify
+
+from ..services.kafka_producer import kafka_producer
 from ..viewmodels import CLDViewModel
 from ..auth import verify_token
 from functools import wraps
@@ -27,7 +29,7 @@ def create_cld(user_id):
     data = request.get_json()
     
     # Validate required fields
-    required_fields = ['name', 'date', 'description', 'variables', 'relationships']
+    required_fields = ['name', 'date', 'description']
     if not all(field in data for field in required_fields):
         return jsonify({
             'message': 'Missing required fields. Need: name, date, description, variables, and relationships'
@@ -39,8 +41,9 @@ def create_cld(user_id):
         data['name'],
         data['date'],
         data['description'],
-        data['variables'],
-        data['relationships']
+        data.get('variables', []),
+        data.get('relationships', []),
+        data.get('subsystems', []),
     )
     
     if not result:
@@ -91,6 +94,7 @@ def get_relationships(user_id, cld_id):
 @token_required
 def update_cld_route(user_id, cld_id):
     data = request.get_json()
+
     if not data:
         return jsonify({'message': 'Bad Request'}), 400
         
@@ -100,6 +104,9 @@ def update_cld_route(user_id, cld_id):
     date = data.get('date')
     variables = data.get('variables')
     relationships = data.get('relationships')
+    subsystems = data.get('subsystems')
+
+    share_token = data.get('share_token')
     
     # Validate that at least one field to update is provided
     if not any([name, description, date, variables, relationships]):
@@ -118,11 +125,20 @@ def update_cld_route(user_id, cld_id):
         description, 
         date,
         variables,
-        relationships
+        relationships,
+        subsystems=subsystems,
+        share_token=share_token,
     )
     
     if not cld:
         return jsonify({'message': message}), 404
+
+    kafka_producer.publish_event(
+        diagram_id=cld_id,
+        user_id=str(user_id),
+        action_type='DIAGRAM_SAVED',
+        payload={}
+    )
     
     # Debug output to see what's being returned
     print(f"Update successful: {message}")
@@ -146,10 +162,12 @@ def delete_cld_route(user_id, cld_id):
 @token_required
 def identify_feedback_loops(user_id, cld_id):
     view_model = CLDViewModel(db.session)
+    request_data = request.get_json(silent=True) or {}
+    share_token = request.args.get('share_token') or request_data.get('share_token')
     
     # For GET requests, retrieve existing feedback loops without re-analyzing
     if request.method == 'GET':
-        cld, get_message = view_model.get_cld(cld_id, user_id)
+        cld, get_message = view_model.get_cld(cld_id, user_id, share_token)
         
         if cld is None:  # Error case - CLD not found
             return jsonify({'message': get_message}), 404
@@ -165,7 +183,11 @@ def identify_feedback_loops(user_id, cld_id):
     # POST request - analyze and identify feedback loops
     try:
         print(f"Identifying feedback loops for CLD {cld_id}")
-        loops, message = view_model.identify_feedback_loops(cld_id, user_id)
+        loops, message = view_model.identify_feedback_loops(
+            cld_id,
+            user_id,
+            share_token,
+        )
         
         if loops is None:  # Error case - CLD not found
             print(f"Error identifying feedback loops: {message}")
@@ -185,10 +207,12 @@ def identify_feedback_loops(user_id, cld_id):
 @token_required
 def identify_archetypes(user_id, cld_id):
     view_model = CLDViewModel(db.session)
+    request_data = request.get_json(silent=True) or {}
+    share_token = request.args.get('share_token') or request_data.get('share_token')
     
     # For GET requests, retrieve existing archetypes without re-analyzing
     if request.method == 'GET':
-        cld, get_message = view_model.get_cld(cld_id, user_id)
+        cld, get_message = view_model.get_cld(cld_id, user_id, share_token)
         
         if cld is None:  # Error case - CLD not found
             return jsonify({'message': get_message}), 404
@@ -204,7 +228,11 @@ def identify_archetypes(user_id, cld_id):
     # POST request - analyze and identify archetypes
     try:
         print(f"Identifying archetypes for CLD {cld_id}")
-        archetypes, message = view_model.identify_archetypes(cld_id, user_id)
+        archetypes, message = view_model.identify_archetypes(
+            cld_id,
+            user_id,
+            share_token,
+        )
         
         if archetypes is None:  # Error case - CLD not found
             print(f"Error identifying archetypes: {message}")
@@ -218,4 +246,135 @@ def identify_archetypes(user_id, cld_id):
         }), 200
     except Exception as e:
         print(f"Exception in archetypes endpoint: {str(e)}")
-        return jsonify({'message': f"Server error: {str(e)}"}), 500 
+        return jsonify({'message': f"Server error: {str(e)}"}), 500
+
+@cld_routes.route('/cld/<string:cld_id>/share', methods=['POST'])
+@token_required
+def generate_share_link(user_id, cld_id):
+    view_model = CLDViewModel(db.session)
+    token, message = view_model.generate_share_token(cld_id, user_id)
+
+    if not token:
+        return jsonify({'message': message}), 404
+
+    return jsonify({
+        'message': message,
+        'token': token
+    }), 200
+
+
+@cld_routes.route('/cld/<string:cld_id>/share', methods=['DELETE'])
+@token_required
+def revoke_share_link(user_id, cld_id):
+    view_model = CLDViewModel(db.session)
+    success, message = view_model.revoke_share_token(cld_id, user_id)
+
+    if not success:
+        return jsonify({'message': message}), 404
+
+    return jsonify({'message': message}), 200
+
+
+@cld_routes.route('/cld/shared/<string:token>', methods=['GET'])
+@token_required
+def get_shared_cld(user_id, token):
+    view_model = CLDViewModel(db.session)
+    cld, message = view_model.get_cld_by_token(token)
+
+    if cld is None:
+        return jsonify({'message': message}), 404
+
+    return jsonify(cld), 200
+
+
+@cld_routes.route('/cld/shared/ownerRelationships', methods=['GET'])
+@token_required
+def get_shared_cld_owner_relationships(user_id):
+    view_model = CLDViewModel(db.session)
+    token = request.args.get('token')
+    exclude_cld_id = request.args.get('exclude_cld_id')
+    if not token:
+        return jsonify({'message': 'Token missing'}), 400
+
+    owner_id = view_model.get_owner_id(token)
+    if owner_id is None:
+        return jsonify({'message': 'Invalid or revoked share token'}), 404
+
+    relationships, message = view_model.get_reusable_relationships(owner_id, exclude_cld_id)
+
+    return jsonify({
+        'relationships': relationships,
+        'message': message
+    }), 200
+
+
+@cld_routes.route('/cld/shared/ownerVariables', methods=['GET'])
+@token_required
+def get_shared_cld_owner_variables(user_id):
+    view_model = CLDViewModel(db.session)
+    token = request.args.get('token')
+    if not token:
+        return jsonify({'message': 'Token missing'}), 400
+
+    owner_id = view_model.get_owner_id(token)
+    if owner_id is None:
+        return jsonify({'message': 'Invalid or revoked share token'}), 404
+
+    variables, message = view_model.get_cld_owner_variables(owner_id)
+
+    if not variables:
+        return jsonify([]), 200
+
+    formatted_variables = [
+        {
+            'id': var.id,
+            'name': var.name,
+            'description': var.description
+        }
+        for var in variables
+    ]
+
+    return jsonify(formatted_variables), 200
+
+
+@cld_routes.route('/cld/<string:cld_id>/history', methods=['GET'])
+@token_required
+def get_cld_history_route(user_id, cld_id):
+    try:
+        view_model = CLDViewModel(db.session)
+        result, message = view_model.get_cld_history(
+            cld_id,
+            user_id,
+            request.args.get('share_token'),
+        )
+        if result is None:
+            return jsonify({'message': message}), 404
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'message': 'Server Error'}), 500
+
+
+@cld_routes.route('/cld/analyze', methods=['POST'])
+@token_required
+def analyze_live_diagram(user_id):
+    data = request.json
+    nodes = data.get('nodes', [])
+    edges = data.get('edges', [])
+    view_model = CLDViewModel(db.session)
+    result, message = view_model.analyze_live_state(nodes, edges)
+
+    if result:
+        return jsonify(result), 200
+    else:
+        return jsonify({"error": message}), 500
+
+@cld_routes.route('/cld/reusable-relationships', methods=['GET'])
+@token_required
+def get_reusable_relationships(user_id):
+    exclude_cld_id = request.args.get('exclude_cld_id')
+    view_model = CLDViewModel(db.session)
+    relationships, message = view_model.get_reusable_relationships(user_id, exclude_cld_id)
+    return jsonify({
+        'relationships': relationships,
+        'message': message
+    }), 200

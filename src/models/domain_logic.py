@@ -1,5 +1,6 @@
 import networkx as nx
-from .entities import RelationshipType, LoopType, ArchetypeType, FeedbackLoop, Archetype
+from .entities import RelationshipType, LoopType, ArchetypeType, FeedbackLoop, Archetype, Relationship
+
 
 class CLDAnalyzer:
     """Contains logic for analyzing Causal Loop Diagrams"""
@@ -76,30 +77,42 @@ class CLDAnalyzer:
         Identify the 'Shifting the Burden' archetype.
         Canonical pattern:
             Problem Symptom (PS) <-> Symptomatic Solution (SS) : PS->SS (+), SS->PS (−)
-            Problem Symptom (PS) <-> Fundamental Solution (FS) : PS->FS (+), FS->PS (−)
+            Problem Symptom (PS) <-> Fundamental Solution (FS) : PS->FS (+), FS->PS (−) WITH DELAY
             Side-effect (SE): SS->SE (+), SE->FS (−)
         This implementation searches for the qualitative wiring consistent with the pattern.
         """
-        rel_map = {(rel.source_id, rel.target_id): rel.type for rel in cld.relationships}
+        rel_map = {(rel.source_id, rel.target_id): rel for rel in cld.relationships}
 
         for var_ps in cld.variables:
             var_ss_candidates = [
-                var for var in cld.variables 
-                if rel_map.get((var.id, var_ps.id)) == RelationshipType.NEGATIVE 
-                and rel_map.get((var_ps.id, var.id)) == RelationshipType.POSITIVE
+                var for var in cld.variables
+                if (var.id, var_ps.id) in rel_map
+                and rel_map.get((var.id, var_ps.id)).type == RelationshipType.NEGATIVE
+                and not rel_map.get((var.id, var_ps.id)).has_delay
+                and (var_ps.id, var.id) in rel_map
+                and rel_map.get((var_ps.id, var.id)).type  == RelationshipType.POSITIVE
+                and not rel_map.get((var_ps.id, var.id)).has_delay
             ]
             var_fs_candidates = [
-                var for var in cld.variables 
-                if rel_map.get((var.id, var_ps.id)) == RelationshipType.NEGATIVE 
-                and rel_map.get((var_ps.id, var.id)) == RelationshipType.POSITIVE
+                var for var in cld.variables
+                if (var.id, var_ps.id) in rel_map
+                and rel_map.get((var.id, var_ps.id)).type  == RelationshipType.NEGATIVE
+                and rel_map[(var.id, var_ps.id)].has_delay
+                and (var_ps.id, var.id) in rel_map
+                and rel_map.get((var_ps.id, var.id)).type  == RelationshipType.POSITIVE
+                and not rel_map.get((var_ps.id, var.id)).has_delay
             ]
 
             for var_ss in var_ss_candidates:
                 for var_fs in var_fs_candidates:
                     var_se_candidates = [
-                        var for var in cld.variables 
-                        if rel_map.get((var_ss.id, var.id)) == RelationshipType.POSITIVE 
-                        and rel_map.get((var.id, var_fs.id)) == RelationshipType.NEGATIVE
+                        var for var in cld.variables
+                        if (var_ss.id, var.id) in rel_map
+                        and rel_map.get((var_ss.id, var.id)).type  == RelationshipType.POSITIVE
+                        and not rel_map.get((var_ss.id, var.id)).has_delay
+                        and (var.id, var_fs.id) in rel_map
+                        and rel_map.get((var.id, var_fs.id)).type  == RelationshipType.NEGATIVE
+                        and not rel_map.get((var.id, var_fs.id)).has_delay
                     ]
 
                     for var_se in var_se_candidates:
@@ -114,13 +127,13 @@ class CLDAnalyzer:
     def _identify_fixes_that_fail(cld, session):
         """
         Identify the 'Fixes that Fail' archetype.
-        Canonical pattern (no explicit delay modeled here):
+        Canonical pattern:
             Problem Symptom (PS) -> Fix / Quick Solution (F) : (+)
             Fix (F) -> Problem Symptom (PS) : (−)         [short balancing loop]
-            Fix (F) -> Unintended Consequence (UC) : (+)
+            Fix (F) -> Unintended Consequence (UC) : (+) WITH DELAY
             Unintended Consequence (UC) -> Problem Symptom (PS) : (+)  [reinforcing drift back]
         """
-        rel_map = {(rel.source_id, rel.target_id): rel.type for rel in cld.relationships}
+        rel_map = {(rel.source_id, rel.target_id): rel for rel in cld.relationships}
         created = set()  # avoid duplicates for the same trio
 
         for var_ps in cld.variables:
@@ -128,8 +141,12 @@ class CLDAnalyzer:
             f_candidates = [
                 v for v in cld.variables
                 if v.id != var_ps.id
-                and rel_map.get((var_ps.id, v.id)) == RelationshipType.POSITIVE
-                and rel_map.get((v.id, var_ps.id)) == RelationshipType.NEGATIVE
+                and (var_ps.id, v.id) in rel_map
+                and rel_map.get((var_ps.id, v.id)).type == RelationshipType.POSITIVE
+                and not rel_map.get((var_ps.id, v.id)).has_delay
+                and (v.id, var_ps.id) in rel_map
+                and rel_map.get((v.id, var_ps.id)).type == RelationshipType.NEGATIVE
+                and not rel_map.get((v.id, var_ps.id)).has_delay
             ]
 
             for var_f in f_candidates:
@@ -137,8 +154,12 @@ class CLDAnalyzer:
                 uc_candidates = [
                     v for v in cld.variables
                     if v.id not in {var_ps.id, var_f.id}
-                    and rel_map.get((var_f.id, v.id)) == RelationshipType.POSITIVE
-                    and rel_map.get((v.id, var_ps.id)) == RelationshipType.POSITIVE
+                       and (var_f.id, v.id) in rel_map
+                       and rel_map.get((var_f.id, v.id)).type == RelationshipType.POSITIVE
+                       and rel_map.get((var_f.id, v.id)).has_delay
+                       and (v.id, var_ps.id) in rel_map
+                       and rel_map.get((v.id, var_ps.id)).type == RelationshipType.POSITIVE
+                       and not rel_map.get((v.id, var_ps.id)).has_delay
                 ]
 
                 for var_uc in uc_candidates:
@@ -166,6 +187,7 @@ class CLDAnalyzer:
             Constraint (C) -> Limiting Action (LA) : (+)
         """
         rel_map = {(rel.source_id, rel.target_id): rel.type for rel in cld.relationships}
+        delay_map = {(rel.source_id, rel.target_id): rel.has_delay for rel in cld.relationships}
         created = set()
 
         for var_p in cld.variables:
@@ -174,7 +196,9 @@ class CLDAnalyzer:
                 v for v in cld.variables
                 if v.id != var_p.id
                 and rel_map.get((v.id, var_p.id)) == RelationshipType.POSITIVE   # E -> P (+)
+                and not delay_map.get((v.id, var_p.id), False)
                 and rel_map.get((var_p.id, v.id)) == RelationshipType.POSITIVE   # P -> E (+)
+                and not delay_map.get((var_p.id, v.id), False)
             ]
 
             # Step 2: candidates for LA (limiting action) tied to performance
@@ -182,7 +206,9 @@ class CLDAnalyzer:
                 v for v in cld.variables
                 if v.id != var_p.id
                 and rel_map.get((var_p.id, v.id)) == RelationshipType.POSITIVE   # P -> LA (+)
+                and not delay_map.get((var_p.id, v.id), False)
                 and rel_map.get((v.id, var_p.id)) == RelationshipType.NEGATIVE   # LA -> P (−)
+                and not delay_map.get((v.id, var_p.id), False)
             ]
 
             if not e_candidates or not la_candidates:
@@ -194,6 +220,7 @@ class CLDAnalyzer:
                     v for v in cld.variables
                     if v.id not in {var_p.id, var_la.id}
                     and rel_map.get((v.id, var_la.id)) == RelationshipType.POSITIVE  # C -> LA (+)
+                    and not delay_map.get((v.id, var_la.id), False)
                 ]
 
                 for var_e in e_candidates:
@@ -216,24 +243,28 @@ class CLDAnalyzer:
         Identify the 'Drifting Goals' (Eroding Goals) archetype.
         Wiring (Gap central to both loops):
         - G -> Gap (+), A -> Gap (-)
-        - [B1] A (-) -> Gap (+) -> CA (+) -> A
+        - [B1] A (-) -> Gap (+) -> CA (+) -> A WITH DELAY
         - [B2] G (+) -> Gap (+) -> PLG (-) -> G
         """
-        rel_map = {(rel.source_id, rel.target_id): rel.type for rel in cld.relationships}
+        rel_map = {(rel.source_id, rel.target_id): rel for rel in cld.relationships}
         created = set()
 
         for var_g in cld.variables:
             # Step 1a: choose a Gap variable influenced by Goal (+)
             gap_candidates = [
                 v for v in cld.variables
-                if v.id != var_g.id and rel_map.get((var_g.id, v.id)) == RelationshipType.POSITIVE
+                if (var_g.id, v.id) in rel_map
+                and v.id != var_g.id and rel_map.get((var_g.id, v.id)).type == RelationshipType.POSITIVE
+                and not rel_map.get((var_g.id, v.id)).has_delay
             ]
             for var_gap in gap_candidates:
                 # Step 1b: find Actual with A -> Gap (-)
                 a_candidates = [
                     v for v in cld.variables
                     if v.id not in {var_g.id, var_gap.id}
-                    and rel_map.get((v.id, var_gap.id)) == RelationshipType.NEGATIVE
+                    and (v.id, var_gap.id) in rel_map
+                    and rel_map.get((v.id, var_gap.id)).type == RelationshipType.NEGATIVE
+                    and not rel_map.get((v.id, var_gap.id)).has_delay
                 ]
                 if not a_candidates:
                     continue
@@ -242,8 +273,12 @@ class CLDAnalyzer:
                 plg_candidates = [
                     v for v in cld.variables
                     if v.id not in {var_g.id, var_gap.id}
-                    and rel_map.get((var_gap.id, v.id)) == RelationshipType.POSITIVE   # Gap -> PLG (+)
-                    and rel_map.get((v.id, var_g.id)) == RelationshipType.NEGATIVE     # PLG -> Goal (-)
+                    and (var_gap.id, v.id) in rel_map
+                    and rel_map.get((var_gap.id, v.id)).type == RelationshipType.POSITIVE   # Gap -> PLG (+)
+                    and not rel_map.get((var_gap.id, v.id)).has_delay
+                    and (v.id, var_g.id) in rel_map
+                    and rel_map.get((v.id, var_g.id)).type == RelationshipType.NEGATIVE     # PLG -> Goal (-)
+                    and not rel_map.get((v.id, var_g.id)).has_delay
                 ]
                 if not plg_candidates:
                     continue
@@ -253,8 +288,12 @@ class CLDAnalyzer:
                     ca_candidates = [
                         v for v in cld.variables
                         if v.id not in {var_g.id, var_gap.id, var_a.id}
-                        and rel_map.get((var_gap.id, v.id)) == RelationshipType.POSITIVE  # Gap -> CA (+)
-                        and rel_map.get((v.id, var_a.id)) == RelationshipType.POSITIVE    # CA -> A (+)
+                        and (var_gap.id, v.id) in rel_map
+                        and rel_map.get((var_gap.id, v.id)).type == RelationshipType.POSITIVE  # Gap -> CA (+)
+                        and not rel_map.get((var_gap.id, v.id)).has_delay
+                        and (v.id, var_a.id) in rel_map
+                        and rel_map.get((v.id, var_a.id)).type == RelationshipType.POSITIVE    # CA -> A (+)
+                        and rel_map.get((v.id, var_a.id)).has_delay
                     ]
                     if not ca_candidates:
                         continue
@@ -278,7 +317,7 @@ class CLDAnalyzer:
         """
         Identify the 'Growth and Underinvestment' archetype.
 
-        Canonical pattern (no explicit delays modeled here):
+        Canonical pattern:
             Reinforcing growth (R1):
                 Growth Effort (E) -> Demand (D) : (+)
                 Demand (D) -> Growth Effort (E) : (+)
@@ -290,11 +329,11 @@ class CLDAnalyzer:
             Investment/capacity build-up (B3):
                 ILF -> Perceived Need to Invest (PNI) : (+)
                 Performance Standard (PS) -> PNI : (+)
-                PNI -> Investment in Capacity (IC) : (+)
-                IC -> Capacity (C) : (+)
+                PNI -> Investment in Capacity (IC) : (+) WITH DELAY
+                IC -> Capacity (C) : (+) WITH DELAY
                 Capacity (C) -> Impact of Limiting Factor (ILF) : (−)
         """
-        rel_map = {(rel.source_id, rel.target_id): rel.type for rel in cld.relationships}
+        rel_map = {(rel.source_id, rel.target_id): rel for rel in cld.relationships}
         created = set()
 
         # Step 1: choose Demand (D) and find Growth Effort (E) forming R1
@@ -302,8 +341,12 @@ class CLDAnalyzer:
             e_candidates = [
                 v for v in cld.variables
                 if v.id != var_d.id
-                and rel_map.get((v.id, var_d.id)) == RelationshipType.POSITIVE   # E -> D (+)
-                and rel_map.get((var_d.id, v.id)) == RelationshipType.POSITIVE   # D -> E (+)
+                and (v.id, var_d.id) in rel_map
+                and rel_map.get((v.id, var_d.id)).type == RelationshipType.POSITIVE   # E -> D (+)
+                and not rel_map.get((v.id, var_d.id)).has_delay
+                and (var_d.id, v.id) in rel_map
+                and rel_map.get((var_d.id, v.id)).type == RelationshipType.POSITIVE   # D -> E (+)
+                and not rel_map.get((var_d.id, v.id)).has_delay
             ]
             if not e_candidates:
                 continue
@@ -312,8 +355,12 @@ class CLDAnalyzer:
             ilf_candidates = [
                 v for v in cld.variables
                 if v.id != var_d.id
-                and rel_map.get((var_d.id, v.id)) == RelationshipType.POSITIVE   # D -> ILF (+)
-                and rel_map.get((v.id, var_d.id)) == RelationshipType.NEGATIVE   # ILF -> D (−)
+                and (var_d.id, v.id) in rel_map
+                and rel_map.get((var_d.id, v.id)).type == RelationshipType.POSITIVE   # D -> ILF (+)
+                and not rel_map.get((var_d.id, v.id)).has_delay
+                and (v.id, var_d.id) in rel_map
+                and rel_map.get((v.id, var_d.id)).type == RelationshipType.NEGATIVE   # ILF -> D (−)
+                and not rel_map.get((v.id, var_d.id)).has_delay
             ]
             if not ilf_candidates:
                 continue
@@ -328,7 +375,9 @@ class CLDAnalyzer:
                 # C -> ILF (−)
                 c_to_ilf = [
                     v for v in c_candidates
-                    if rel_map.get((v.id, var_ilf.id)) == RelationshipType.NEGATIVE
+                    if (v.id, var_ilf.id) in rel_map
+                    and rel_map.get((v.id, var_ilf.id)).type == RelationshipType.NEGATIVE
+                    and not rel_map.get((v.id, var_ilf.id)).has_delay
                 ]
                 if not c_to_ilf:
                     continue
@@ -338,7 +387,9 @@ class CLDAnalyzer:
                     ic_candidates = [
                         v for v in cld.variables
                         if v.id not in {var_d.id, var_ilf.id, var_c.id}
-                        and rel_map.get((v.id, var_c.id)) == RelationshipType.POSITIVE
+                        and (v.id, var_c.id) in rel_map
+                        and rel_map.get((v.id, var_c.id)).type == RelationshipType.POSITIVE
+                        and rel_map.get((v.id, var_c.id)).has_delay
                     ]
                     if not ic_candidates:
                         continue
@@ -348,19 +399,26 @@ class CLDAnalyzer:
                         pni_candidates = [
                             v for v in cld.variables
                             if v.id not in {var_d.id, var_ilf.id, var_c.id, var_ic.id}
-                            and rel_map.get((v.id, var_ic.id)) == RelationshipType.POSITIVE
+                            and (v.id, var_ic.id) in rel_map
+                            and rel_map.get((v.id, var_ic.id)).type == RelationshipType.POSITIVE
+                            and rel_map.get((v.id, var_ic.id)).has_delay
                         ]
                         if not pni_candidates:
                             continue
 
                         for var_pni in pni_candidates:
                             # Step 4: PNI parents: ILF -> PNI (+), PS -> PNI (+)
-                            if rel_map.get((var_ilf.id, var_pni.id)) != RelationshipType.POSITIVE:
+                            if (var_ilf.id, var_pni.id) in rel_map and (
+                                rel_map.get((var_ilf.id, var_pni.id)).type != RelationshipType.POSITIVE
+                                or rel_map.get((var_ilf.id, var_pni.id)).has_delay
+                            ):
                                 continue
                             ps_candidates = [
                                 v for v in cld.variables
                                 if v.id not in {var_d.id, var_ilf.id, var_c.id, var_ic.id, var_pni.id}
-                                and rel_map.get((v.id, var_pni.id)) == RelationshipType.POSITIVE
+                                and (v.id, var_pni.id) in rel_map
+                                and rel_map.get((v.id, var_pni.id)).type == RelationshipType.POSITIVE
+                                and not rel_map.get((v.id, var_pni.id)).has_delay
                             ]
                             if not ps_candidates:
                                 continue
@@ -397,6 +455,7 @@ class CLDAnalyzer:
                 RB              -> SB                               : (+)
         """
         rel_map = {(rel.source_id, rel.target_id): rel.type for rel in cld.relationships}
+        delay_map = {(rel.source_id, rel.target_id): rel.has_delay for rel in cld.relationships}
         created = set()
 
         for alloc in cld.variables:
@@ -404,6 +463,7 @@ class CLDAnalyzer:
             ra_candidates = [
                 v for v in cld.variables
                 if v.id != alloc.id and rel_map.get((alloc.id, v.id)) == RelationshipType.POSITIVE
+                and not delay_map.get((alloc.id, v.id), False)
             ]
             branch_a = []
             for ra in ra_candidates:
@@ -411,7 +471,9 @@ class CLDAnalyzer:
                     v for v in cld.variables
                     if v.id not in {alloc.id, ra.id}
                     and rel_map.get((ra.id, v.id)) == RelationshipType.POSITIVE
+                    and not delay_map.get((ra.id, v.id), False)
                     and rel_map.get((v.id, alloc.id)) == RelationshipType.POSITIVE
+                    and not delay_map.get((v.id, alloc.id), False)
                 ]
                 for sa in sa_list:
                     branch_a.append((ra, sa))
@@ -422,6 +484,7 @@ class CLDAnalyzer:
             rb_candidates = [
                 v for v in cld.variables
                 if v.id != alloc.id and rel_map.get((alloc.id, v.id)) == RelationshipType.NEGATIVE
+                and not delay_map.get((alloc.id, v.id), False)
             ]
             branch_b = []
             for rb in rb_candidates:
@@ -429,7 +492,9 @@ class CLDAnalyzer:
                     v for v in cld.variables
                     if v.id not in {alloc.id, rb.id}
                     and rel_map.get((rb.id, v.id)) == RelationshipType.POSITIVE
+                    and not delay_map.get((rb.id, v.id), False)
                     and rel_map.get((v.id, alloc.id)) == RelationshipType.NEGATIVE
+                    and not delay_map.get((v.id, alloc.id), False)
                 ]
                 for sb in sb_list:
                     branch_b.append((rb, sb))
@@ -476,6 +541,7 @@ class CLDAnalyzer:
                 Q -> Threat_B (TB) : (+)
         """
         rel_map = {(rel.source_id, rel.target_id): rel.type for rel in cld.relationships}
+        delay_map = {(rel.source_id, rel.target_id): rel.has_delay for rel in cld.relationships}
         created = set()
 
         for var_q in cld.variables:
@@ -483,6 +549,7 @@ class CLDAnalyzer:
             ta_candidates = [
                 v for v in cld.variables
                 if v.id != var_q.id and rel_map.get((var_q.id, v.id)) == RelationshipType.NEGATIVE  # Q -> TA (−)
+                and not delay_map.get((var_q.id, v.id), False)
             ]
             a_side = []
             for var_ta in ta_candidates:
@@ -490,13 +557,16 @@ class CLDAnalyzer:
                     v for v in cld.variables
                     if v.id not in {var_q.id, var_ta.id}
                     and rel_map.get((var_ta.id, v.id)) == RelationshipType.POSITIVE  # TA -> ActA (+)
+                    and not delay_map.get((var_ta.id, v.id), False)
                 ]
                 for var_acta in acta_list:
                     resa_list = [
                         v for v in cld.variables
                         if v.id not in {var_q.id, var_ta.id, var_acta.id}
                         and rel_map.get((var_acta.id, v.id)) == RelationshipType.POSITIVE  # ActA -> ResA (+)
+                        and not delay_map.get((var_acta.id, v.id), False)
                         and rel_map.get((v.id, var_q.id)) == RelationshipType.POSITIVE    # ResA -> Q (+)
+                        and not delay_map.get((v.id, var_q.id), False)
                     ]
                     for var_resa in resa_list:
                         a_side.append((var_ta, var_acta, var_resa))
@@ -507,6 +577,7 @@ class CLDAnalyzer:
             tb_candidates = [
                 v for v in cld.variables
                 if v.id != var_q.id and rel_map.get((var_q.id, v.id)) == RelationshipType.POSITIVE  # Q -> TB (+)
+                and not delay_map.get((var_q.id, v.id), False)
             ]
             b_side = []
             for var_tb in tb_candidates:
@@ -514,13 +585,16 @@ class CLDAnalyzer:
                     v for v in cld.variables
                     if v.id not in {var_q.id, var_tb.id}
                     and rel_map.get((var_tb.id, v.id)) == RelationshipType.POSITIVE  # TB -> ActB (+)
+                    and not delay_map.get((var_tb.id, v.id), False)
                 ]
                 for var_actb in actb_list:
                     resb_list = [
                         v for v in cld.variables
                         if v.id not in {var_q.id, var_tb.id, var_actb.id}
                         and rel_map.get((var_actb.id, v.id)) == RelationshipType.POSITIVE  # ActB -> ResB (+)
+                        and not delay_map.get((var_actb.id, v.id), False)
                         and rel_map.get((v.id, var_q.id)) == RelationshipType.NEGATIVE     # ResB -> Q (−)
+                        and not delay_map.get((v.id, var_q.id), False)
                     ]
                     for var_resb in resb_list:
                         b_side.append((var_tb, var_actb, var_resb))
@@ -551,7 +625,7 @@ class CLDAnalyzer:
         """
         Identify the 'Tragedy of the Commons' archetype.
 
-        Canonical pattern (no explicit delays modeled here):
+        Canonical pattern:
             Two actors (A and B) draw from a shared commons.
 
             R1 (A-side reinforcement):
@@ -565,7 +639,7 @@ class CLDAnalyzer:
             Shared commons coupling:
                 A_Activity -> TotalActivity : (+)
                 B_Activity -> TotalActivity : (+)
-                TotalActivity -> GainPerIndividual : (−)
+                TotalActivity -> GainPerIndividual : (−) WITH DELAY
                 GainPerIndividual -> A_Activity : (−)
                 GainPerIndividual -> B_Activity : (−)
 
@@ -574,21 +648,25 @@ class CLDAnalyzer:
                 GainPerIndividual -> NetGains_B : (+)
                 ResourceLimit -> GainPerIndividual : (+)
         """
-        rel_map = {(rel.source_id, rel.target_id): rel.type for rel in cld.relationships}
+        rel_map = {(rel.source_id, rel.target_id): rel for rel in cld.relationships}
         created = set()
 
         # Step 1: choose Total and GainPer with the negative link Total -> GainPer
         for var_total in cld.variables:
             gain_candidates = [
                 v for v in cld.variables
-                if v.id != var_total.id and rel_map.get((var_total.id, v.id)) == RelationshipType.NEGATIVE
+                if (var_total.id, v.id) in rel_map
+                and v.id != var_total.id and rel_map.get((var_total.id, v.id)).type == RelationshipType.NEGATIVE
+                and rel_map.get((var_total.id, v.id)).has_delay
             ]
             for var_gain in gain_candidates:
                 # Resource limit must boost gain per individual
                 rl_candidates = [
                     v for v in cld.variables
                     if v.id not in {var_total.id, var_gain.id}
-                    and rel_map.get((v.id, var_gain.id)) == RelationshipType.POSITIVE
+                    and (v.id, var_gain.id) in rel_map
+                    and rel_map.get((v.id, var_gain.id)).type == RelationshipType.POSITIVE
+                    and not rel_map.get((v.id, var_gain.id)).has_delay
                 ]
                 if not rl_candidates:
                     continue
@@ -597,17 +675,27 @@ class CLDAnalyzer:
                 a_act_candidates = [
                     v for v in cld.variables
                     if v.id not in {var_total.id, var_gain.id}
-                    and rel_map.get((var_gain.id, v.id)) == RelationshipType.NEGATIVE  # Gain -> A (−)
-                    and rel_map.get((v.id, var_total.id)) == RelationshipType.POSITIVE  # A -> Total (+)
+                    and (var_gain.id, v.id) in rel_map
+                    and rel_map.get((var_gain.id, v.id)).type == RelationshipType.NEGATIVE  # Gain -> A (−)
+                    and not rel_map.get((var_gain.id, v.id)).has_delay
+                    and (v.id, var_total.id) in rel_map
+                    and rel_map.get((v.id, var_total.id)).type == RelationshipType.POSITIVE  # A -> Total (+)
+                    and not rel_map.get((v.id, var_total.id)).has_delay
                 ]
                 a_branch = []
                 for var_a_act in a_act_candidates:
                     a_ng_list = [
                         v for v in cld.variables
                         if v.id not in {var_total.id, var_gain.id, var_a_act.id}
-                        and rel_map.get((var_a_act.id, v.id)) == RelationshipType.POSITIVE   # A -> NG_A (+)
-                        and rel_map.get((v.id, var_a_act.id)) == RelationshipType.POSITIVE   # NG_A -> A (+)
-                        and rel_map.get((var_gain.id, v.id)) == RelationshipType.POSITIVE    # Gain -> NG_A (+)
+                        and (var_a_act.id, v.id) in rel_map
+                        and rel_map.get((var_a_act.id, v.id)).type == RelationshipType.POSITIVE   # A -> NG_A (+)
+                        and not rel_map.get((var_a_act.id, v.id)).has_delay
+                        and (v.id, var_a_act.id) in rel_map
+                        and rel_map.get((v.id, var_a_act.id)).type == RelationshipType.POSITIVE   # NG_A -> A (+)
+                        and not rel_map.get((v.id, var_a_act.id)).has_delay
+                        and (var_gain.id, v.id) in rel_map
+                        and rel_map.get((var_gain.id, v.id)).type == RelationshipType.POSITIVE    # Gain -> NG_A (+)
+                        and not rel_map.get((var_gain.id, v.id)).has_delay
                     ]
                     for var_a_ng in a_ng_list:
                         a_branch.append((var_a_act, var_a_ng))
@@ -618,17 +706,27 @@ class CLDAnalyzer:
                 b_act_candidates = [
                     v for v in cld.variables
                     if v.id not in {var_total.id, var_gain.id}
-                    and rel_map.get((var_gain.id, v.id)) == RelationshipType.NEGATIVE  # Gain -> B (−)
-                    and rel_map.get((v.id, var_total.id)) == RelationshipType.POSITIVE  # B -> Total (+)
+                    and (var_gain.id, v.id) in rel_map
+                    and rel_map.get((var_gain.id, v.id)).type == RelationshipType.NEGATIVE  # Gain -> B (−)
+                    and not rel_map.get((var_gain.id, v.id)).has_delay
+                    and (v.id, var_total.id) in rel_map
+                    and rel_map.get((v.id, var_total.id)).type == RelationshipType.POSITIVE  # B -> Total (+)
+                    and not rel_map.get((v.id, var_total.id)).has_delay
                 ]
                 b_branch = []
                 for var_b_act in b_act_candidates:
                     b_ng_list = [
                         v for v in cld.variables
                         if v.id not in {var_total.id, var_gain.id, var_b_act.id}
-                        and rel_map.get((var_b_act.id, v.id)) == RelationshipType.POSITIVE   # B -> NG_B (+)
-                        and rel_map.get((v.id, var_b_act.id)) == RelationshipType.POSITIVE   # NG_B -> B (+)
-                        and rel_map.get((var_gain.id, v.id)) == RelationshipType.POSITIVE    # Gain -> NG_B (+)
+                        and (var_b_act.id, v.id) in rel_map
+                        and rel_map.get((var_b_act.id, v.id)).type == RelationshipType.POSITIVE   # B -> NG_B (+)
+                        and not rel_map.get((var_b_act.id, v.id)).has_delay
+                        and (v.id, var_b_act.id) in rel_map
+                        and rel_map.get((v.id, var_b_act.id)).type == RelationshipType.POSITIVE   # NG_B -> B (+)
+                        and not rel_map.get((v.id, var_b_act.id)).has_delay
+                        and (var_gain.id, v.id) in rel_map
+                        and rel_map.get((var_gain.id, v.id)).type == RelationshipType.POSITIVE    # Gain -> NG_B (+)
+                        and not rel_map.get((var_gain.id, v.id)).has_delay
                     ]
                     for var_b_ng in b_ng_list:
                         b_branch.append((var_b_act, var_b_ng))

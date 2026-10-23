@@ -236,6 +236,7 @@ onMounted(() => {
 .getting-started-container {
   background-color: #f5f7fa;
   min-height: 100vh;
+  width: 100%;
 }
 
 .getting-started-content {

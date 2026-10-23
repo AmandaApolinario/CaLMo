@@ -40,11 +40,11 @@ class CLDService {
       console.log('CLD Service - Create response:', response.data);
       
       // Generate feedback loops and archetypes for the new CLD
-      if (response.data && response.data.id) {
-        await this.generateLoopsAndArchetypes(response.data.id);
+      if (response.data && response.data.cld.id) {
+        await this.generateLoopsAndArchetypes(response.data.cld.id);
       }
       
-      return CLDModel.fromJSON(response.data);
+      return CLDModel.fromJSON(response.data.cld);
     } catch (error) {
       console.error('Error creating CLD:', error);
       console.error('Error response:', error.response?.data);
@@ -54,7 +54,6 @@ class CLDService {
 
   async updateCLD(id, cldData) {
     try {
-      // Make sure we're sending all necessary CLD data, including variables and relationships
       const dataToSend = {
         name: cldData.name,
         description: cldData.description,
@@ -69,6 +68,13 @@ class CLDService {
       if (cldData.relationships) {
         dataToSend.relationships = cldData.relationships;
       }
+
+      if(cldData.share_token){
+        dataToSend.share_token = cldData.share_token;
+      }
+      if(cldData.subsystems){
+        dataToSend.subsystems = cldData.subsystems;
+      }
       
       console.log(`CLD Service - Updating CLD ${id} with data:`, dataToSend);
       const response = await ApiService.put(`cld/${id}`, dataToSend);
@@ -77,11 +83,15 @@ class CLDService {
       // The backend now returns the CLD data directly without nesting in a 'cld' property
       const updatedCLD = CLDModel.fromJSON(response.data);
       
-      // Re-generate feedback loops and archetypes after update
-      await this.generateLoopsAndArchetypes(id);
-      
-      // Fetch the latest CLD with all regenerated data
-      return await this.getCLDById(id);
+      // Re-generate feedback loops and archetypes after update.
+      // Forward the share token so collaborators (non-owners) stay authorized.
+      const shareToken = cldData.share_token || null;
+      await this.generateLoopsAndArchetypes(id, shareToken);
+
+      // Fetch the latest CLD with all regenerated data (share-token aware)
+      return shareToken
+        ? await this.getSharedCLD(shareToken)
+        : await this.getCLDById(id);
     } catch (error) {
       console.error(`Error updating CLD with ID ${id}:`, error);
       console.error('Error response:', error.response?.data);
@@ -100,32 +110,119 @@ class CLDService {
   }
   
   // Generate feedback loops and archetypes for a CLD
-  async generateLoopsAndArchetypes(cldId) {
+  async generateLoopsAndArchetypes(cldId, shareToken = null) {
     if (!cldId) {
       console.error('Cannot generate loops and archetypes: No CLD ID provided');
       return;
     }
     
     try {
+      const payload = shareToken ? { share_token: shareToken } : undefined;
       console.log('Regenerating feedback loops for CLD:', cldId);
       // The POST request will replace existing data, not add to it
-      const loopsResponse = await ApiService.post(`cld/${cldId}/feedback-loops`);
+      const loopsResponse = await ApiService.post(`cld/${cldId}/feedback-loops`, payload);
       console.log('Feedback loops regenerated:', loopsResponse.data);
       
       console.log('Regenerating archetypes for CLD:', cldId);
       // The POST request will replace existing data, not add to it
-      const archetypesResponse = await ApiService.post(`cld/${cldId}/archetypes`);
+      const archetypesResponse = await ApiService.post(`cld/${cldId}/archetypes`, payload);
       console.log('Archetypes regenerated:', archetypesResponse.data);
       
       // Return the CLD with updated loops and archetypes
-      return await this.getCLDById(cldId);
+      return shareToken
+        ? await this.getSharedCLD(shareToken)
+        : await this.getCLDById(cldId);
     } catch (error) {
       console.error('Error generating loops and archetypes:', error);
       // Don't throw the error - we still want the creation/update to succeed
       // Just log it and return the original CLD
-      return await this.getCLDById(cldId);
+      return shareToken
+        ? await this.getSharedCLD(shareToken)
+        : await this.getCLDById(cldId);
+    }
+  }
+
+  async generateShareToken(id) {
+    try {
+      const response = await ApiService.post(`cld/${id}/share`);
+      return response.data.token;
+    } catch (error) {
+      console.error(`Error generating share token for CLD ${id}:`, error);
+      throw new Error(error.response?.data?.message || 'Failed to generate share link');
+    }
+  }
+
+  async revokeShareToken(id) {
+    try {
+      await ApiService.delete(`cld/${id}/share`);
+      return true;
+    } catch (error) {
+      console.error(`Error revoking share token for CLD ${id}:`, error);
+      throw new Error(error.response?.data?.message || 'Failed to revoke share link');
+    }
+  }
+
+  async getSharedCLD(token) {
+    try {
+      const response = await ApiService.get(`cld/shared/${token}`);
+      return CLDModel.fromJSON(response.data);
+    } catch (error) {
+      console.error(`Error fetching shared CLD with token ${token}:`, error);
+      throw new Error(error.response?.data?.message || 'Invalid or revoked link');
+    }
+  }
+
+  async generateLiveLoopsAndArchetypes(nodes, edges) {
+    try {
+      const payload = { nodes, edges };
+
+      const response = await ApiService.post(`cld/analyze`, payload);
+
+      return response.data;
+    } catch (error) {
+      console.error('Error generating live loops and archetypes:', error);
+      return null;
+    }
+  }
+
+  async getReusableRelationships(excludeCldId = null) {
+    try {
+      const params = excludeCldId ? `?exclude_cld_id=${excludeCldId}` : '';
+      const response = await ApiService.get(`cld/reusable-relationships${params}`);
+      return response.data.relationships || [];
+    } catch (error) {
+      console.error('Error fetching reusable relationships:', error);
+      return [];
+    }
+  }
+
+  async getOwnerReusableRelationships(token, excludeCldId = null) {
+    try {
+      let params = `?token=${token}`;
+      if (excludeCldId) params += `&exclude_cld_id=${excludeCldId}`;
+      const response = await ApiService.get(`cld/shared/ownerRelationships${params}`);
+      return response.data.relationships || [];
+    } catch (error) {
+      console.error('Error fetching owner reusable relationships:', error);
+      return [];
+    }
+  }
+
+  async createEmptyCLD(cldData) {
+    try{
+      console.log('CLD Service - Creating CLD with data:', cldData);
+      const response = await ApiService.post('cld/create-empty', cldData);
+      console.log('CLD Service - Create response:', response.data);
+
+      if(response.data && response.data.cld_id) {
+        return response.data.cld_id;
+      }
+    }catch (error) {
+      console.error('Error creating CLD:', error);
+      console.error('Error response:', error.response?.data);
+      throw new Error(error.response?.data?.message || error.message || 'Failed to create diagram');
     }
   }
 }
 
-export default new CLDService(); 
+export default new CLDService();

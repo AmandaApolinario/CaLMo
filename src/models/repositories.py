@@ -1,6 +1,6 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select
-from .entities import User, Variable, CLD, Relationship, RelationshipType
+from .entities import User, Variable, CLD, Relationship, RelationshipType, CLDHistory
 from werkzeug.security import generate_password_hash, check_password_hash
 
 class UserRepository:
@@ -66,6 +66,10 @@ class VariableRepository:
             return True
         return False
 
+    @staticmethod
+    def get_variable_by_id(db: Session, variable_id: str):
+        return db.query(Variable).filter(Variable.id == variable_id).first()
+
 class CLDRepository:
     @staticmethod
     def create_cld(db: Session, user_id: str, name: str, date, description: str):
@@ -98,6 +102,10 @@ class CLDRepository:
         return cld
 
     @staticmethod
+    def get_cld_by_id(db: Session, cld_id:str ):
+        return db.query(CLD).filter(CLD.id == cld_id).first()
+
+    @staticmethod
     def delete_cld(db: Session, cld_id: str, user_id: str):
         cld = db.query(CLD).filter(CLD.id == cld_id, CLD.user_id == user_id).first()
         if cld:
@@ -108,12 +116,13 @@ class CLDRepository:
 
 class RelationshipRepository:
     @staticmethod
-    def create_relationship(db: Session, cld_id: str, source_id: str, target_id: str, rel_type: RelationshipType):
+    def create_relationship(db: Session, cld_id: str, source_id: str, target_id: str, rel_type: RelationshipType, has_delay: bool):
         new_rel = Relationship(
             cld_id=cld_id,
             source_id=source_id,
             target_id=target_id,
-            type=rel_type
+            type=rel_type,
+            has_delay = has_delay
         )
         db.add(new_rel)
         db.commit()
@@ -122,4 +131,17 @@ class RelationshipRepository:
 
     @staticmethod
     def get_relationships_by_cld(db: Session, cld_id):
-        return db.query(Relationship).filter_by(cld_id=cld_id).all() 
+        return db.query(Relationship).filter_by(cld_id=cld_id).all()
+
+    @staticmethod
+    def get_relationships_by_user_clds(db: Session, user_id, exclude_cld_id=None):
+        query = db.query(Relationship, CLD.name).join(CLD, Relationship.cld_id == CLD.id).filter(CLD.user_id == user_id)
+        if exclude_cld_id:
+            query = query.filter(Relationship.cld_id != exclude_cld_id)
+        rows = query.all()
+        return [(rel, cld_name) for rel, cld_name in rows]
+
+class CLDHistoryRepository:
+    @staticmethod
+    def get_history(db: Session, cld_id):
+        return db.query(CLDHistory).filter_by(cld_id=cld_id).order_by(CLDHistory.timestamp.desc()).all()

@@ -47,14 +47,16 @@ export function makePieEllipseDataUrl({
   const slice = (2 * Math.PI) / cols.length;
   const start0 = -Math.PI / 2; // start at 12 o'clock
 
-  const paths = cols.map((c, i) => {
-    const a1 = start0 + i * slice;
-    const a2 = start0 + (i + 1) * slice;
-    const x1 = cx + rx * Math.cos(a1), y1 = cy + ry * Math.sin(a1);
-    const x2 = cx + rx * Math.cos(a2), y2 = cy + ry * Math.sin(a2);
-    const large = (a2 - a1) > Math.PI ? 1 : 0;
-    return `<path d="M ${cx} ${cy} L ${x1} ${y1} A ${rx} ${ry} 0 ${large} 1 ${x2} ${y2} Z" fill="${c}"/>`;
-  }).join('');
+  const paths = cols.length === 1
+    ? `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${cols[0]}"/>`
+    : cols.map((c, i) => {
+        const a1 = start0 + i * slice;
+        const a2 = start0 + (i + 1) * slice;
+        const x1 = cx + rx * Math.cos(a1), y1 = cy + ry * Math.sin(a1);
+        const x2 = cx + rx * Math.cos(a2), y2 = cy + ry * Math.sin(a2);
+        const large = (a2 - a1) > Math.PI ? 1 : 0;
+        return `<path d="M ${cx} ${cy} L ${x1} ${y1} A ${rx} ${ry} 0 ${large} 1 ${x2} ${y2} Z" fill="${c}"/>`;
+      }).join('');
 
   const lines = String(label || '').split('\n');
   const linePx = fontSize * lineHeight;

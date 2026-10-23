@@ -54,6 +54,13 @@
               <!-- Variable Relationships -->
               <div class="form-group">
                 <label>Variable Relationships</label>
+                <div class="import-actions">
+                    <input type="file" ref="fileInput" @change="handleFileUpload" accept=".json,.csv,.xmile,.stmx" style="display: none;" />
+                    <button type="button" class="btn-import-sm" @click="triggerFileInput" :disabled="isImporting">
+                      <i class="fas fa-file-import"></i>
+                      {{ isImporting ? 'Importing...' : 'Import Relationships' }}
+                    </button>
+                  </div>
                 <div v-if="variables.length === 0" class="no-variables-message">
                   <p>No variables available. Please create variables first.</p>
                   <button type="button" @click="goToVariables" class="btn-secondary">
@@ -64,8 +71,7 @@
                   <div v-for="(edge, index) in diagram.edges" :key="index" class="relationship">
                     <div class="relationship-row">
                       <select v-model="edge.source" 
-                              @change="edge.target && checkForConflictingRelationship(index)" 
-                              required 
+                              @change="edge.target && checkForConflictingRelationship(index)"
                               class="relationship-select">
                         <option value="">Select source variable</option>
                         <option v-for="variable in variables" :key="variable.id" :value="variable.id">
@@ -75,7 +81,6 @@
                       
                       <select v-model="edge.polarity" 
                               @change="edge.source && edge.target && checkForConflictingRelationship(index)"
-                              required 
                               class="relationship-type">
                         <option value="positive">+ (Positive)</option>
                         <option value="negative">- (Negative)</option>
@@ -83,7 +88,6 @@
                       
                       <select v-model="edge.target" 
                               @change="checkForConflictingRelationship(index)"
-                              required 
                               class="relationship-select">
                         <option value="">Select target variable</option>
                         <option v-for="variable in filteredTargetVariables(edge.source)" 
@@ -92,6 +96,11 @@
                           {{ variable.name }}
                         </option>
                       </select>
+
+                      <label class="delay-checkbox">
+                        <input type="checkbox" v-model="edge.has_delay">
+                        Delay
+                      </label>
                       
                       <button type="button" @click="() => removeEdge(index)" class="btn-delete">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
@@ -123,6 +132,15 @@
             >
               {{ saving ? 'Creating...' : 'Create CLD' }}
             </button>
+            <button
+              type="submit"
+              :disabled="saving"
+              class="btn-submit"
+              @click="isCanvasRedirect = true"
+            >
+              <i class="fas fa-project-diagram"></i>
+              {{ saving && isCanvasRedirect ? 'Opening Canvas...' : 'Create & Open Canvas' }}
+            </button>
           </div>
         </form>
 
@@ -141,12 +159,14 @@
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount } from 'vue'
+import {onMounted, onBeforeUnmount, ref} from 'vue'
 import { useRouter } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
 import { useCLDEditorViewModel } from '@/viewmodels/CLDEditorViewModel'
 
 const router = useRouter()
+const isCanvasRedirect = ref(false)
+const fileInput = ref(null)
 
 // Initialize the CLD Editor ViewModel
 const { 
@@ -163,7 +183,10 @@ const {
   addEdge,
   removeEdge,
   filteredTargetVariables,
-  validateDiagram
+  validateDiagram,
+  isImporting,
+  importRelationshipsFromFile,
+  checkEdgeConflict
 } = useCLDEditorViewModel()
 
 // Initialize with an empty diagram
@@ -192,10 +215,12 @@ onBeforeUnmount(() => {
 
 const handleSubmit = async () => {
   // Validate the diagram data
-  const validationError = validateDiagram()
-  if (validationError) {
-    error.value = validationError
-    return
+  if(!isCanvasRedirect.value) {
+   const validationError = validateDiagram()
+    if (validationError) {
+      error.value = validationError
+      return
+    }
   }
   
   // Create the diagram
@@ -204,7 +229,11 @@ const handleSubmit = async () => {
     if (newDiagram) {
       // Redirect to the diagram list after successful creation
       setTimeout(() => {
-        router.push('/clds')
+        if (isCanvasRedirect.value) {
+          router.push(`/cld/${newDiagram.id}/canvas`)
+        } else {
+          router.push('/clds')
+        }
       }, 1000)
     }
   } catch (err) {
@@ -222,48 +251,36 @@ const goToVariables = () => {
 
 const checkForConflictingRelationship = (index) => {
   const currentEdge = diagram.value.edges[index];
-  
-  // Skip if the edge is not fully defined
-  if (!currentEdge.source || !currentEdge.target || !currentEdge.polarity) {
-    return;
-  }
-  
-  // Check if there's already a relationship between these variables with a different polarity
-  for (let i = 0; i < diagram.value.edges.length; i++) {
-    if (i === index) continue; // Skip the current edge
-    
-    const otherEdge = diagram.value.edges[i];
-    
-    // Skip incomplete edges
-    if (!otherEdge.source || !otherEdge.target || !otherEdge.polarity) {
-      continue;
-    }
-    
-    // Check if exactly the same variables are connected in the same direction
-    const sameDirectionalRelationship = 
-      (currentEdge.source === otherEdge.source && currentEdge.target === otherEdge.target);
-    
-    if (sameDirectionalRelationship && currentEdge.polarity !== otherEdge.polarity) {
-      error.value = `Conflicting relationship: Cannot have both positive and negative relationships between the same variables in the same direction`;
-      
-      // Reset the last selection 
-      currentEdge.target = '';
-      
-      // Clear the error after 5 seconds
-      setTimeout(() => {
-        error.value = null;
-      }, 5000);
-      
-      break;
-    }
+  if (!currentEdge) return;
+  if (checkEdgeConflict(index)) {
+    currentEdge.target = '';
   }
 }
+
+const triggerFileInput = () => {
+    if (fileInput.value) fileInput.value.click();
+  };
+
+const handleFileUpload = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  try {
+    await importRelationshipsFromFile(file);
+  } finally {
+    event.target.value = '';
+    if (isImporting !== undefined) {
+      isImporting.value = false;
+    }
+  }
+};
 </script>
 
 <style scoped>
 .create-cld-container {
   min-height: 100vh;
   background-color: #f5f7fa;
+  width: 100%;
 }
 
 .cld-content {
@@ -519,4 +536,58 @@ button {
 .fas {
   font-size: 1.2rem;
 }
+
+.btn-canvas {
+  background-color: #2c3e50;
+  color: white;
+}
+
+.btn-canvas:hover {
+  background-color: #1a252f;
+  transform: translateY(-2px);
+}
+
+.relationships-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.btn-import-sm {
+  background-color: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all 0.2s ease;
+}
+
+.btn-import-sm:hover {
+  background-color: #e2e8f0;
+  color: #0f172a;
+}
+
+.btn-import-sm:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.delay-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.delay-checkbox input { width: auto; margin: 0; cursor: pointer; }
 </style>

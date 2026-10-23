@@ -1,6 +1,8 @@
 import { ref, reactive, computed } from 'vue';
 import CLDService from '@/services/cld.service';
 import ApiService from '@/services/api.service';
+import {FileParserService} from "@/services/fileParser.service.js";
+import {parseBoolean} from "@/services/parser/parserUtils.js";
 
 export function useCLDEditorViewModel() {
   // Initialize with default empty structure to avoid null references
@@ -16,7 +18,23 @@ export function useCLDEditorViewModel() {
   const saving = ref(false);
   const error = ref(null);
   const successMessage = ref('');
-  
+  const isImporting = ref(false);
+
+  const relationshipSchema = {
+    xmlSelector: 'connector',
+    fields: {
+      source: { required: true, xmlAttr: 'from' },
+      target: { required: true, xmlAttr: 'to' },
+      polarity: { required: false, default: 'positive', xmlAttr: 'polarity' },
+      has_delay: {
+        required: false,
+        default: false,
+        xmlAttr: 'delay_mark',
+        aliases: ['delay', 'delay_mark']
+      }
+    }
+  };
+
   // Initialize empty diagram structure
   const createEmptyDiagram = () => {
     return {
@@ -87,12 +105,13 @@ export function useCLDEditorViewModel() {
         description: fetchedDiagram.description || '',
         createdAt: formattedDate,
         nodes: fetchedDiagram.nodes || fetchedDiagram.variables || [],
-        edges: fetchedDiagram.edges || (fetchedDiagram.relationships ? fetchedDiagram.relationships.map(r => ({
+        edges: (fetchedDiagram.relationships || []).map(r => ({
           source: r.source_id,
           target: r.target_id,
-          polarity: r.type?.toLowerCase() === 'positive' ? 'positive' : 'negative'
-        })) : [])
-      };
+          polarity: r.type?.toLowerCase() === 'positive' ? 'positive' : 'negative',
+          has_delay: !!r.has_delay
+        }))
+      };  
       
       console.log('Diagram fetched:', diagram.value);
       
@@ -131,13 +150,14 @@ export function useCLDEditorViewModel() {
       });
       
       // Format relationships in the way the backend expects them
-      const relationships = (diagramData.edges || []).map(edge => {
-        return {
+      const relationships = (diagramData.edges || [])
+        .filter(edge => edge.source !== "" && edge.target !== "")
+        .map(edge => ({
           source_id: edge.source,
           target_id: edge.target,
-          type: edge.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE'
-        };
-      });
+          type: edge.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE',
+          has_delay: edge.has_delay,
+        }));
 
       // Transform data for API - using the exact field names required by the backend
       const apiData = {
@@ -147,10 +167,8 @@ export function useCLDEditorViewModel() {
         variables: Array.from(variableIds),
         relationships: relationships
       };
-      
-      console.log('Creating diagram with API data:', apiData);
+
       const newDiagram = await CLDService.createCLD(apiData);
-      
       successMessage.value = 'Diagram created successfully!';
       return newDiagram;
     } catch (err) {
@@ -174,19 +192,27 @@ export function useCLDEditorViewModel() {
     successMessage.value = '';
     
     try {
-      // Extract variable IDs from the relationships
+      // Preserve every variable already in the diagram — including ones with no
+      // relationship — otherwise the backend's update_cld (which replaces the
+      // whole variable set) drops unconnected variables from the CLD.
       const variableIds = new Set();
+      (diagramData.nodes || []).forEach(v => {
+        const id = (v && typeof v === 'object') ? v.id : v;
+        if (id) variableIds.add(id);
+      });
+      // Also include any variable referenced by a relationship.
       (diagramData.edges || []).forEach(edge => {
         if (edge.source) variableIds.add(edge.source);
         if (edge.target) variableIds.add(edge.target);
       });
-      
+
       // Format relationships in the way the backend expects them
       const relationships = (diagramData.edges || []).map(edge => {
         return {
           source_id: edge.source,
           target_id: edge.target,
-          type: edge.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE'
+          type: edge.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE',
+          has_delay: edge.has_delay,
         };
       });
 
@@ -226,7 +252,8 @@ export function useCLDEditorViewModel() {
     diagram.value.edges.push({
       source: '',
       target: '',
-      polarity: 'positive'
+      polarity: 'positive',
+      has_delay: false,
     });
     
     console.log('Edge added, edges now:', diagram.value.edges);
@@ -277,6 +304,101 @@ export function useCLDEditorViewModel() {
     
     return null;
   };
+
+  // Renamed from checkForConflictingRelationship — validates that no two edges share the same source/target with opposite polarity
+  const checkEdgeConflict = (index) => {
+    const currentEdge = diagram.value.edges[index];
+    if (!currentEdge || !currentEdge.source || !currentEdge.target || !currentEdge.polarity) return false;
+
+    for (let i = 0; i < diagram.value.edges.length; i++) {
+      if (i === index) continue;
+      const otherEdge = diagram.value.edges[i];
+      if (!otherEdge.source || !otherEdge.target || !otherEdge.polarity) continue;
+      if (currentEdge.source === otherEdge.source && currentEdge.target === otherEdge.target && currentEdge.polarity !== otherEdge.polarity) {
+        error.value = 'Conflicting relationship: Cannot have both positive and negative relationships between the same variables in the same direction';
+        setTimeout(() => { error.value = null; }, 5000);
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const importRelationshipsFromFile = async (file) => {
+    isImporting.value = true;
+    error.value = null;
+    successMessage.value = '';
+
+    try {
+      const parsedEdges = await FileParserService.parseFile(file, relationshipSchema);
+
+      if (parsedEdges.length === 0) {
+        throw new Error('No valid relationships found in the file.');
+      }
+
+      const uniqueVarNames = new Set();
+      parsedEdges.forEach(edge => {
+        if (edge.source) uniqueVarNames.add(edge.source.trim());
+        if (edge.target) uniqueVarNames.add(edge.target.trim());
+      });
+
+      await fetchVariables();
+      const existingNamesMap = new Map();
+      variables.value.forEach(v => existingNamesMap.set(v.name.toLowerCase().trim(), v.id));
+
+      let newlyCreatedCount = 0;
+      for (const name of uniqueVarNames) {
+        const normalizedName = name.toLowerCase();
+        if (!existingNamesMap.has(normalizedName)) {
+          try {
+             const response = await ApiService.post('variable', { name: name, description: 'Created via Relationship Import' });
+             existingNamesMap.set(normalizedName, response.data.id);
+             newlyCreatedCount++;
+          } catch (e) {
+             console.error(`Failed to auto-create variable: ${name}`, e);
+          }
+        }
+      }
+
+      if (newlyCreatedCount > 0) {
+         await fetchVariables();
+         variables.value.forEach(v => existingNamesMap.set(v.name.toLowerCase().trim(), v.id));
+      }
+
+      if (!diagram.value.edges) diagram.value.edges = [];
+
+      let addedEdgesCount = 0;
+      parsedEdges.forEach(edge => {
+         const sourceId = existingNamesMap.get(edge.source.toLowerCase().trim());
+         const targetId = existingNamesMap.get(edge.target.toLowerCase().trim());
+
+         if (sourceId && targetId) {
+            let pol = String(edge.polarity).toLowerCase();
+            if (pol === '+' || pol === '1' || pol === 'positive') pol = 'positive';
+            else if (pol === '-' || pol === '-1' || pol === 'negative') pol = 'negative';
+            else pol = 'positive';
+
+            diagram.value.edges.push({
+               source: sourceId,
+               target: targetId,
+               polarity: pol,
+               has_delay: parseBoolean(
+                 edge.has_delay ?? edge.delay ?? edge.delay_mark,
+                 false
+               )
+            });
+            addedEdgesCount++;
+         }
+      });
+
+      successMessage.value = `Imported ${addedEdgesCount} relationships and auto-created ${newlyCreatedCount} missing variables!`;
+      setTimeout(() => { successMessage.value = '' }, 6000);
+    } catch (err) {
+      error.value = err.message || 'Failed to import relationships';
+      console.error('Import error:', err);
+    } finally {
+      isImporting.value = false;
+    }
+  };
   
   return {
     diagram,
@@ -294,6 +416,9 @@ export function useCLDEditorViewModel() {
     addEdge,
     removeEdge,
     filteredTargetVariables,
-    validateDiagram
+    validateDiagram,
+    isImporting,
+    importRelationshipsFromFile,
+    checkEdgeConflict
   };
 } 

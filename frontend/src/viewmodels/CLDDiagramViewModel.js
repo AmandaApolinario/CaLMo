@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { ref, markRaw, shallowRef} from 'vue';
 import { Network } from 'vis-network';
 import { DataSet } from 'vis-data';
 import {
@@ -7,16 +7,22 @@ import {
   getArchetypeColor,
   getLoopColor,
   getArchetypeInstanceColor,
-  ensureContrastWithBackground, // ensure instance color is not too close to node regular color
+  LOOP_COLORS,
 } from '@/theme/colors';
 import { makePieEllipseDataUrl } from '@/theme/nodeImages';
-
+import { getSingleArchetypeColor } from '@/viewmodels/archetypePresentation.utils.js';
 export function useCLDDiagramViewModel() {
   const networkContainer = ref(null);
-  const network = ref(null);
+  const network = shallowRef(null);
   const zoomLevel = ref(1);
   const selectedNode = ref(null);
-  const selectedNodeInfo = ref({ nodeName: '', loops: [], archetypes: [] });
+  const selectedNodeInfo = ref({ nodeName: '', subsystemIds: [], loops: [], archetypes: [] });
+  const interactionMode = ref('select');
+  const edgeAddedCallback = ref(null);
+  const hasSelection = ref(false);
+  const nodeDraggedCallback = ref(null);
+  const diagramLayers = ref([]);
+  const showSubsystemBorders = ref(false);
 
   // Persisted node positions by diagram id
   const diagramPositions = ref({});
@@ -113,10 +119,32 @@ export function useCLDDiagramViewModel() {
 
   function createDiagram(diagram, container) {
     if (!container || !diagram) return;
+
+    // Capture the current on-screen positions BEFORE tearing down the old
+    // network. Recreating the network on every structural change (new edge,
+    // new loop) must not fall back to a physics re-layout: the live positions
+    // are the source of truth and win over any stale persisted layout.
+    let livePositions = {};
+    let liveViewport = null;
+    if (network.value !== null) {
+      try {
+        livePositions = network.value.getPositions() || {};
+        liveViewport = { scale: network.value.getScale(), position: network.value.getViewPosition() };
+      } catch (e) { livePositions = {}; }
+      network.value.destroy();
+      network.value = null;
+    }
     networkContainer.value = container;
 
-    // Saved positions for this diagram
+    // Persisted layout (localStorage) as base, live on-screen positions win.
     const savedPositions = getSavedPositions(diagram.id);
+    const positionMap = { ...(savedPositions || {}), ...livePositions };
+    const hasPositions = Object.keys(positionMap).length > 0;
+    // Persist the merged layout so future loads restore it without physics.
+    if (hasPositions && diagram.id) {
+      diagramPositions.value[diagram.id] = positionMap;
+      try { localStorage.setItem(`cld-positions-${diagram.id}`, JSON.stringify(positionMap)); } catch (e) {}
+    }
 
     // ---- Pass 1: count instances per archetype type ----
     const typeTotals = new Map(); // type -> total instances
@@ -129,9 +157,20 @@ export function useCLDDiagramViewModel() {
     archetypeMetaById = new Map();
     const typeIndices = new Map();          // type -> next index (0-based)
     const archetypeIdsByNode = new Map();   // nodeId -> [archetypeId, ...]
+    const processedSignatures = new Set();
 
     (diagram.archetypes || []).forEach((arch) => {
       const t = arch.type;
+
+      const varIds = (arch.variables || [])
+      .map(v => typeof v === 'object' ? v.id : v)
+      .sort()
+      .join('|');
+      const signature = `${t}-${varIds}`;
+      const archKey = arch.id || signature;
+      if (processedSignatures.has(signature)) return;
+      processedSignatures.add(signature)
+
       const idx = typeIndices.get(t) || 0;
       typeIndices.set(t, idx + 1);
 
@@ -143,13 +182,19 @@ export function useCLDDiagramViewModel() {
       const label =
         total === 1 ? formatArchetypeName(t) : `${formatArchetypeName(t)} ${toRoman(idx + 1)}`;
 
-      archetypeMetaById.set(arch.id, { type: t, index: idx, color, label });
+      archetypeMetaById.set(archKey, {
+        type: t,
+        color,
+        label: formatArchetypeName(t)
+    });
 
       (arch.variables || []).forEach((v) => {
         const id = typeof v === 'object' ? v.id : v;
         if (id == null) return;
-        if (!archetypeIdsByNode.has(id)) archetypeIdsByNode.set(id, []);
-        archetypeIdsByNode.get(id).push(arch.id);
+        if (!archetypeIdsByNode.has(id)) {
+            archetypeIdsByNode.set(id, []);
+        }
+        archetypeIdsByNode.get(id).push(archKey);
       });
     });
 
@@ -176,25 +221,31 @@ export function useCLDDiagramViewModel() {
           title: node.name
         };
 
-        if (savedPositions && savedPositions[node.id]) {
-          nodeObj.x = savedPositions[node.id].x;
-          nodeObj.y = savedPositions[node.id].y;
+        if (positionMap[node.id]) {
+          nodeObj.x = positionMap[node.id].x;
+          nodeObj.y = positionMap[node.id].y;
+        } else if (node.x !== undefined && node.y !== undefined) {
+          nodeObj.x = node.x;
+          nodeObj.y = node.y;
         }
 
-        const archIds = archetypeIdsByNode.get(node.id) || [];
+        const archKeys = archetypeIdsByNode.get(nodeObj.id) || [];
 
-        if (archIds.length >= 2) {
+        if (archKeys.length >= 2) {
           const colors = [...new Set(
-            archIds.map(id => archetypeMetaById.get(id)?.color).filter(Boolean)
+            archKeys.map(id => archetypeMetaById.get(id)?.color).filter(Boolean)
           )];
           nodeObj.shape = 'image';
           nodeObj.image = makePieEllipseDataUrl({ label: wrapped, colors });
           nodeObj.label = '';
           nodeObj.shadow = true;
 
-        } else if (archIds.length === 1) {
-          const meta = archetypeMetaById.get(archIds[0]);
-          const c = meta?.color || getArchetypeColor(meta?.type);
+        } else if (archKeys.length === 1) {
+          const c = getSingleArchetypeColor(
+            archKeys[0],
+            archetypeMetaById,
+            getArchetypeColor,
+          );
           nodeObj.shape = 'ellipse';
           nodeObj.color = {
             background: c,
@@ -218,23 +269,63 @@ export function useCLDDiagramViewModel() {
       })
     );
 
+    const rawEdges = diagram.edges || diagram.relationships || [];
+
+    function getSmartSmooth(sourceId, targetId) {
+      const hasReciprocal = rawEdges.some(e =>
+          (e.source === targetId && e.target === sourceId) ||
+          (e.source_id === targetId && e.target_id === sourceId)
+      );
+
+      if (hasReciprocal) {
+          return { type: 'curvedCW', roundness: 0.2 };
+      }
+
+      return { type: 'continuous', roundness: 0.2 };
+    }
+
     // ---- Edges ----
     const edges = new DataSet(
       (diagram.edges || []).map(edge => {
         const isPositive = edge.polarity === 'positive';
         const c = isPositive ? EDGE_COLORS.positive : EDGE_COLORS.negative;
-        return {
+        const sourceId = edge.source || edge.source_id;
+        const targetId = edge.target || edge.target_id;
+        const edgeObj = {
           id: edge.id,
           from: edge.source,
           to: edge.target,
-          label: isPositive ? '+' : '-',
+          label: edge.has_delay ? '||' : '',
+          polarityLabel: isPositive ? '+' : '-',
+          smooth: getSmartSmooth(sourceId, targetId),
           arrows: 'to',
-          font: { size: 22, color: c.base },
+          font: {
+              size: 22,
+              color: '',
+              align: 'middle',
+              face: 'Arial',
+              background: 'transparent'
+          },
           width: 2,
           color: { color: c.base, highlight: c.highlight }
         };
+
+        if (edge.has_delay) {
+            const isDarkTheme = document.documentElement.getAttribute('data-theme') !== 'light';
+            edgeObj.font.color = '#000000';
+            edgeObj.font.background = 'transparent';
+            if (isDarkTheme) {
+                edgeObj.font.strokeWidth = 2;
+                edgeObj.font.strokeColor = '#ffffff';
+            }
+        }
+
+        return edgeObj;
+
       })
     );
+
+    const hasSavedPositions = hasPositions;
 
     // ---- Network options ----
     const options = {
@@ -247,78 +338,401 @@ export function useCLDDiagramViewModel() {
         fixed: { x: false, y: false },
         font: { multi: true },
         shapeProperties: {
-          useImageSize: true,       // usa width/height do SVG
-          useBorderWithImage: false  // mantém a borda do nó com imagem
+          useImageSize: true,
+          useBorderWithImage: false
         }
       },
-      edges: { smooth: { type: 'curvedCW', roundness: 0.2 },
+      edges: { smooth: { type: 'cubicBezier', roundness: 0.2 },
         width: 2
       },
       interaction: {
-        hover: true, navigationButtons: true, keyboard: true,
-        multiselect: false, dragNodes: true, zoomView: true
+        hover: true,
+        navigationButtons: true,
+        keyboard: true,
+        multiselect: false,
+        zoomView: true,
+        dragNodes: interactionMode.value === 'select',
+        selectable: interactionMode.value === 'select'
       },
       physics: {
-        enabled: false,
-        stabilization: { enabled: true, iterations: 100, fit: true },
+        // Must be enabled up front so vis-network runs the initial layout as a
+        // headless stabilization (redraw is blocked). Enabling it after the
+        // Network is built starts a *visible* simulation instead, and
+        // 'stabilizationIterationsDone' never fires.
+        enabled: !hasSavedPositions,
+        stabilization: { enabled: !hasSavedPositions, iterations: 100, fit: true },
         barnesHut: {
           gravitationalConstant: -2000, centralGravity: 0.05,
           springLength: 150, springConstant: 0.04,
           damping: 0.5, avoidOverlap: 1.0
         }
       },
-      layout: { improvedLayout: true, randomSeed: 42 }
+      layout: { improvedLayout: true, randomSeed: 42 },
+      manipulation: {
+        enabled: false,
+        controlNodeStyle: {
+          shape: 'dot',
+          size: 6,
+          color: {
+            background: EDGE_COLORS.positive.base,
+            border: EDGE_COLORS.positive.base,
+            highlight: {
+                background: EDGE_COLORS.positive.base,
+                border: EDGE_COLORS.positive.base
+            }
+          }
+        },
+        addEdge: (edgeData, callback) => {
+          if (edgeData.from === edgeData.to) {
+            callback(null);
+            setTimeout(() => {
+              if (network.value && (interactionMode.value === 'addPositiveEdge' || interactionMode.value === 'addNegativeEdge')) {
+                setInteractionMode(interactionMode.value);
+              }
+            }, 50);
+            return;
+          }
+
+          const fromNode = network.value.body.data.nodes.get(edgeData.from);
+          const toNode = network.value.body.data.nodes.get(edgeData.to);
+
+          if (edgeAddedCallback.value && fromNode && toNode) {
+            const polarity = interactionMode.value === 'addNegativeEdge' ? 'negative' : 'positive';
+            edgeAddedCallback.value(fromNode.id, toNode.id, polarity);
+          }
+
+          callback(null);
+          setTimeout(() => {
+            if (network.value && (interactionMode.value === 'addPositiveEdge' || interactionMode.value === 'addNegativeEdge')) {
+              setInteractionMode(interactionMode.value);
+            }
+          }, 50);
+        }
+      },
     };
 
     // ---- Create network ----
-    network.value = new Network(networkContainer.value, { nodes, edges }, options);
+    network.value = markRaw(new Network(networkContainer.value, { nodes, edges }, options));
+
+    // Restore the previous camera synchronously so the recreate paints at the
+    // same viewport instead of briefly fitting and then shifting into place.
+    if (liveViewport) {
+      try {
+        network.value.moveTo({ position: liveViewport.position, scale: liveViewport.scale, animation: false });
+      } catch (e) { /* viewport not ready yet; the delayed restoreView covers it */ }
+    }
 
     // Selection & UX
     network.value.on('selectNode', (params) => handleNodeSelection(params, diagram));
     network.value.on('click', (params) => {
-      if (params.nodes.length === 0) {
+      if (params.nodes.length === 0 && params.edges.length === 0) {
         clearNodeSelection();
-      } else {
-        handleNodeSelection({ nodes: params.nodes }, diagram);
+      }
+      else if (params.nodes.length > 0) {
+        selectedNode.value = params.nodes[0];
+        selectedNodeInfo.value = { nodeName: '', subsystemIds: [], loops: [], archetypes: [] };
+      }
+      else if (params.edges.length > 0) {
+        selectedNode.value = null;
+        selectedNodeInfo.value = { nodeName: '', subsystemIds: [], loops: [], archetypes: [] };
       }
     });
     network.value.on('dragEnd', () => saveNodePositions(diagram.id));
+    network.value.on('dragging', (params) => {
+        if (params.nodes.length > 0 && nodeDraggedCallback.value) {
+            const nodeId = params.nodes[0];
+            const pos = network.value.getPositions([nodeId])[nodeId];
+            nodeDraggedCallback.value(nodeId, pos);
+        }
+    });
+    network.value.on('select', () => { hasSelection.value = true; });
+    network.value.on('deselect', () => {
+      const sel = network.value.getSelection();
+      hasSelection.value = sel.nodes.length > 0 || sel.edges.length > 0;
+    });
+    network.value.on('doubleClick', (params) => {
+      if (params.nodes.length > 0) {
+        handleNodeSelection({ nodes: params.nodes }, diagram);
+      }
+    });
 
-    setTimeout(() => {
-      network.value.fit({ animation: { duration: 1000, easingFunction: 'easeInOutQuad' } });
-    }, 500);
+    // Subsystem boundaries are an overlay derived from the current graph positions.
+    // A parent includes visible descendants only while expanded, and depth-dependent
+    // padding keeps nested subsystem boxes visually distinguishable.
+    network.value.on('beforeDrawing', (ctx) => {
+        if (!showSubsystemBorders.value) return;
+        if (diagramLayers.value && diagramLayers.value.length > 0) {
+            const positions = network.value.getPositions();
 
-    if (!savedPositions) {
-      network.value.setOptions({ physics: { enabled: true } });
-      network.value.once('stabilizationIterationsDone', () => {
-        setTimeout(() => {
-          ensureNoOverlap();
-          network.value.setOptions({ physics: { enabled: false } });
-          network.value.stopSimulation();
-          network.value.fit({ animation: { duration: 1000, easingFunction: 'easeInOutQuad' } });
-          saveNodePositions(diagram.id);
-        }, 500);
+            const drawLayerBox = (layer, depth = 0) => {
+                if (!layer.visible || layer.id === 'global') return;
+
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                let hasValidNodes = false;
+
+                const collectNodes = (l) => {
+                    if (!l.visible) return [];
+                    let ns = [...l.variableIds];
+                    if (l.expanded && l.subsystems) {
+                        l.subsystems.forEach(sub => ns = ns.concat(collectNodes(sub)));
+                    }
+                    return ns;
+                };
+
+                const allNodesInSystem = collectNodes(layer);
+
+                allNodesInSystem.forEach(nodeId => {
+                    const pos = positions[nodeId];
+                    const visNode = network.value.body.nodes[nodeId];
+                    if (pos && visNode && !visNode.options.hidden) {
+                        hasValidNodes = true;
+                        minX = Math.min(minX, pos.x);
+                        minY = Math.min(minY, pos.y);
+                        maxX = Math.max(maxX, pos.x);
+                        maxY = Math.max(maxY, pos.y);
+                    }
+                });
+
+                if (hasValidNodes) {
+                    const padding = 50 + (depth * 20);
+                    const colorHex = layer.color;
+
+                    ctx.fillStyle = colorHex + '1A';
+                    ctx.strokeStyle = colorHex + '80';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([8, 6]);
+
+                    const x = minX - padding;
+                    const y = minY - padding;
+                    const w = (maxX - minX) + padding * 2;
+                    const h = (maxY - minY) + padding * 2;
+
+                    ctx.beginPath();
+                    if (ctx.roundRect) ctx.roundRect(x, y, w, h, 15);
+                    else ctx.rect(x, y, w, h);
+                    ctx.fill();
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    ctx.fillStyle = colorHex;
+                    ctx.font = 'bold 16px Arial';
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'bottom';
+                    ctx.fillText(layer.name, x + 10, y - 5);
+                }
+
+                if (layer.expanded && layer.subsystems) {
+                    layer.subsystems.forEach(sub => drawLayerBox(sub, depth + 1));
+                }
+            };
+
+            const globalLayer = diagramLayers.value.find(l => l.id === 'global');
+            if (globalLayer && globalLayer.subsystems && globalLayer.visible) {
+                globalLayer.subsystems.forEach(sublayer => drawLayerBox(sublayer, 0));
+            }
+        }
+    });
+
+    // Loop badges are rendered after the network so they remain above nodes and edges.
+    // Their anchor is the centroid of the loop members; the small vertical offset keeps
+    // larger loops from placing the badge directly on a central node.
+    network.value.on('afterDrawing', (ctx) => {
+
+      diagram.feedback_loops.forEach((loop, index) => {
+        const isReinforcing = String(loop.type).toUpperCase().includes('REINFORCING');
+
+        const prefix = isReinforcing ? 'R' : 'B';
+        const labelText = `${prefix}${index + 1}`;
+        const color = isReinforcing ? LOOP_COLORS.REINFORCING : LOOP_COLORS.BALANCING;
+
+        const varIds = (loop.variables || []).map(v => typeof v === 'object' ? v.id : v);
+        if (varIds.length === 0) return;
+
+        const positions = network.value.getPositions(varIds);
+        let sumX = 0, sumY = 0, validNodes = 0;
+        let isLoopVisible = true;
+
+        varIds.forEach(id => {
+          const visNode = network.value.body.nodes[id];
+          if (visNode && visNode.options.hidden) isLoopVisible = false;
+
+          if (positions[id]) {
+            sumX += positions[id].x;
+            sumY += positions[id].y;
+            validNodes++;
+          }
+        });
+
+        if (validNodes > 0 && isLoopVisible) {
+          const centerX = sumX / validNodes;
+          const centerY = validNodes > 2 ? (sumY / validNodes) + (validNodes * 5) : sumY / validNodes;
+
+          const radius = 22;
+          const startAngle = -Math.PI / 2 + 0.4;
+          const endAngle = 1.5 * Math.PI - 0.4;
+
+          const arrowLengthRadians = 0.45;
+          const arrowHalfWidth = 8;
+
+          const baseAngle = endAngle - arrowLengthRadians;
+          const arcEndAngle = baseAngle + 0.05;
+
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, radius, startAngle, arcEndAngle, false);
+          ctx.lineWidth = 4;
+          ctx.strokeStyle = color;
+          ctx.stroke();
+
+          const tipX = centerX + radius * Math.cos(endAngle);
+          const tipY = centerY + radius * Math.sin(endAngle);
+
+          const baseInnerX = centerX + (radius - arrowHalfWidth) * Math.cos(baseAngle);
+          const baseInnerY = centerY + (radius - arrowHalfWidth) * Math.sin(baseAngle);
+
+          const baseOuterX = centerX + (radius + arrowHalfWidth) * Math.cos(baseAngle);
+          const baseOuterY = centerY + (radius + arrowHalfWidth) * Math.sin(baseAngle);
+
+          ctx.beginPath();
+          ctx.moveTo(tipX, tipY);
+          ctx.lineTo(baseInnerX, baseInnerY);
+          ctx.lineTo(baseOuterX, baseOuterY);
+          ctx.closePath();
+          ctx.fillStyle = color;
+          ctx.fill();
+
+          const isLoopDarkTheme = document.documentElement.getAttribute('data-theme') !== 'light';
+          ctx.font = 'bold 16px Arial';
+          ctx.fillStyle = isLoopDarkTheme ? '#FFFFFF' : '#000000';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(labelText, centerX, centerY);
+        }
       });
-    } else {
-      setTimeout(() => {
-        ensureNoOverlap();
+
+      const allEdges = network.value.body.data.edges.get();
+
+      const isEdgeDarkTheme = document.documentElement.getAttribute('data-theme') !== 'light';
+      const bgStrokeColor = isEdgeDarkTheme ? '#1e1e1e' : '#ffffff';
+  
+      allEdges.forEach(edge => {
+        const visEdge = network.value.body.edges[edge.id];
+        const fromNode = network.value.body.nodes[edge.from];
+        const toNode = network.value.body.nodes[edge.to];
+
+        if (visEdge && visEdge.options.hidden) return;
+        if (fromNode && fromNode.options.hidden) return;
+        if (toNode && toNode.options.hidden) return;
+
+        if (visEdge && visEdge.edgeType && typeof visEdge.edgeType.getPoint === 'function') {
+          const pt = visEdge.edgeType.getPoint(0.75);
+          const prevPt = visEdge.edgeType.getPoint(0.74);
+
+          if (pt && prevPt && edge.polarityLabel) {
+            const angle = Math.atan2(pt.y - prevPt.y, pt.x - prevPt.x);
+
+            const offsetDistance = 18;
+
+            const offsetX = Math.cos(angle - Math.PI / 2) * offsetDistance;
+            const offsetY = Math.sin(angle - Math.PI / 2) * offsetDistance;
+
+            const drawX = pt.x + offsetX;
+            const drawY = pt.y + offsetY;
+
+            ctx.font = 'bold 24px Arial';
+
+            const isPositive = edge.polarityLabel === '+';
+            ctx.fillStyle = isPositive ? EDGE_COLORS.positive.base : EDGE_COLORS.negative.base;
+
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = bgStrokeColor;
+            ctx.strokeText(edge.polarityLabel, drawX, drawY);
+
+            ctx.fillText(edge.polarityLabel, drawX, drawY);
+          }
+        }
+      });
+    });
+
+    // Preserve the user's current camera (zoom/pan) across a recreate; only
+    // auto-fit on a fresh layout, when there is no previous viewport to keep.
+    const restoreView = () => {
+      if (!network.value) return;
+      if (liveViewport) {
+        network.value.moveTo({ position: liveViewport.position, scale: liveViewport.scale, animation: false });
+      } else {
+        network.value.fit({ animation: false });
+      }
+    };
+    setTimeout(restoreView, 500);
+
+    if (!hasPositions) {
+      // Physics only runs for a brand-new diagram with no known positions.
+      // Turn it off once the initial layout stabilizes so the graph doesn't
+      // keep floating, and persist the resulting positions.
+      let physicsStopped = false;
+      const stopPhysics = () => {
+        if (physicsStopped || !network || !network.value) return;
+        physicsStopped = true;
         network.value.setOptions({ physics: { enabled: false } });
         network.value.stopSimulation();
-        network.value.fit();
+        network.value.fit({ animation: false });
+        saveNodePositions(diagram.id);
+      };
+
+      network.value.once('stabilizationIterationsDone', () => {
+        setTimeout(stopPhysics, 100);
+      });
+      // Fallback: stabilize() bails out early (no event) when the diagram has
+      // no physics nodes, e.g. a brand new empty CLD.
+      setTimeout(stopPhysics, 2000);
+    } else {
+      setTimeout(() => {
+        if (network && network.value) {
+          network.value.setOptions({ physics: { enabled: false } });
+          network.value.stopSimulation();
+          restoreView();
+        }
       }, 100);
+    }
+
+    if (interactionMode.value === 'addPositiveEdge' || interactionMode.value === 'addNegativeEdge') {
+      setInteractionMode(interactionMode.value);
+      // Re-arm once more after the post-recreate settle timers (fit/physics at
+      // ~100ms) have run, so the add-edge mode reliably survives the recreate
+      // and stays sticky — the user draws many edges with a single tool click.
+      setTimeout(() => {
+        if (network.value && (interactionMode.value === 'addPositiveEdge' || interactionMode.value === 'addNegativeEdge')) {
+          network.value.addEdgeMode();
+        }
+      }, 160);
     }
   }
 
   // Save node positions
-  function saveNodePositions(diagramId) {
-    if (!network.value || !diagramId) return;
+  function saveNodePositions(diagramId, manualPositions = null) {
+    if (!diagramId) return;
     try {
-      const positions = {};
-      const nodePositions = network.value.getPositions();
-      Object.keys(nodePositions).forEach(nodeId => { positions[nodeId] = nodePositions[nodeId]; });
+      let positions = {};
+
+      if (network.value) {
+        const nodePositions = network.value.getPositions();
+        Object.keys(nodePositions).forEach(nodeId => {
+          positions[nodeId] = nodePositions[nodeId];
+        });
+      }
+
+      if (manualPositions) {
+        positions = { ...positions, ...manualPositions };
+      }
+
       diagramPositions.value[diagramId] = positions;
       localStorage.setItem(`cld-positions-${diagramId}`, JSON.stringify(positions));
-    } catch (error) { console.error('Error saving node positions:', error); }
+    } catch (error) {
+      console.error('Error saving node positions:', error);
+    }
   }
 
   // Load node positions
@@ -344,36 +758,73 @@ export function useCLDDiagramViewModel() {
     const node = (diagram.nodes || []).find(n => n.id === nodeId);
     if (!node) return;
 
-    const loops = (diagram.feedback_loops || []).filter(loop =>
+    const rawLoops = (diagram.feedback_loops || []).filter(loop =>
       Array.isArray(loop.variables) &&
       loop.variables.some(v => (typeof v === 'object' ? v.id === nodeId : v === nodeId))
     );
 
-    const archetypes = (diagram.archetypes || []).filter(arch =>
+    const uniqueLoopsMap = new Map();
+    rawLoops.forEach(loop => {
+        const varSignature = (loop.variables || []).map(v => typeof v === 'object' ? v.id : String(v)).sort().join('|');
+        const key = loop.id ? loop.id : `${loop.type}-${varSignature}`;
+        uniqueLoopsMap.set(key, loop);
+    });
+    const filteredLoops = Array.from(uniqueLoopsMap.values());
+
+    const rawArchetypes = (diagram.archetypes || []).filter(arch =>
       Array.isArray(arch.variables) &&
       arch.variables.some(v => (typeof v === 'object' ? v.id === nodeId : v === nodeId))
     );
+
+    const uniqueArchMap = new Map();
+    rawArchetypes.forEach(arch => {
+        const varSignature = (arch.variables || []).map(v => typeof v === 'object' ? v.id : String(v)).sort().join('|');
+        const key = arch.id ? arch.id : `${arch.type}-${varSignature}`;
+        uniqueArchMap.set(key, arch);
+    });
+    const filteredArchetypes = Array.from(uniqueArchMap.values());
 
     const getVariableName = (varId) => {
       const foundVar = (diagram.nodes || []).find(n => n.id === varId);
       return foundVar ? foundVar.name : varId;
     };
 
+    let currentSubsystemIds = [];
+    const checkNodeSubsystem = (l) => {
+        if (l.id !== 'global' && l.variableIds && l.variableIds.includes(nodeId)) {
+            currentSubsystemIds.push(l.id);
+        }
+        if (l.subsystems) l.subsystems.forEach(checkNodeSubsystem);
+    };
+    if (diagramLayers.value) {
+        diagramLayers.value.forEach(checkNodeSubsystem);
+    }
+
     selectedNodeInfo.value = {
+      nodeId: node.id,
       nodeName: node.name,
-      loops: (loops || []).map(loop => ({
-        id: loop.id,
-        type: loop.type,
-        color: getLoopColor(loop.type),
-        variables: Array.isArray(loop.variables)
-          ? loop.variables.map(v => {
-              if (typeof v === 'object' && v.name) return v.name;
-              if (typeof v === 'object' && v.id)   return getVariableName(v.id);
-              return getVariableName(v);
-            })
-          : []
-      })),
-      archetypes: (archetypes || []).map(arch => {
+      subsystemIds: currentSubsystemIds,
+      loops: filteredLoops.map(loop => {
+        // Match the canvas badge label (B1/R2/...): prefix by type + the loop's
+        // global position in diagram.feedback_loops.
+        const globalIdx = (diagram.feedback_loops || []).indexOf(loop);
+        const isReinforcing = String(loop.type).toUpperCase().includes('REINFORCING');
+        const label = `${isReinforcing ? 'R' : 'B'}${globalIdx >= 0 ? globalIdx + 1 : ''}`;
+        return {
+          id: loop.id,
+          type: loop.type,
+          label,
+          color: getLoopColor(loop.type),
+          variables: Array.isArray(loop.variables)
+            ? loop.variables.map(v => {
+                if (typeof v === 'object' && v.name) return v.name;
+                if (typeof v === 'object' && v.id)   return getVariableName(v.id);
+                return getVariableName(v);
+              })
+            : []
+        };
+      }),
+      archetypes: filteredArchetypes.map(arch => {
         const meta = archetypeMetaById.get(arch.id);
         return {
           id: arch.id,
@@ -397,7 +848,7 @@ export function useCLDDiagramViewModel() {
       try {
         network.value.unselectAll();
       } catch (e) {
-        console.error('Erro ao limpar seleção do network:', e);
+        console.error('Error clearing network selection:', e);
       }
     }
 
@@ -455,7 +906,9 @@ export function useCLDDiagramViewModel() {
     }
 
     if (overlapsFixed > 0) {
-      network.value.fit({ animation: { duration: 500, easingFunction: 'easeOutQuad' } });
+      if (network && network.value) {
+        network.value.fit({animation: {duration: 500, easingFunction: 'easeOutQuad'}});
+      }
     }
   }
 
@@ -485,8 +938,10 @@ export function useCLDDiagramViewModel() {
 
     setTimeout(() => {
       ensureNoOverlap();
-      network.value.setOptions({ physics: { enabled: false } });
-      network.value.fit({ animation: { duration: 1000, easingFunction: 'easeInOutQuad' } });
+      if (network && network.value) {
+        network.value.setOptions({ physics: { enabled: false } });
+        network.value.fit({ animation: { duration: 1000, easingFunction: 'easeInOutQuad' } });
+      }
     }, 1500);
   }
 
@@ -512,8 +967,281 @@ export function useCLDDiagramViewModel() {
       .replace(/\w\S*/g, txt => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
   }
 
+  function fitView() {
+    if (!network.value) return;
+    network.value.fit({ animation: { duration: 1000, easingFunction: 'easeInOutQuad' } });
+  }
+
+  function setInteractionMode(mode) {
+    interactionMode.value = mode;
+    if (!network.value) return;
+
+    network.value.disableEditMode();
+
+    if (mode === 'pan') {
+
+      network.value.setOptions({
+        interaction: { dragNodes: false, selectable: false },
+        edges: { color: { inherit: false }, arrows: 'to' }
+      });
+      clearNodeSelection();
+    } else if (mode === 'addPositiveEdge' || mode === 'addNegativeEdge') {
+      const isPositive = mode === 'addPositiveEdge';
+      const c = isPositive ? EDGE_COLORS.positive : EDGE_COLORS.negative;
+      network.value.setOptions({
+        interaction: { dragNodes: false, selectable: false },
+        edges: {
+          arrows: 'to',
+          color: {
+            inherit: false,
+            color: c.base,
+            highlight: c.base,
+            hover: c.base,
+          }
+        },
+        manipulation: {
+          controlNodeStyle: {
+            shape: 'dot',
+            size: 6,
+            color: {
+              background: c.base,
+              border: c.base,
+              highlight: { background: c.base, border: c.base }
+            }
+          }
+        }
+      });
+      clearNodeSelection();
+      network.value.addEdgeMode();
+    } else {
+      network.value.setOptions({
+        interaction: { dragNodes: true, selectable: true },
+        edges: { color: { inherit: false }, arrows: 'to' }
+      });
+    }
+  }
+
+  function addEdgeToCanvas(edgeData) {
+    if (!network.value) return;
+    // Skip the optimistic add when either endpoint isn't in the network yet
+    // (e.g. connecting a just-added node whose recreate is still pending). Adding
+    // it now makes vis spawn a phantom node at the origin — the visible glitch.
+    // The pending diagram recreate will render this edge correctly.
+    const nodesDS = network.value.body.data.nodes;
+    if (!nodesDS.get(edgeData.source) || !nodesDS.get(edgeData.target)) return;
+    const isPositive = edgeData.polarity === 'positive';
+    const c = isPositive ? EDGE_COLORS.positive : EDGE_COLORS.negative;
+
+    const allEdges = network.value.body.data.edges.get();
+    const hasReciprocal = allEdges.some(e => e.from === edgeData.target && e.to === edgeData.source);
+
+    if (hasReciprocal) {
+        const reciprocalEdge = allEdges.find(e => e.from === edgeData.target && e.to === edgeData.source);
+        if (reciprocalEdge) {
+            network.value.body.data.edges.update({
+                id: reciprocalEdge.id,
+                smooth: { type: 'curvedCW', roundness: 0.2 }
+            });
+        }
+    }
+
+    const smartSmooth = hasReciprocal
+        ? { type: 'curvedCW', roundness: 0.2 }
+        : { type: 'continuous', roundness: 0.2 };
+
+    const delayDarkTheme = document.documentElement.getAttribute('data-theme') !== 'light';
+    const edgeObj = {
+      id: edgeData.id,
+      from: edgeData.source,
+      to: edgeData.target,
+      label: edgeData.has_delay ? '||' : '',
+      polarityLabel: isPositive ? '+' : '-',
+      arrows: 'to',
+      smooth: smartSmooth,
+      font: {
+          size: 20,
+          color: edgeData.has_delay ? '#000000' : c.base,
+          align: 'middle',
+          face: 'Arial',
+          background: 'transparent',
+          strokeWidth: edgeData.has_delay && delayDarkTheme ? 2 : 0,
+          strokeColor: edgeData.has_delay && delayDarkTheme ? '#ffffff' : 'transparent'
+      },
+      width: 2,
+      color: { color: c.base, highlight: c.highlight }
+    };
+
+  }
+
+  function deleteSelectedElements(removeNodeCb, removeEdgeCb) {
+    if (!network.value) return;
+
+    const selection = network.value.getSelection();
+
+    if (selection.nodes.length > 0) {
+      selection.nodes.forEach(nodeId => {
+        const connectedEdgeIds = network.value.getConnectedEdges(nodeId);
+        const visEdges = connectedEdgeIds.map(id => network.value.body.data.edges.get(id));
+
+        if (removeNodeCb) removeNodeCb(nodeId, visEdges);
+      });
+    } else if (selection.edges.length > 0) {
+      selection.edges.forEach(edgeId => {
+        const visEdge = network.value.body.data.edges.get(edgeId);
+
+        if (removeEdgeCb) removeEdgeCb(edgeId, visEdge);
+      });
+    }
+
+    clearNodeSelection();
+    hasSelection.value = false;
+  }
+
+  function getCurrentPositions() {
+    if (!network.value) return {};
+    return network.value.getPositions();
+  }
+
+  function updateNodePosition(nodeId, x, y) {
+    if (!network.value) return;
+    try {
+        network.value.moveNode(nodeId, x, y);
+    } catch (e) {
+    }
+  }
+
+  function addNodeToCanvas(nodeData) {
+    if (!network.value) return;
+    try {
+        const bgColor = (typeof NODE_COLORS !== 'undefined' && NODE_COLORS.regular) ? NODE_COLORS.regular.background : '#FDE5A6';
+        const borderColor = (typeof NODE_COLORS !== 'undefined' && NODE_COLORS.regular) ? NODE_COLORS.regular.border : '#D8C28D';
+
+        const nodeObj = {
+            id: nodeData.id,
+            label: wrapLabel(nodeData.name, 30, 3),
+            shape: 'ellipse',
+            font: { size: 18, color: '#000000', face: 'Arial', multi: true },
+            borderWidth: 2,
+            widthConstraint: { maximum: 200 },
+            title: nodeData.name,
+            color: {
+                background: bgColor,
+                border: borderColor,
+                highlight: { background: bgColor, border: borderColor }
+            }
+        };
+
+        if (nodeData.x !== undefined && nodeData.y !== undefined) {
+            nodeObj.x = Number(nodeData.x);
+            nodeObj.y = Number(nodeData.y);
+        }
+
+        network.value.body.data.nodes.add(nodeObj);
+
+        if (nodeData.x !== undefined && nodeData.y !== undefined) {
+            network.value.moveNode(nodeObj.id, Number(nodeData.x), Number(nodeData.y));
+        }
+    } catch (e) {
+        console.warn('Node already exists or there was an error adding it:', e);
+    }
+  }
+
+  function removeNodeFromCanvas(nodeId) {
+      if (!network.value) return;
+      try {
+        network.value.body.data.nodes.remove(nodeId);
+      } catch(e){
+        console.log(e);
+      }
+  }
+
+  function removeEdgeFromCanvas(edgeId, source, target) {
+      if (!network.value) return;
+      try {
+          if (network.value.body.data.edges.get(edgeId)) {
+              network.value.body.data.edges.remove(edgeId);
+              return;
+          } else if (network.value.body.data.edges.get(String(edgeId))) {
+              network.value.body.data.edges.remove(String(edgeId));
+              return;
+          }
+
+          if (source && target) {
+              const allEdges = network.value.body.data.edges.get();
+              const visualEdge = allEdges.find(e =>
+                  String(e.from) === String(source) && String(e.to) === String(target)
+              );
+
+              if (visualEdge) {
+                  network.value.body.data.edges.remove(visualEdge.id);
+              }
+          }
+      } catch(e) { console.warn(e); }
+  }
+
+  function exportToPNG(filename = 'diagrama_cld.png') {
+    if (!networkContainer.value) return;
+
+    const canvas = networkContainer.value.querySelector('canvas');
+    if (!canvas) {
+      console.warn('Canvas not found for export.');
+      return;
+    }
+
+    const imageURL = canvas.toDataURL('image/png');
+
+    const downloadLink = document.createElement('a');
+    downloadLink.href = imageURL;
+    downloadLink.download = filename;
+
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+  }
+
+  // Hides/shows nodes based on subsystem visibility after canvas recreation
+  function updateVisibility() {
+    if (!network.value) return;
+    const allNodes = network.value.body.data.nodes.get();
+    const updates = [];
+
+    allNodes.forEach(node => {
+      let isVisible = false;
+      let belongsToAnySubsystem = false;
+
+      const checkLayer = (layer) => {
+        if (layer.id !== 'global' && layer.variableIds.includes(node.id)) {
+          belongsToAnySubsystem = true;
+          if (layer.visible) isVisible = true;
+        }
+        if (layer.subsystems) {
+          layer.subsystems.forEach(checkLayer);
+        }
+      };
+
+      diagramLayers.value.forEach(checkLayer);
+
+      if (!belongsToAnySubsystem) {
+        const globalLayer = diagramLayers.value.find(l => l.id === 'global');
+        isVisible = globalLayer ? globalLayer.visible : true;
+      }
+
+      updates.push({ id: node.id, hidden: !isVisible });
+    });
+
+    network.value.body.data.nodes.update(updates);
+  }
+
+  function toggleSubsystemBorders() {
+      showSubsystemBorders.value = !showSubsystemBorders.value;
+      if (network.value) {
+          network.value.redraw();
+      }
+  }
+
   return {
     networkContainer,
+    network,
     selectedNodeInfo,
     selectedNode,
     legendArchetypes,
@@ -523,6 +1251,25 @@ export function useCLDDiagramViewModel() {
     zoomOut,
     redistributeNodes,
     getArchetypeIcon,
-    formatArchetypeName
+    formatArchetypeName,
+    saveNodePositions,
+    interactionMode,
+    setInteractionMode,
+    fitView,
+    edgeAddedCallback,
+    addEdgeToCanvas,
+    hasSelection,
+    deleteSelectedElements,
+    getCurrentPositions,
+    updateNodePosition,
+    nodeDraggedCallback,
+    addNodeToCanvas,
+    removeEdgeFromCanvas,
+    removeNodeFromCanvas,
+    exportToPNG,
+    diagramLayers,
+    updateVisibility,
+    showSubsystemBorders,
+    toggleSubsystemBorders
   };
 }

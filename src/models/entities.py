@@ -1,7 +1,7 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Enum as SqlEnum, Date, Text, Table
+from sqlalchemy import Column, Integer, String, ForeignKey, Enum as SqlEnum, Date, Text, Table, DateTime, Boolean
 from sqlalchemy.orm import relationship
 import enum
-from datetime import date
+from datetime import date, datetime
 import uuid
 import networkx as nx
 from .. import db
@@ -68,6 +68,12 @@ archetype_variables = Table(
     Column('variable_id', String, ForeignKey('variables.id', ondelete='RESTRICT'), primary_key=True)
 )
 
+subsystem_variables = Table(
+    'subsystem_variables', db.metadata,
+    Column('subsystem_id', String, ForeignKey('subsystems.id', ondelete='CASCADE'), primary_key=True),
+    Column('variable_id', String, ForeignKey('variables.id', ondelete='CASCADE'), primary_key=True)
+)
+
 # Models
 class User(db.Model):
     __tablename__ = 'users'
@@ -87,7 +93,6 @@ class Variable(db.Model):
     name = Column(String(512), nullable=False)
     description = Column(String)
     user_id = Column(String, ForeignKey('users.id'))
-
     user = relationship("User", back_populates="variables")
 
 class CLD(db.Model):
@@ -98,10 +103,10 @@ class CLD(db.Model):
     description = Column(Text)
     date = Column(Date, default=date.today)
     user_id = Column(String, ForeignKey('users.id'))
-
+    share_token = Column(String(100), unique=True, nullable=True)
     user = relationship("User", back_populates="clds")
     variables = relationship('Variable', secondary=cld_variables)
-    relationships = relationship('Relationship', back_populates='cld', cascade='all, delete-orphan', passive_deletes=True,)
+    relationships = relationship('Relationship', back_populates='cld', cascade='all, delete-orphan')
     feedback_loops = relationship(
         'FeedbackLoop',
         back_populates='cld',
@@ -113,6 +118,7 @@ class CLD(db.Model):
         back_populates='cld',
         cascade='all, delete-orphan'
     )
+    subsystems = relationship('Subsystem', back_populates='cld', cascade='all, delete-orphan')
 
 class Relationship(db.Model):
     __tablename__ = 'relationships'
@@ -122,6 +128,7 @@ class Relationship(db.Model):
     target_id = Column(String, ForeignKey('variables.id', ondelete='RESTRICT'), nullable=False)
     type = Column(relationship_type_enum, nullable=False)
     cld_id = Column(String, ForeignKey('clds.id', ondelete='CASCADE'), nullable=False)
+    has_delay = Column(Boolean, default=False)
 
     cld = relationship('CLD', back_populates='relationships')
 
@@ -144,3 +151,28 @@ class Archetype(db.Model):
 
     cld = relationship('CLD', back_populates='archetypes', passive_deletes=True)
     variables = relationship('Variable', secondary=archetype_variables)
+
+class CLDHistory(db.Model):
+    __tablename__ = 'cld_history'
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    cld_id = Column(String(36), ForeignKey('clds.id', ondelete="CASCADE"))
+    user_id = Column(String(36), ForeignKey('users.id'))
+    action_summary = Column(Text)
+    timestamp = Column(DateTime, default=datetime.timestamp(datetime.now()))
+
+    user = relationship('User')
+
+
+class Subsystem(db.Model):
+    __tablename__ = 'subsystems'
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, nullable=False)
+    description = Column(Text)
+    cld_id = Column(String, ForeignKey('clds.id', ondelete='CASCADE'), nullable=False)
+    cld = relationship('CLD', back_populates='subsystems')
+
+    parent_id = Column(String, ForeignKey('subsystems.id', ondelete='CASCADE'), nullable=True)
+    subsystems = relationship("Subsystem", backref=db.backref('parent', remote_side=[id]), cascade="all, delete-orphan")
+
+    variables = relationship('Variable', secondary=subsystem_variables)

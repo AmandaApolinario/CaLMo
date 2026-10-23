@@ -1,7 +1,9 @@
+import uuid
 from datetime import datetime
-from ..models.repositories import CLDRepository, RelationshipRepository, VariableRepository
+from ..models.repositories import CLDRepository, RelationshipRepository, VariableRepository, CLDHistoryRepository
 from ..models.domain_logic import CLDAnalyzer
-from ..models.entities import RelationshipType, Variable, CLD, Relationship
+from ..models.entities import RelationshipType, Variable, CLD, Relationship, CLDHistory, Subsystem
+import secrets
 
 class CLDViewModel:
     def __init__(self, db_session):
@@ -9,9 +11,19 @@ class CLDViewModel:
         self.cld_repo = CLDRepository()
         self.rel_repo = RelationshipRepository()
         self.var_repo = VariableRepository()
+        self.cld_history_repo = CLDHistoryRepository()
         self.analyzer = CLDAnalyzer
     
-    def create_cld(self, user_id, name, date_str, description, variable_ids, relationships_data):
+    def create_cld(
+        self,
+        user_id,
+        name,
+        date_str,
+        description,
+        variable_ids,
+        relationships_data,
+        subsystems_data=None,
+    ):
         """Create a new Causal Loop Diagram"""
         # Validate date format
         try:
@@ -63,8 +75,15 @@ class CLDViewModel:
                     cld_id=cld.id,
                     source_id=rel['source_id'],
                     target_id=rel['target_id'],
-                    rel_type=RelationshipType[rel['type'].upper()]
+                    rel_type=RelationshipType[rel['type'].upper()],
+                    has_delay=rel.get('has_delay', False)
                 )
+
+            for sub_data in subsystems_data or []:
+                self.insert_subsystem(sub_data, cld_id=cld.id)
+
+            self.db_session.commit()
+            self.db_session.refresh(cld)
             
             # Format CLD for response
             cld_data = self._format_cld(cld)
@@ -94,12 +113,31 @@ class CLDViewModel:
         
         return cld_list, "CLDs retrieved successfully"
     
-    def get_cld(self, cld_id, user_id):
-        """Get a specific CLD by ID"""
-        cld = self.cld_repo.get_cld_by_user(self.db_session, cld_id, user_id)
+    def get_accessible_cld(self, cld_id, user_id, share_token=None):
+        """Return a CLD when the caller owns it or presents its share token."""
+        if share_token:
+            cld = self.db_session.query(CLD).filter_by(
+                id=cld_id,
+                share_token=share_token,
+            ).first()
+        else:
+            cld = self.cld_repo.get_cld_by_user(
+                self.db_session,
+                cld_id,
+                user_id,
+            )
+
         if not cld:
-            return None, "CLD not found or not owned by user"
-        
+            return None, "CLD not found or access denied"
+
+        return cld, "CLD retrieved successfully"
+
+    def get_cld(self, cld_id, user_id, share_token=None):
+        """Get a formatted CLD after owner-or-share-token authorization."""
+        cld, message = self.get_accessible_cld(cld_id, user_id, share_token)
+        if not cld:
+            return None, message
+
         cld_data = self._format_cld(cld)
         return cld_data, "CLD retrieved successfully"
     
@@ -117,15 +155,35 @@ class CLDViewModel:
                 'id': rel.id,
                 'source_id': rel.source_id,
                 'target_id': rel.target_id,
-                'type': rel.type.name
+                'type': rel.type.name,
+                'has_delay': rel.has_delay
             } 
             for rel in relationships
         ]
         
         # Return empty array if no relationships found
         return relationships_data, "Relationships retrieved successfully"
+
+    def get_reusable_relationships(self, user_id, exclude_cld_id=None):
+        """Get relationships from all user CLDs, optionally excluding a specific CLD"""
+        rows = self.rel_repo.get_relationships_by_user_clds(self.db_session, user_id, exclude_cld_id)
+
+        rels_data = [
+            {
+                'id': rel.id,
+                'cld_id': rel.cld_id,
+                'cld_name': cld_name,
+                'source_id': rel.source_id,
+                'target_id': rel.target_id,
+                'type': rel.type.name,
+                'has_delay': rel.has_delay
+            }
+            for rel, cld_name in rows
+        ]
+
+        return rels_data, "Reusable relationships retrieved successfully"
     
-    def update_cld(self, cld_id, user_id, name=None, description=None, date_str=None, variables=None, relationships=None):
+    def update_cld(self, cld_id, user_id, name=None, description=None, date_str=None, variables=None, relationships=None, share_token=None, subsystems = None):
         """Update an existing CLD"""
         date = None
         if date_str:
@@ -133,7 +191,7 @@ class CLDViewModel:
                 date = datetime.strptime(date_str, "%Y-%m-%d").date()
             except ValueError:
                 return None, "Invalid date format. Use YYYY-MM-DD"
-                
+
         try:
             # Add debug logging
             print(f"ViewModel: Updating CLD {cld_id} with name={name}, description={description}, date={date}")
@@ -143,7 +201,10 @@ class CLDViewModel:
                 print(f"ViewModel: Updating relationships: {relationships}")
             
             # Get the CLD first to verify it exists
-            cld = self.cld_repo.get_cld_by_user(self.db_session, cld_id, user_id)
+            if share_token:
+                cld = self.db_session.query(CLD).filter_by(id=cld_id, share_token=share_token).first()
+            else:
+                cld = self.cld_repo.get_cld_by_user(self.db_session, cld_id, user_id)
             if not cld:
                 return None, "CLD not found or not owned by user"
                 
@@ -161,10 +222,7 @@ class CLDViewModel:
                 cld.variables = []
                 # Add new variables
                 for var_id in variables:
-                    variable = self.db_session.query(Variable).filter_by(
-                        id=var_id,
-                        user_id=user_id
-                    ).first()
+                    variable = self.var_repo.get_variable_by_id(self.db_session, var_id)
                     if not variable:
                         self.db_session.rollback()
                         return None, f"Variable {var_id} not found or does not belong to user"
@@ -186,14 +244,22 @@ class CLDViewModel:
                     except KeyError:
                         self.db_session.rollback()
                         return None, f"Invalid relationship type. Must be one of: {[t.name for t in RelationshipType]}"
+
                     
                     relationship = Relationship(
                         cld_id=cld_id,
                         source_id=rel['source_id'],
                         target_id=rel['target_id'],
-                        type=rel_type
+                        type=rel_type,
+                        has_delay=rel['has_delay'],
                     )
                     self.db_session.add(relationship)
+
+            if subsystems is not None:
+                self.db_session.query(Subsystem).filter_by(cld_id=cld_id).delete()
+                self.db_session.flush()
+                for sub_data in subsystems:
+                    self.insert_subsystem(sub_data, cld_id=cld_id)
                 
             # Commit the changes directly
             self.db_session.commit()
@@ -222,13 +288,14 @@ class CLDViewModel:
                 
             return True, "CLD deleted successfully"
         except Exception as e:
+            self.db_session.rollback()
             return False, f"Error deleting CLD: {str(e)}"
     
-    def identify_feedback_loops(self, cld_id, user_id):
+    def identify_feedback_loops(self, cld_id, user_id, share_token=None):
         """Identify feedback loops in a CLD"""
-        cld = self.cld_repo.get_cld_by_user(self.db_session, cld_id, user_id)
+        cld, message = self.get_accessible_cld(cld_id, user_id, share_token)
         if not cld:
-            return None, "CLD not found or not owned by user"
+            return None, message
             
         try:
             # First, clear existing feedback loops
@@ -239,7 +306,19 @@ class CLDViewModel:
             
             # Use domain logic to identify feedback loops
             feedback_loops = self.analyzer.identify_feedback_loops(cld, self.db_session)
-            
+
+            # Deduplicate each loop's variables to avoid a duplicate
+            # (feedback_loop_id, variable_id) pair violating the association PK.
+            for loop in feedback_loops:
+                seen = set()
+                unique_vars = []
+                for var in loop.variables:
+                    if var.id not in seen:
+                        seen.add(var.id)
+                        unique_vars.append(var)
+                if len(unique_vars) != len(loop.variables):
+                    loop.variables = unique_vars
+
             # Commit the changes
             self.db_session.commit()
             
@@ -259,11 +338,11 @@ class CLDViewModel:
             self.db_session.rollback()
             return None, f"Error identifying feedback loops: {str(e)}"
     
-    def identify_archetypes(self, cld_id, user_id):
+    def identify_archetypes(self, cld_id, user_id, share_token=None):
         """Identify system archetypes in a CLD"""
-        cld = self.cld_repo.get_cld_by_user(self.db_session, cld_id, user_id)
+        cld, message = self.get_accessible_cld(cld_id, user_id, share_token)
         if not cld:
-            return None, "CLD not found or not owned by user"
+            return None, message
             
         try:
             # First, clear existing archetypes
@@ -272,12 +351,33 @@ class CLDViewModel:
             cld.archetypes = []
             self.db_session.flush()
             
-            # Use domain logic to identify archetypes
-            archetypes = self.analyzer.identify_archetypes(cld, self.db_session)
-            
+
+            self.analyzer.identify_archetypes(cld, self.db_session)
+
+            distinct_archetypes = list(dict.fromkeys(cld.archetypes))
+
+            seen = set()
+            kept = []
+            for arch in distinct_archetypes:
+                seen_var = set()
+                unique_vars = []
+                for var in arch.variables:
+                    if var.id not in seen_var:
+                        seen_var.add(var.id)
+                        unique_vars.append(var)
+                if len(unique_vars) != len(arch.variables):
+                    arch.variables = unique_vars
+                sig = (arch.type.name, frozenset(v.id for v in unique_vars))
+                if sig in seen:
+                    continue
+                seen.add(sig)
+                kept.append(arch)
+
+            cld.archetypes = kept
+
             # Commit the changes
             self.db_session.commit()
-            
+
             # Format archetypes for response
             archetypes_data = [
                 {
@@ -285,7 +385,7 @@ class CLDViewModel:
                     'type': arch.type.name,
                     'variables': [var.id for var in arch.variables]
                 }
-                for arch in archetypes
+                for arch in kept
             ]
             
             # Return empty array if no archetypes found
@@ -316,7 +416,8 @@ class CLDViewModel:
                     'id': rel.id,
                     'source_id': rel.source_id,
                     'target_id': rel.target_id,
-                    'type': rel.type.name
+                    'type': rel.type.name,
+                    'has_delay': rel.has_delay,
                 } 
                 for rel in relationships
             ],
@@ -335,5 +436,213 @@ class CLDViewModel:
                     'variables': [var.id for var in arch.variables]
                 } 
                 for arch in cld.archetypes
-            ]
-        } 
+            ],
+            'subsystems': self.build_subsystem_tree(cld, parent_id=None)
+        }
+
+    def generate_share_token(self, cld_id, user_id):
+        """Generate or retrieve a persistent share token for a CLD.
+
+        If the CLD does not already have a share token, create a new
+        cryptographically-secure token and persist it. Returns the token
+        and a status message, or (None, message) if the CLD wasn't found
+        or doesn't belong to the requesting user.
+        """
+        cld = self.cld_repo.get_cld_by_user(self.db_session, cld_id, user_id)
+        if not cld:
+            return None, "CLD not found or not owned by user"
+
+        # Se não tiver token, gera um novo seguro
+        if not cld.share_token:
+            cld.share_token = secrets.token_urlsafe(32)
+            self.db_session.commit()
+
+        return cld.share_token, "Share token retrieved successfully"
+
+    def revoke_share_token(self, cld_id, user_id):
+        """Revoke (delete) the current share token for a CLD.
+
+        This removes the existing share token so any previously issued
+        share links become invalid. Returns (True, message) on success
+        or (False, message) if the CLD wasn't found or doesn't belong
+        to the requesting user.
+        """
+        cld = self.cld_repo.get_cld_by_user(self.db_session, cld_id, user_id)
+        if not cld:
+            return False, "CLD not found or not owned by user"
+
+        cld.share_token = None
+        self.db_session.commit()
+        return True, "Share token revoked successfully"
+
+    def get_cld_by_token(self, token):
+        """Retrieve a CLD by its share token for guest access.
+
+        Look up the CLD associated with the provided share token. If the
+        token is invalid or has been revoked, return (None, message).
+        On success return the formatted CLD data and a success message.
+        """
+        cld = self.db_session.query(CLD).filter_by(share_token=token).first()
+        if not cld:
+            return None, "Invalid or revoked share token"
+
+        cld_data = self._format_cld(cld)
+        return cld_data, "CLD retrieved successfully"
+
+    def get_cld_by_id(self, cld_id):
+        """Get a CLD entity by its ID.
+
+        This returns the raw CLD object (not the formatted dict). If the
+        CLD does not exist return (None, message). Note: caller is
+        responsible for verifying ownership where necessary.
+        """
+        cld = self.cld_repo.get_cld_by_id(self.db_session, cld_id)
+        if not cld:
+            return None, "CLD not found or not owned by user"
+
+        return cld, "CLD retrieved successfully"
+
+    def get_cld_owner_variables(self, user_id):
+        """Return variables that belong to a given user.
+
+        This helper fetches all variables owned by the user. Returns a
+        list of Variable objects and a message, or (None, message) when
+        no variables are found.
+        """
+
+        variables = self.var_repo.get_user_variables(self.db_session, user_id)
+        if not variables:
+            return None, "Variables not found"
+        return variables, "Variables retrieved successfully"
+
+
+    def get_owner_id(self, token):
+        """Return the owner (user_id) of a CLD identified by a share token.
+
+        Useful to determine which user created the shared CLD. Returns
+        the user_id integer or None if the token is invalid or revoked.
+        """
+        cld = self.db_session.query(CLD).filter_by(share_token=token).first()
+        if not cld:
+            return None
+        return cld.user_id
+
+    def get_cld_history(self, cld_id, user_id, share_token=None):
+        cld, message = self.get_accessible_cld(cld_id, user_id, share_token)
+        if not cld:
+            return None, message
+
+        histories = self.cld_history_repo.get_history(self.db_session, cld_id)
+        result = []
+        for h in histories:
+            result.append({
+                'id': h.id,
+                'user_name': h.user.name if h.user else 'Unknown User',
+                'action_summary': h.action_summary,
+                'timestamp': h.timestamp.isoformat()
+            })
+        return result, "CLD history retrieved successfully"
+
+    def analyze_live_state(self, nodes_data, edges_data):
+        try:
+            class MockSession:
+                def add(self, instance):
+                    pass
+
+            mock_session = MockSession()
+
+            temp_cld = CLD(id="live-preview-id", name="Live Preview")
+
+            for n in nodes_data:
+                var = Variable(id=n.get('id'), name=n.get('name', 'Unnamed'))
+                temp_cld.variables.append(var)
+
+            for e in edges_data:
+                polarity_str = str(e.get('polarity')).upper()
+                rel_type = RelationshipType.POSITIVE if polarity_str in ['POSITIVE', '+'] else RelationshipType.NEGATIVE
+
+                rel = Relationship(
+                    id=str(uuid.uuid4()),
+                    source_id=e.get('source'),
+                    target_id=e.get('target'),
+                    type=rel_type,
+                    has_delay=e.get('has_delay'),
+                )
+                temp_cld.relationships.append(rel)
+
+
+            self.analyzer.identify_feedback_loops(temp_cld, mock_session)
+            self.analyzer.identify_archetypes(temp_cld, mock_session)
+
+            # Deduplicate the analysis output: (1) a variable can fill more than
+            # one role in a pattern, but must not be reported twice within an
+            # item; (2) the detector can emit the same pattern more than once, so
+            # collapse items with the same type + variable set. dict.fromkeys
+            # preserves order.
+            def _dedupe(items):
+                seen = set()
+                out = []
+                for it in items:
+                    t = it.type.name if hasattr(it.type, 'name') else str(it.type)
+                    var_ids = list(dict.fromkeys(v.id for v in it.variables))
+                    sig = (t, frozenset(var_ids))
+                    if sig in seen:
+                        continue
+                    seen.add(sig)
+                    out.append({'id': it.id, 'type': t, 'variables': var_ids})
+                return out
+
+            loops_data = _dedupe(temp_cld.feedback_loops)
+            archetypes_data = _dedupe(temp_cld.archetypes)
+
+            return {
+                "loops": loops_data,
+                "archetypes": archetypes_data
+            }, "Live analysis completed successfully"
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return None, f"Error analyzing live state: {str(e)}"
+
+    def insert_subsystem(self, sub_data, parent_id=None, cld_id=None):
+        # Prevent inserting the dummy 'global' layer from frontend
+        if sub_data.get('id') == 'global':
+            return
+
+        sub_id = f"subsystem-{str(uuid.uuid4())[:8]}"
+
+        # Create the Subsystem record
+        sub_model = Subsystem(
+            id=sub_id,
+            name=sub_data.get('name', 'Unnamed'),
+            description=sub_data.get('description', ''),
+            cld_id=cld_id,
+            parent_id=parent_id
+        )
+        self.db_session.add(sub_model)
+
+        # Link existing variables (shapeIds) to this subsystem
+        var_ids = sub_data.get('variableIds', [])
+        if var_ids:
+            vars_to_link = self.db_session.query(Variable).filter(Variable.id.in_(var_ids)).all()
+            sub_model.variables.extend(vars_to_link)
+
+        # Recursively process children
+        for child_data in sub_data.get('subsystems', []):
+            self.insert_subsystem(child_data, parent_id=sub_id, cld_id=cld_id)
+
+    def build_subsystem_tree(self, cld, parent_id=None):
+        tree = []
+        # Find children for the current parent
+        children = [s for s in cld.subsystems if s.parent_id == parent_id]
+        for child in children:
+            node = {
+                'id': child.id,
+                'name': child.name,
+                'description': child.description,
+                'variableIds': [v.id for v in child.variables],  # Extract linked variable IDs
+                'subsystems': self.build_subsystem_tree(cld, child.id)  # Recurse
+            }
+            tree.append(node)
+        return tree

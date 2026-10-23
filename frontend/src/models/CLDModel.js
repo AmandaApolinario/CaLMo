@@ -24,14 +24,16 @@ export class CLDModel {
       this.relationships = data.edges.map(edge => ({
         source_id: edge.source,
         target_id: edge.target,
-        type: edge.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE'
+        type: edge.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE',
+        has_delay: edge.has_delay,
       }));
     } else if (data.variable_clds) {
       // Convert from variable_clds format to relationships format
       this.relationships = data.variable_clds.map(rel => ({
         source_id: rel.from_variable_id || rel.source_id,
         target_id: rel.to_variable_id || rel.target_id,
-        type: (rel.type || '').toUpperCase()
+        type: (rel.type || '').toUpperCase(),
+        has_delay: rel.has_delay
       }));
     } else {
       this.relationships = [];
@@ -49,6 +51,7 @@ export class CLDModel {
     this.userId = data.userId || data.user_id || null;
     this.createdAt = data.createdAt || new Date();
     this.updatedAt = data.updatedAt || data.date || new Date();
+    this.subsystems = data.subsystems || [];
     
     console.log('CLDModel constructed:', this);
   }
@@ -71,6 +74,7 @@ export class CLDModel {
       date: this.date,
       variables: this.variables,
       relationships: this.relationships,
+      subsystems: this.subsystems,
       feedback_loops: this.feedback_loops,
       archetypes: this.archetypes,
       variable_count: this.variable_count || this.variables.length
@@ -104,7 +108,8 @@ export class CLDModel {
     return this.relationships.map(rel => ({
       source: rel.source_id,
       target: rel.target_id,
-      polarity: rel.type?.toLowerCase() === 'positive' ? 'positive' : 'negative'
+      polarity: rel.type?.toLowerCase() === 'positive' ? 'positive' : 'negative',
+      has_delay: rel.has_delay,
     }));
   }
   
@@ -112,7 +117,8 @@ export class CLDModel {
     this.relationships = value.map(edge => ({
       source_id: edge.source,
       target_id: edge.target,
-      type: edge.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE'
+      type: edge.polarity === 'positive' ? 'POSITIVE' : 'NEGATIVE',
+      has_delay: edge.has_delay,
     }));
   }
 } 
