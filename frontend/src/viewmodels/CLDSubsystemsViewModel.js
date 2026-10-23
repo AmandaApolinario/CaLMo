@@ -78,6 +78,7 @@ export function useCLDSubsystemsViewModel({
     }
 
     syncSubsystems();
+    broadcastSubsystems();
     updateVisibility();
   };
 

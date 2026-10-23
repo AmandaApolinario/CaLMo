@@ -47,6 +47,15 @@ def _handle_message(app, msg):
             del changes['nodes_added'][node_id]
         else:
             changes['nodes_removed'][node_id] = "Unknown Variable"
+        # A removed node takes its edges with it. Drop any session-added edges
+        # touching it so a relationship involving a node that no longer exists
+        # is not reported as "New Relationship". This keeps the history as the
+        # NET change at save time (a variable created and deleted in the same
+        # session — and its edges — cancels out entirely).
+        changes['edges_added'] = {
+            eid: e for eid, e in changes['edges_added'].items()
+            if e.get('source') != node_id and e.get('target') != node_id
+        }
 
     elif action == 'EDGE_ADDED':
         edge = payload.get('edge', {})
@@ -80,6 +89,10 @@ def _handle_message(app, msg):
             summary_lines.append(f"New Relationship: {src} -> {tgt}, {pol}")
 
         for eid, edata in changes['edges_removed'].items():
+            # Skip removals that carry no endpoint metadata (would render as
+            # "Unknown Variable -> Unknown Variable, UNKNOWN" and just add noise).
+            if not edata.get('source') and not edata.get('target'):
+                continue
             src = get_node_name(app, edata.get('source'))
             tgt = get_node_name(app, edata.get('target'))
             pol = str(edata.get('polarity', 'UNKNOWN')).upper()

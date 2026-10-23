@@ -192,13 +192,20 @@ export function useCLDEditorViewModel() {
     successMessage.value = '';
     
     try {
-      // Extract variable IDs from the relationships
+      // Preserve every variable already in the diagram — including ones with no
+      // relationship — otherwise the backend's update_cld (which replaces the
+      // whole variable set) drops unconnected variables from the CLD.
       const variableIds = new Set();
+      (diagramData.nodes || []).forEach(v => {
+        const id = (v && typeof v === 'object') ? v.id : v;
+        if (id) variableIds.add(id);
+      });
+      // Also include any variable referenced by a relationship.
       (diagramData.edges || []).forEach(edge => {
         if (edge.source) variableIds.add(edge.source);
         if (edge.target) variableIds.add(edge.target);
       });
-      
+
       // Format relationships in the way the backend expects them
       const relationships = (diagramData.edges || []).map(edge => {
         return {

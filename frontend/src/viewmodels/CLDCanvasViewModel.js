@@ -689,7 +689,13 @@ export function useCLDCanvasViewModel() {
       undoResult.removedEdges.forEach(edge => {
           if (remoteEdgeRemovedCallback.value) remoteEdgeRemovedCallback.value(edge.id);
           if (action === 'NODE_ADDED' && diagram.value?.id) {
-              publishDiagramEvent(diagram.value.id, 'EDGE_REMOVED', { edgeId: edge.id, clientId: clientId.value }).catch(console.error);
+              publishDiagramEvent(diagram.value.id, 'EDGE_REMOVED', {
+                  edgeId: edge.id,
+                  source: edge.source,
+                  target: edge.target,
+                  polarity: edge.polarity,
+                  clientId: clientId.value
+              }).catch(console.error);
           }
       });
 
